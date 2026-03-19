@@ -1,0 +1,21 @@
+# Google Earth Engine
+earthengine-api>=0.1.370
+geemap>=0.30.0
+
+# Data & Visualization
+numpy>=1.24.0
+matplotlib>=3.7.0
+Pillow>=10.0.0
+
+# HTTP & Web
+requests>=2.31.0
+
+# Web Search
+duckduckgo-search>=6.0.0
+
+# LangGraph + LangChain
+langgraph>=0.2.0
+langchain-core>=0.2.0
+langchain-ollama>=0.1.0
+pydantic>=2.0.0
+typing-extensions>=4.8.0
