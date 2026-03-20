@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GIS Agent — Satellite Analysis</title>
+
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+
+<!-- Plotly -->
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+<!-- Marked (markdown renderer) -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════
+     SIDEBAR NAV
+════════════════════════════════════════════════════════ -->
+<nav class="sidebar-nav">
+  <div class="nav-logo">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+    </svg>
+  </div>
+  <button class="nav-btn active" title="Chat" onclick="setNavActive(this)">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+  </button>
+  <button class="nav-btn" title="Library" onclick="setNavActive(this)">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+    </svg>
+  </button>
+  <button class="nav-btn" title="Layers" onclick="setNavActive(this)">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+    </svg>
+  </button>
+  <div class="nav-spacer"></div>
+  <button class="nav-btn" title="Settings" onclick="setNavActive(this)">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
+  <button class="nav-btn" title="Help" onclick="setNavActive(this)">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+  </button>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════
+     LEFT PANEL — CHAT
+════════════════════════════════════════════════════════ -->
+<div class="chat-panel" id="chatPanel">
+
+  <!-- Header -->
+  <div class="chat-header">
+    <div class="chat-header-left">
+      <span class="chat-title">GIS Agent</span>
+      <span class="status-dot" id="statusDot" title="Checking..."></span>
+    </div>
+    <div class="chat-header-right">
+      <button class="icon-btn" title="New chat" onclick="clearChat()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Messages -->
+  <div class="messages" id="messages">
+    <!-- Welcome message -->
+    <div class="msg-row ai">
+      <div class="msg-avatar">AI</div>
+      <div class="msg-bubble ai">
+        <p>Hello! I'm your GIS Agent powered by Google Earth Engine.</p>
+        <p>I can analyze satellite data for any region. Try:</p>
+        <ul>
+          <li><code>/ndvi</code> — Vegetation analysis</li>
+          <li><code>/lulc</code> — Land cover classification</li>
+          <li><code>/lst</code> — Land surface temperature</li>
+          <li><code>/no2</code> — Air quality</li>
+        </ul>
+        <p>Or draw a region on the map and reference it with <strong>@region</strong>.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plan widget (hidden by default) -->
+  <div class="plan-widget" id="planWidget" style="display:none">
+    <div class="plan-header">
+      <span class="plan-title" id="planTitle">Plan · Running</span>
+      <button class="plan-toggle" onclick="togglePlan()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="18 15 12 9 6 15"/>
+        </svg>
+      </button>
+    </div>
+    <div class="plan-steps" id="planSteps"></div>
+  </div>
+
+  <!-- Input area -->
+  <div class="input-area">
+    <!-- Active ROI chip -->
+    <div class="roi-chips" id="roiChips" style="display:none">
+      <div class="roi-chip" id="activeRoiChip">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+        </svg>
+        <span id="roiChipName">custom_region</span>
+        <button onclick="clearROI()">×</button>
+      </div>
+    </div>
+
+    <div class="input-box">
+      <textarea
+        id="chatInput"
+        placeholder="Type a message. Use '@' for ROI, '/' for quick actions"
+        rows="1"
+        onkeydown="handleKey(event)"
+        oninput="autoResize(this); handleInputChange(this)"
+      ></textarea>
+
+      <!-- Quick action dropdown -->
+      <div class="quick-actions" id="quickActions" style="display:none">
+        <div class="qa-item" onclick="insertQuickAction('/ndvi')"><span class="qa-cmd">/ndvi</span><span class="qa-desc">Vegetation index analysis</span></div>
+        <div class="qa-item" onclick="insertQuickAction('/lulc')"><span class="qa-cmd">/lulc</span><span class="qa-desc">Land cover classification</span></div>
+        <div class="qa-item" onclick="insertQuickAction('/lst')"><span class="qa-cmd">/lst</span><span class="qa-desc">Land surface temperature</span></div>
+        <div class="qa-item" onclick="insertQuickAction('/uhi')"><span class="qa-cmd">/uhi</span><span class="qa-desc">Urban heat island</span></div>
+        <div class="qa-item" onclick="insertQuickAction('/no2')"><span class="qa-cmd">/no2</span><span class="qa-desc">Nitrogen dioxide (air quality)</span></div>
+        <div class="qa-item" onclick="insertQuickAction('/co')"><span class="qa-cmd">/co</span><span class="qa-desc">Carbon monoxide</span></div>
+        <div class="qa-item" onclick="insertQuickAction('/ndwi')"><span class="qa-cmd">/ndwi</span><span class="qa-desc">Water body index</span></div>
+        <div class="qa-item" onclick="insertQuickAction('/ffpi')"><span class="qa-cmd">/ffpi</span><span class="qa-desc">Fossil fuel pollution index</span></div>
+      </div>
+
+      <div class="input-toolbar">
+        <div class="toolbar-left">
+          <button class="tb-btn" title="Add attachment">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add
+          </button>
+          <button class="tb-btn" title="Insights+">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            Insights+
+          </button>
+          <button class="tb-btn" id="assetsBtn" title="Assets">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
+            </svg>
+            Assets
+            <span class="badge" id="assetsBadge">0</span>
+          </button>
+        </div>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     RIGHT PANEL — MAP
+════════════════════════════════════════════════════════ -->
+<div class="map-panel" id="mapPanel">
+
+  <!-- Map header -->
+  <div class="map-header">
+    <span class="map-title">Insights Viewer</span>
+    <button class="icon-btn" id="collapseMapBtn" onclick="toggleMapPanel()" title="Collapse">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Active layer badge -->
+  <div class="layer-badge" id="layerBadge" style="display:none">
+    <span id="layerBadgeText">Layer</span>
+  </div>
+
+  <!-- Map container -->
+  <div id="map"></div>
+
+  <!-- Map Layers panel -->
+  <div class="layers-panel" id="layersPanel" style="display:none">
+    <div class="layers-header">
+      <span>Map Layers</span>
+      <button onclick="toggleLayersPanel()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+    </div>
+    <div class="layers-list" id="layersList"></div>
+  </div>
+
+  <!-- Map toolbar -->
+  <div class="map-toolbar">
+    <button class="mt-btn" title="Menu" onclick="toggleLayersPanel()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <button class="mt-btn active" title="ROI" id="roiModeBtn" onclick="toggleROIMode()">
+      ROI
+    </button>
+    <button class="mt-btn" title="Draw freehand polygon" id="drawPolyBtn" onclick="startDrawPolygon()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/>
+      </svg>
+    </button>
+    <button class="mt-btn" title="Draw rectangle" id="drawRectBtn" onclick="startDrawRect()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+      </svg>
+    </button>
+    <button class="mt-btn" title="Search region">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    </button>
+    <button class="mt-btn" title="Charts">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+      </svg>
+    </button>
+    <button class="mt-btn" title="More">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+      </svg>
+    </button>
+    <div class="mt-divider"></div>
+    <button class="mt-btn zoom-btn" onclick="map.zoomIn()">+</button>
+    <button class="mt-btn zoom-btn" onclick="map.zoomOut()">−</button>
+  </div>
+
+  <!-- ROI name modal -->
+  <div class="roi-modal" id="roiModal" style="display:none">
+    <div class="roi-modal-inner">
+      <p>Name this region:</p>
+      <input type="text" id="roiNameInput" placeholder="e.g. jakarta_area" />
+      <div class="roi-modal-btns">
+        <button onclick="cancelROIDraw()">Cancel</button>
+        <button class="primary" onclick="confirmROI()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

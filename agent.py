@@ -306,10 +306,7 @@ def _monthly_atmo(col, band_name, study_area, start_date, end_date):
                else cur.replace(year=cur.year+1, month=1, day=1))
     return monthly
 
-def compute_lst_simple(composite):
-    """LST wrapper that returns a single-band image for monthly stats."""
-    lst, _ = compute_lst(composite, composite.geometry())
-    return lst
+# compute_lst_simple moved to gis_functions.py
 
 
 # ── Tool 6: LULC analysis — standalone, independent of surface_analysis ───────

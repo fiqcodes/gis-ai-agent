@@ -17,6 +17,8 @@
 
 import ee
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend — safe for threading + servers
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
@@ -176,6 +178,11 @@ def compute_uhi(lst, study_area):
     lst_std  = stats['LST_stdDev']
     uhi      = lst.subtract(lst_mean).divide(lst_std).rename('UHI')
     return uhi, lst_mean, lst_std
+
+def compute_lst_simple(composite):
+    """LST wrapper returning single-band image — used for monthly stats."""
+    lst, _ = compute_lst(composite, composite.geometry())
+    return lst
 
 # =============================================================================
 # SECTION D - ATMOSPHERIC FUNCTIONS
