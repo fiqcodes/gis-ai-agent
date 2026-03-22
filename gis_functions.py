@@ -34,6 +34,20 @@ from PIL import Image as PILImage
 
 from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR
 
+def ensure_gee():
+    """Ensure GEE is initialized — safe to call multiple times."""
+    try:
+        # Quick test if already initialized
+        ee.Number(1).getInfo()
+    except Exception:
+        try:
+            ee.Reset()
+        except: pass
+        try:
+            ee.Initialize(project=GEE_PROJECT)
+        except Exception as e:
+            print(f'  GEE init in gis_functions: {e}')
+
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 import textwrap
@@ -55,6 +69,7 @@ def apply_cloud_mask(image):
     return image.updateMask(mask)
 
 def load_landsat(study_area, start, end):
+    ensure_gee()
     col = (ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
              .filterDate(start, end)
              .filterBounds(study_area)
@@ -67,6 +82,7 @@ def load_landsat(study_area, start, end):
 # =============================================================================
 
 def resolve_region(region_name):
+    ensure_gee()
     print(f'  Resolving region: "{region_name}"...')
     try:
         gaul1 = ee.FeatureCollection('FAO/GAUL/2015/level1')
@@ -852,6 +868,9 @@ def compute_lulc(study_area, start_date, end_date, region_name):
     5. Area stats in hectares and percentage
     """
     try:
+        # Ensure GEE is initialized in this scope
+        ensure_gee()
+
         # ── Step 1: Get relevant classes from LLM ────────────────────────────
         relevant_ids = get_relevant_classes(region_name)
 
