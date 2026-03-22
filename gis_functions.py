@@ -35,36 +35,21 @@ from PIL import Image as PILImage
 from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR
 
 def ensure_gee():
-    """Initialize GEE — only if not already initialized. Never resets mid-computation."""
+    """Initialize GEE with service account — no reset, safe mid-computation."""
     import os
-    # Check if already initialized — skip to avoid disrupting active computations
+    from config import GEE_SERVICE_ACCOUNT_FILE, GEE_SERVICE_ACCOUNT_EMAIL, GEE_PROJECT
     try:
-        from ee import apifunction
-        if apifunction.ApiFunction._api:
-            return  # Already initialized
-    except: pass
-
-    # Not initialized yet — use service account if available
-    try:
-        from config import GEE_SERVICE_ACCOUNT_FILE, GEE_SERVICE_ACCOUNT_EMAIL
         if os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
             credentials = ee.ServiceAccountCredentials(
                 email=GEE_SERVICE_ACCOUNT_EMAIL,
                 key_file=GEE_SERVICE_ACCOUNT_FILE
             )
-            ee.Initialize(credentials)
-            return
-    except Exception as sa_err:
-        if 'already' not in str(sa_err).lower():
-            print(f'  SA init note: {sa_err}')
-        return
-
-    # Fallback: default credentials
-    try:
-        ee.Initialize(project=GEE_PROJECT)
+            ee.Initialize(credentials, project=GEE_PROJECT)
+        else:
+            ee.Initialize(project=GEE_PROJECT)
     except Exception as e:
         if 'already' not in str(e).lower():
-            print(f'  GEE ensure_gee fallback: {e}')
+            print(f'  ensure_gee: {e}')
 
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
@@ -936,25 +921,30 @@ def compute_lulc(study_area, start_date, end_date, region_name):
         print('  Sampling training points (stratified)...')
         training_stack = features.addBands(ref_lc)
 
-        # Filter relevant_ids to only those present in the reference map
+        # Filter relevant_ids to only those present — SINGLE batch GEE call
         present_classes = []
-        for class_id in relevant_ids:
-            try:
-                mask = ref_lc.eq(class_id)
-                # Check at 500m scale — fast
-                pixel_count = mask.reduceRegion(
-                    reducer  = ee.Reducer.sum(),
-                    geometry = study_area,
-                    scale    = 500,
-                    maxPixels= 1e8
-                ).getInfo().get('landcover', 0)
-                if pixel_count and pixel_count > 2:
+        try:
+            # Count pixels per class in one reduceRegion call
+            counts = ref_lc.reduceRegion(
+                reducer  = ee.Reducer.frequencyHistogram(),
+                geometry = study_area,
+                scale    = 500,
+                maxPixels= 1e8
+            ).getInfo().get('landcover', {})
+            # counts is a dict like {'1': 65, '2': 163, ...}
+            counts_by_id = {int(float(k)): int(v) for k, v in counts.items()}
+            for class_id in relevant_ids:
+                count = counts_by_id.get(class_id, 0)
+                if count > 2:
                     present_classes.append(class_id)
-                    print(f'    {ESRI_CLASSES[class_id][0]}: present ({int(pixel_count)} px @ 500m)')
+                    print(f'    {ESRI_CLASSES[class_id][0]}: present ({count} px @ 500m)')
                 else:
                     print(f'    {ESRI_CLASSES[class_id][0]}: absent in this region, skipping')
-            except Exception as e:
-                print(f'    {ESRI_CLASSES[class_id][0]}: check failed ({e}), skipping')
+        except Exception as e:
+            print(f'  Presence check failed: {e}')
+            # Fallback: use all relevant classes
+            present_classes = relevant_ids
+            print(f'  Fallback: using all {len(present_classes)} LLM-selected classes')
 
         if len(present_classes) < 2:
             return {'success': False,
