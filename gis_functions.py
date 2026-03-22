@@ -35,8 +35,16 @@ from PIL import Image as PILImage
 from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR
 
 def ensure_gee():
-    """Initialize GEE using service account — thread-safe, no expiry."""
+    """Initialize GEE — only if not already initialized. Never resets mid-computation."""
     import os
+    # Check if already initialized — skip to avoid disrupting active computations
+    try:
+        from ee import apifunction
+        if apifunction.ApiFunction._api:
+            return  # Already initialized
+    except: pass
+
+    # Not initialized yet — use service account if available
     try:
         from config import GEE_SERVICE_ACCOUNT_FILE, GEE_SERVICE_ACCOUNT_EMAIL
         if os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
@@ -47,12 +55,11 @@ def ensure_gee():
             ee.Initialize(credentials)
             return
     except Exception as sa_err:
-        err = str(sa_err).lower()
-        if 'already' in err:
-            return
-        print(f'  Service account init note: {sa_err}')
+        if 'already' not in str(sa_err).lower():
+            print(f'  SA init note: {sa_err}')
+        return
 
-    # Fallback: use default credentials
+    # Fallback: default credentials
     try:
         ee.Initialize(project=GEE_PROJECT)
     except Exception as e:
@@ -959,7 +966,6 @@ def compute_lulc(study_area, start_date, end_date, region_name):
         sampled_ids = []
         for class_id in present_classes:
             try:
-                ensure_gee()  # Re-ensure GEE per class — prevents mid-loop session loss
                 class_mask = ref_lc.eq(class_id)
                 samples    = (training_stack
                               .updateMask(class_mask)
