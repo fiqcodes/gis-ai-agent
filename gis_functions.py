@@ -35,24 +35,23 @@ from PIL import Image as PILImage
 from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR
 
 def ensure_gee():
-    """Force full GEE reinit every call — stateless, always works."""
+    """Initialize GEE with service account — no reset, explicit project always."""
     import os
     from config import GEE_SERVICE_ACCOUNT_FILE, GEE_SERVICE_ACCOUNT_EMAIL, GEE_PROJECT
-    try:
-        ee.Reset()
-    except: pass
     try:
         if os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
             creds = ee.ServiceAccountCredentials(
                 email=GEE_SERVICE_ACCOUNT_EMAIL,
                 key_file=GEE_SERVICE_ACCOUNT_FILE
             )
-            ee.Initialize(creds, project=GEE_PROJECT)
+            ee.Initialize(creds, project=GEE_PROJECT,
+                          opt_url='https://earthengine.googleapis.com')
         else:
-            ee.Initialize(project=GEE_PROJECT)
+            ee.Initialize(project=GEE_PROJECT,
+                          opt_url='https://earthengine.googleapis.com')
     except Exception as e:
         if 'already' not in str(e).lower():
-            print(f'  ensure_gee error: {e}')
+            print(f'  ensure_gee: {e}')
 
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm

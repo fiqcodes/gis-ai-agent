@@ -30,7 +30,7 @@ from config import (GEE_PROJECT as _GEE_PROJECT,
 try:
     if _os.path.exists(_SA_FILE):
         _creds = _ee.ServiceAccountCredentials(email=_SA_EMAIL, key_file=_SA_FILE)
-        _ee.Initialize(_creds)
+        _ee.Initialize(_creds, project=_GEE_PROJECT)
         print(f'✅ GEE initialized with service account: {_SA_EMAIL}')
     else:
         _ee.Initialize(project=_GEE_PROJECT)
@@ -135,7 +135,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                         email=GEE_SERVICE_ACCOUNT_EMAIL,
                         key_file=GEE_SERVICE_ACCOUNT_FILE
                     )
-                    ee.Initialize(creds)
+                    ee.Initialize(creds, project=GEE_PROJECT)
                 else:
                     ee.Initialize(project=GEE_PROJECT)
                 _ = ee.Number(1).getInfo()  # quick connectivity test
