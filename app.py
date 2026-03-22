@@ -105,18 +105,48 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         update_step(0, 'running', 10)
         import ee
         from config import GEE_PROJECT
-        try:
-            ee.Initialize(project=GEE_PROJECT)
-            print('  GEE initialized for this request')
-        except Exception as gee_init_err:
-            # Already initialized or credentials valid — continue
-            print(f'  GEE init note: {gee_init_err}')
+
+        def init_gee():
+            """Try to initialize GEE, re-authenticate if token expired."""
             try:
                 ee.Reset()
+            except: pass
+            try:
                 ee.Initialize(project=GEE_PROJECT)
-                print('  GEE re-initialized after reset')
-            except Exception as gee_reset_err:
-                print(f'  GEE reset failed: {gee_reset_err}')
+                _ = ee.Number(1).getInfo()  # quick test
+                print('  GEE initialized ✓')
+                return True
+            except Exception as e:
+                err_str = str(e).lower()
+                if 'authorize' in err_str or 'authenticate' in err_str or 'credentials' in err_str:
+                    print('  GEE token expired — re-authenticating...')
+                    try:
+                        ee.Authenticate(auth_mode='notebook', force=True)
+                        ee.Initialize(project=GEE_PROJECT)
+                        print('  GEE re-authenticated ✓')
+                        return True
+                    except Exception as auth_err:
+                        print(f'  GEE re-auth failed: {auth_err}')
+                        # Try gcloud credentials as fallback
+                        try:
+                            import subprocess
+                            subprocess.run([
+                                'earthengine', 'authenticate',
+                                '--auth_mode=gcloud'
+                            ], timeout=30)
+                            ee.Initialize(project=GEE_PROJECT)
+                            return True
+                        except Exception as gc_err:
+                            print(f'  gcloud auth failed: {gc_err}')
+                            return False
+                else:
+                    print(f'  GEE init error: {e}')
+                    return False
+
+        if not init_gee():
+            job['status'] = 'error'
+            job['error']  = 'GEE authentication expired. Run: earthengine authenticate'
+            return
         from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR as OUT
         from gis_functions import (
             SURFACE_INDEX_MAP, ATMO_INDEX_MAP, KEYWORD_MAP, SYSTEM_PROMPT,
