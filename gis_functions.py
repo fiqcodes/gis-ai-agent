@@ -35,18 +35,23 @@ from PIL import Image as PILImage
 from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR
 
 def ensure_gee():
-    """Ensure GEE is initialized — safe to call multiple times."""
+    """Ensure GEE is initialized in this module scope — safe to call multiple times."""
     try:
-        # Quick test if already initialized
-        ee.Number(1).getInfo()
+        # Check if GEE API functions are available (lightweight check)
+        from ee import apifunction
+        if not apifunction.ApiFunction._api:
+            raise Exception("not initialized")
+        return  # Already initialized
     except Exception:
-        try:
-            ee.Reset()
-        except: pass
-        try:
-            ee.Initialize(project=GEE_PROJECT)
-        except Exception as e:
-            print(f'  GEE init in gis_functions: {e}')
+        pass
+    # Initialize without reset — preserve existing session
+    try:
+        ee.Initialize(project=GEE_PROJECT)
+    except Exception as e:
+        err = str(e).lower()
+        if 'already initialized' in err or 'already been initialized' in err:
+            return  # Fine, already initialized
+        print(f'  GEE ensure_gee: {e}')
 
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm

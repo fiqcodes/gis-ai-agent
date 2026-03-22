@@ -21,6 +21,16 @@ sys.path.insert(0, str(PARENT_DIR))
 app = Flask(__name__)
 CORS(app)
 
+# ── Initialize GEE at startup using saved credentials ────────────────────────
+import ee as _ee
+from config import GEE_PROJECT as _GEE_PROJECT
+try:
+    _ee.Initialize(project=_GEE_PROJECT)
+    print(f'✅ GEE initialized at startup')
+except Exception as _e:
+    print(f'⚠️  GEE startup init failed: {_e}')
+    print('   Run: earthengine authenticate && gcloud auth application-default set-quota-project case-study-360616')
+
 # ── Job store (in-memory, keyed by job_id) ────────────────────────────────────
 jobs = {}   # job_id → { status, result, error, progress, steps }
 
