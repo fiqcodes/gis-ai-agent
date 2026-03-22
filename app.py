@@ -97,13 +97,26 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
 
         # ── Step 0: Set matplotlib to non-interactive backend for threading ───
         import matplotlib
-        matplotlib.use('Agg')  # Must be set before importing pyplot in thread
+        matplotlib.use('Agg')
         import matplotlib.pyplot as plt
-        plt.close('all')  # Close any existing figures
+        plt.close('all')
 
-        # ── Step 1: import agent modules ──────────────────────────────────────
+        # ── Step 1: Initialize GEE fresh for this thread ──────────────────────
         update_step(0, 'running', 10)
         import ee
+        from config import GEE_PROJECT
+        try:
+            ee.Initialize(project=GEE_PROJECT)
+            print('  GEE initialized for this request')
+        except Exception as gee_init_err:
+            # Already initialized or credentials valid — continue
+            print(f'  GEE init note: {gee_init_err}')
+            try:
+                ee.Reset()
+                ee.Initialize(project=GEE_PROJECT)
+                print('  GEE re-initialized after reset')
+            except Exception as gee_reset_err:
+                print(f'  GEE reset failed: {gee_reset_err}')
         from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR as OUT
         from gis_functions import (
             SURFACE_INDEX_MAP, ATMO_INDEX_MAP, KEYWORD_MAP, SYSTEM_PROMPT,
@@ -501,10 +514,15 @@ def health():
     try:
         import ee
         from config import GEE_PROJECT
+        try:
+            ee.Reset()
+        except: pass
         ee.Initialize(project=GEE_PROJECT)
+        # Quick test
+        _ = ee.Number(1).getInfo()
         status['gee'] = True
-    except:
-        pass
+    except Exception as ge:
+        status['gee_error'] = str(ge)
     return jsonify(status)
 
 
