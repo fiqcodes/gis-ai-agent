@@ -35,21 +35,24 @@ from PIL import Image as PILImage
 from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR
 
 def ensure_gee():
-    """Initialize GEE with service account — no reset, safe mid-computation."""
+    """Force full GEE reinit every call — stateless, always works."""
     import os
     from config import GEE_SERVICE_ACCOUNT_FILE, GEE_SERVICE_ACCOUNT_EMAIL, GEE_PROJECT
     try:
+        ee.Reset()
+    except: pass
+    try:
         if os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
-            credentials = ee.ServiceAccountCredentials(
+            creds = ee.ServiceAccountCredentials(
                 email=GEE_SERVICE_ACCOUNT_EMAIL,
                 key_file=GEE_SERVICE_ACCOUNT_FILE
             )
-            ee.Initialize(credentials, project=GEE_PROJECT)
+            ee.Initialize(creds, project=GEE_PROJECT)
         else:
             ee.Initialize(project=GEE_PROJECT)
     except Exception as e:
         if 'already' not in str(e).lower():
-            print(f'  ensure_gee: {e}')
+            print(f'  ensure_gee error: {e}')
 
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
@@ -897,6 +900,7 @@ def compute_lulc(study_area, start_date, end_date, region_name):
 
         # ── Step 3: Load Landsat 8 composite as features ─────────────────────
         print('  Loading Landsat 8 features...')
+        ensure_gee()
         landsat_col, composite = load_landsat(study_area, start_date, end_date)
         count = landsat_col.size().getInfo()
         if count == 0:
@@ -1015,10 +1019,12 @@ def compute_lulc(study_area, start_date, end_date, region_name):
         )
 
         # ── Step 6: Classify ──────────────────────────────────────────────────
+        ensure_gee()
         print('  Classifying image...')
         classified = features.classify(classifier).rename('classification')
 
         # ── Step 7: Area statistics at appropriate scale ──────────────────────
+        ensure_gee()
         print('  Computing area statistics...')
         bbox_area     = study_area.area(maxError=1).getInfo()
         stats_scale   = 100 if bbox_area < 5e9 else 300  # 100m cities, 300m countries
