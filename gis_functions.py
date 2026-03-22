@@ -35,23 +35,29 @@ from PIL import Image as PILImage
 from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR
 
 def ensure_gee():
-    """Ensure GEE is initialized in this module scope — safe to call multiple times."""
+    """Initialize GEE using service account — thread-safe, no expiry."""
+    import os
     try:
-        # Check if GEE API functions are available (lightweight check)
-        from ee import apifunction
-        if not apifunction.ApiFunction._api:
-            raise Exception("not initialized")
-        return  # Already initialized
-    except Exception:
-        pass
-    # Initialize without reset — preserve existing session
+        from config import GEE_SERVICE_ACCOUNT_FILE, GEE_SERVICE_ACCOUNT_EMAIL
+        if os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
+            credentials = ee.ServiceAccountCredentials(
+                email=GEE_SERVICE_ACCOUNT_EMAIL,
+                key_file=GEE_SERVICE_ACCOUNT_FILE
+            )
+            ee.Initialize(credentials)
+            return
+    except Exception as sa_err:
+        err = str(sa_err).lower()
+        if 'already' in err:
+            return
+        print(f'  Service account init note: {sa_err}')
+
+    # Fallback: use default credentials
     try:
         ee.Initialize(project=GEE_PROJECT)
     except Exception as e:
-        err = str(e).lower()
-        if 'already initialized' in err or 'already been initialized' in err:
-            return  # Fine, already initialized
-        print(f'  GEE ensure_gee: {e}')
+        if 'already' not in str(e).lower():
+            print(f'  GEE ensure_gee fallback: {e}')
 
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
@@ -953,6 +959,7 @@ def compute_lulc(study_area, start_date, end_date, region_name):
         sampled_ids = []
         for class_id in present_classes:
             try:
+                ensure_gee()  # Re-ensure GEE per class — prevents mid-loop session loss
                 class_mask = ref_lc.eq(class_id)
                 samples    = (training_stack
                               .updateMask(class_mask)
