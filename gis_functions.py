@@ -35,20 +35,24 @@ from PIL import Image as PILImage
 from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR
 
 def ensure_gee():
-    """Initialize GEE with service account — no reset, explicit project always."""
+    """Refresh GEE credentials in place — no re-Initialize."""
     import os
-    from config import GEE_SERVICE_ACCOUNT_FILE, GEE_SERVICE_ACCOUNT_EMAIL, GEE_PROJECT
+    from config import GEE_SERVICE_ACCOUNT_FILE, GEE_PROJECT
     try:
         if os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
-            creds = ee.ServiceAccountCredentials(
-                email=GEE_SERVICE_ACCOUNT_EMAIL,
-                key_file=GEE_SERVICE_ACCOUNT_FILE
-            )
-            ee.Initialize(creds, project=GEE_PROJECT,
-                          opt_url='https://earthengine.googleapis.com')
-        else:
-            ee.Initialize(project=GEE_PROJECT,
-                          opt_url='https://earthengine.googleapis.com')
+            import google.oauth2.service_account as _sa_g
+            import google.auth.transport.requests as _req_g
+            scopes = ['https://www.googleapis.com/auth/earthengine',
+                      'https://www.googleapis.com/auth/cloud-platform']
+            creds = _sa_g.Credentials.from_service_account_file(
+                GEE_SERVICE_ACCOUNT_FILE, scopes=scopes)
+            creds.refresh(_req_g.Request())
+            # Only re-initialize if GEE is not responding
+            try:
+                ee.Number(1).getInfo()
+            except Exception:
+                ee.Initialize(creds, project=GEE_PROJECT,
+                              opt_url='https://earthengine.googleapis.com')
     except Exception as e:
         if 'already' not in str(e).lower():
             print(f'  ensure_gee: {e}')

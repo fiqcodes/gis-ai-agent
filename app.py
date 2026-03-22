@@ -21,16 +21,31 @@ sys.path.insert(0, str(PARENT_DIR))
 app = Flask(__name__)
 CORS(app)
 
-# ── Initialize GEE at startup using service account ──────────────────────────
+# ── Initialize GEE ONCE at startup, keep credentials alive ───────────────────
 import os as _os
 import ee as _ee
 from config import (GEE_PROJECT as _GEE_PROJECT,
                     GEE_SERVICE_ACCOUNT_FILE as _SA_FILE,
                     GEE_SERVICE_ACCOUNT_EMAIL as _SA_EMAIL)
+
+# Global credentials object — refreshed before each use, never re-initialized
+_GEE_CREDENTIALS = None
+
+def _build_gee_credentials():
+    """Build fresh credentials from service account file."""
+    import google.oauth2.service_account as _sa
+    import google.auth.transport.requests as _ga_req
+    scopes = ['https://www.googleapis.com/auth/earthengine',
+              'https://www.googleapis.com/auth/cloud-platform']
+    creds = _sa.Credentials.from_service_account_file(_SA_FILE, scopes=scopes)
+    creds.refresh(_ga_req.Request())
+    return creds
+
 try:
     if _os.path.exists(_SA_FILE):
-        _creds = _ee.ServiceAccountCredentials(email=_SA_EMAIL, key_file=_SA_FILE)
-        _ee.Initialize(_creds, project=_GEE_PROJECT)
+        _GEE_CREDENTIALS = _build_gee_credentials()
+        _ee.Initialize(_GEE_CREDENTIALS, project=_GEE_PROJECT,
+                       opt_url='https://earthengine.googleapis.com')
         print(f'✅ GEE initialized with service account: {_SA_EMAIL}')
     else:
         _ee.Initialize(project=_GEE_PROJECT)
@@ -125,28 +140,30 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         from config import GEE_PROJECT
 
         def init_gee():
-            """Initialize GEE using service account — thread-safe."""
+            """Refresh GEE token — no re-Initialize needed."""
             import os
-            from config import (GEE_SERVICE_ACCOUNT_FILE, GEE_SERVICE_ACCOUNT_EMAIL,
-                                 GEE_PROJECT)
+            from config import GEE_SERVICE_ACCOUNT_FILE, GEE_PROJECT
             try:
-                if os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
-                    creds = ee.ServiceAccountCredentials(
-                        email=GEE_SERVICE_ACCOUNT_EMAIL,
-                        key_file=GEE_SERVICE_ACCOUNT_FILE
-                    )
-                    ee.Initialize(creds, project=GEE_PROJECT)
-                else:
-                    ee.Initialize(project=GEE_PROJECT)
-                _ = ee.Number(1).getInfo()  # quick connectivity test
+                if os.path.exists(GEE_SERVICE_ACCOUNT_FILE) and _GEE_CREDENTIALS:
+                    import google.auth.transport.requests as _ga_r
+                    _GEE_CREDENTIALS.refresh(_ga_r.Request())
+                _ = ee.Number(1).getInfo()
                 print('  GEE initialized ✓')
                 return True
             except Exception as e:
                 if 'already' in str(e).lower():
-                    print('  GEE already initialized ✓')
                     return True
                 print(f'  GEE init error: {e}')
-                return False
+                try:
+                    fresh = _build_gee_credentials()
+                    ee.Initialize(fresh, project=GEE_PROJECT,
+                                  opt_url='https://earthengine.googleapis.com')
+                    return True
+                except Exception as e2:
+                    if 'already' in str(e2).lower():
+                        return True
+                    print(f'  GEE fallback: {e2}')
+                    return False
 
         if not init_gee():
             job['status'] = 'error'
