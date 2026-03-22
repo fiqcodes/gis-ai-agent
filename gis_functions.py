@@ -1028,19 +1028,24 @@ def compute_lulc(study_area, start_date, end_date, region_name):
         total_pixels = 0
         class_pixels = {}
 
-        for class_id in sampled_ids:
-            try:
-                px = (classified.eq(class_id)
-                                .reduceRegion(reducer  = ee.Reducer.sum(),
-                                              geometry = study_area,
-                                              scale    = stats_scale,
-                                              maxPixels= 1e9)
-                                .getInfo().get('classification', 0))
-                if px and px > 0:
-                    class_pixels[class_id] = px
-                    total_pixels += px
-            except Exception as e:
-                print(f'  Area calc failed for {ESRI_CLASSES[class_id][0]}: {e}')
+        # Single batch call — count all class pixels at once
+        try:
+            counts = classified.reduceRegion(
+                reducer  = ee.Reducer.frequencyHistogram(),
+                geometry = study_area,
+                scale    = stats_scale,
+                maxPixels= 1e9
+            ).getInfo().get('classification', {})
+            # counts = {'1': 909, '7': 57492, ...}
+            for k, v in counts.items():
+                try:
+                    class_id = int(float(k))
+                    if class_id in sampled_ids and v > 0:
+                        class_pixels[class_id] = int(v)
+                        total_pixels += int(v)
+                except: pass
+        except Exception as e:
+            print(f'  Area batch calc failed: {e}')
 
         if total_pixels == 0:
             return {'success': False, 'message': 'Area calculation returned zero pixels'}
