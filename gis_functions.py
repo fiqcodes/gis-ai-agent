@@ -92,8 +92,25 @@ def load_landsat(study_area, start, end):
 def resolve_region(region_name):
     print(f'  Resolving region: "{region_name}"...')
 
-    # Step 1: Try Nominatim FIRST (no GEE calls, always works for cities/boroughs)
-    nom_geom = None
+    # Step 1: GAUL — uses filterBounds trick to avoid size().getInfo() session expiry
+    # Use .limit(1).size().getInfo() is still 1 call but fast — only runs if session OK
+    for gaul_id, level_name, field in [
+        ('FAO/GAUL/2015/level1', 'GAUL Level 1 (province/state)', 'ADM1_NAME'),
+        ('FAO/GAUL/2015/level0', 'GAUL Level 0 (country)',        'ADM0_NAME'),
+        ('FAO/GAUL/2015/level2', 'GAUL Level 2 (district/city)',  'ADM2_NAME'),
+    ]:
+        try:
+            fc    = ee.FeatureCollection(gaul_id)
+            match = fc.filter(ee.Filter.stringContains(field, region_name)).limit(1)
+            feat  = match.first()
+            # Use getInfo() on the feature directly — avoids size() call
+            info  = feat.getInfo()
+            if info and info.get('geometry'):
+                print(f'  Found in {level_name}')
+                return feat.geometry()
+        except: pass
+
+    # Step 2: Nominatim fallback for cities/boroughs not in GAUL
     try:
         url     = 'https://nominatim.openstreetmap.org/search?q=' + region_name + '&format=json&limit=1'
         headers = {'User-Agent': 'SatelliteAgent/1.0'}
@@ -101,38 +118,11 @@ def resolve_region(region_name):
         if resp:
             bb   = resp[0]['boundingbox']
             s, n, w, e = float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])
-            nom_geom = ee.Geometry.Rectangle([w, s, e, n])
+            geom = ee.Geometry.Rectangle([w, s, e, n])
             print(f'  Found via Nominatim  bbox: [{w:.2f},{s:.2f},{e:.2f},{n:.2f}]')
+            return geom
     except Exception as ex:
         print(f'  Nominatim failed: {ex}')
-
-    # Step 2: Try GAUL for precise polygon boundaries (states, provinces, countries)
-    # GAUL gives better clipping than bbox, try it for known admin regions
-    try:
-        gaul1 = ee.FeatureCollection('FAO/GAUL/2015/level1')
-        match = gaul1.filter(ee.Filter.stringContains('ADM1_NAME', region_name))
-        if match.size().getInfo() > 0:
-            print('  Found in GAUL Level 1 (province/state)')
-            return match.first().geometry()
-    except: pass
-    try:
-        gaul0 = ee.FeatureCollection('FAO/GAUL/2015/level0')
-        match = gaul0.filter(ee.Filter.stringContains('ADM0_NAME', region_name))
-        if match.size().getInfo() > 0:
-            print('  Found in GAUL Level 0 (country)')
-            return match.first().geometry()
-    except: pass
-    try:
-        gaul2 = ee.FeatureCollection('FAO/GAUL/2015/level2')
-        match = gaul2.filter(ee.Filter.stringContains('ADM2_NAME', region_name))
-        if match.size().getInfo() > 0:
-            print('  Found in GAUL Level 2 (district/city)')
-            return match.first().geometry()
-    except: pass
-
-    # Step 3: Fall back to Nominatim bbox if GAUL failed
-    if nom_geom is not None:
-        return nom_geom
 
     raise ValueError(f'Could not resolve region: "{region_name}"')
 
