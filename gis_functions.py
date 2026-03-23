@@ -883,7 +883,29 @@ def compute_lulc(study_area, start_date, end_date, region_name):
     5. Area stats in hectares and percentage
     """
     try:
-        # Ensure GEE is initialized in this scope
+        # Re-initialize GEE in this thread with fresh service account credentials
+        # GEE session is thread-local — must re-init in every new Flask thread
+        try:
+            import os as _os
+            import google.oauth2.service_account as _sa_lulc
+            import google.auth.transport.requests as _req_lulc
+            _sa_file = GEE_SERVICE_ACCOUNT_FILE
+            if _os.path.exists(_sa_file):
+                _scopes = ['https://www.googleapis.com/auth/earthengine',
+                           'https://www.googleapis.com/auth/cloud-platform']
+                _creds = _sa_lulc.Credentials.from_service_account_file(_sa_file, scopes=_scopes)
+                _creds.refresh(_req_lulc.Request())
+                # Reset stale internal state
+                try:
+                    import ee as _ee_r
+                    _ee_r.data._cloud_api_resource = None
+                    _ee_r.data._cloud_api_resource_raw = None
+                    _ee_r.ApiFunction._api = None
+                except: pass
+                ee.Initialize(_creds, project=GEE_PROJECT,
+                              opt_url='https://earthengine.googleapis.com')
+        except Exception as _gee_init_err:
+            pass  # Continue — may already be initialized in this thread
 
         # ── Step 1: Get relevant classes from LLM ────────────────────────────
         relevant_ids = get_relevant_classes(region_name)
