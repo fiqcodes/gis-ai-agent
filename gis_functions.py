@@ -954,40 +954,22 @@ def compute_lulc(study_area, start_date, end_date, region_name):
                     'message': f'Only {len(present_classes)} class(es) present — need ≥2'}
 
         print(f'  Sampling {len(present_classes)} classes...')
-        # Sample per class at 100m scale with 200 points each
+        # No per-class getInfo() — build collections lazily, merge once
         all_samples = []
         sampled_ids = []
         for class_id in present_classes:
             try:
                 class_mask = ref_lc.eq(class_id)
-                samples    = (training_stack
-                              .updateMask(class_mask)
-                              .sample(region    = study_area,
-                                      scale     = 100,
-                                      numPixels = 200,
-                                      seed      = 42 + class_id,
-                                      geometries= False))
-                n = samples.size().getInfo()
-                if n >= 5:
-                    all_samples.append(samples)
-                    sampled_ids.append(class_id)
-                    print(f'    {ESRI_CLASSES[class_id][0]}: {n} samples @ 100m')
-                else:
-                    # Try 300m
-                    samples2 = (training_stack
-                                .updateMask(class_mask)
-                                .sample(region    = study_area,
-                                        scale     = 300,
-                                        numPixels = 200,
-                                        seed      = 42 + class_id,
-                                        geometries= False))
-                    n2 = samples2.size().getInfo()
-                    if n2 >= 3:
-                        all_samples.append(samples2)
-                        sampled_ids.append(class_id)
-                        print(f'    {ESRI_CLASSES[class_id][0]}: {n2} samples @ 300m')
-                    else:
-                        print(f'    {ESRI_CLASSES[class_id][0]}: skipped ({n2} samples)')
+                # Build sample collection without calling getInfo()
+                samples = (training_stack
+                           .updateMask(class_mask)
+                           .sample(region    = study_area,
+                                   scale     = 100,
+                                   numPixels = 200,
+                                   seed      = 42 + class_id,
+                                   geometries= False))
+                all_samples.append(samples)
+                sampled_ids.append(class_id)
             except Exception as e:
                 print(f'    {ESRI_CLASSES[class_id][0]}: sampling error ({e})')
 
