@@ -554,18 +554,13 @@ def health():
         status['ollama_models'] = models
     except:
         pass
+    # GEE check: just verify credentials file exists — DO NOT call ee.Reset()
+    # or ee.Initialize() here as it corrupts the GEE state for worker threads
     try:
-        import ee
-        from config import GEE_PROJECT
-        try:
-            ee.Reset()
-        except: pass
-        ee.Initialize(project=GEE_PROJECT)
-        # Quick test
-        _ = ee.Number(1).getInfo()
-        status['gee'] = True
-    except Exception as ge:
-        status['gee_error'] = str(ge)
+        from config import GEE_SERVICE_ACCOUNT_FILE
+        status['gee'] = os.path.exists(GEE_SERVICE_ACCOUNT_FILE)
+    except:
+        pass
     return jsonify(status)
 
 

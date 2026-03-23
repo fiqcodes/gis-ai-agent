@@ -40,8 +40,8 @@ def ensure_gee():
 
 
 def gee_init_for_thread():
-    """Initialize GEE fresh in the current thread.
-    Directly patches ee internals to force re-initialization."""
+    """Initialize GEE fresh in the current thread using service account credentials.
+    Called at the start of every analysis job and every major GEE function."""
     import os
     from config import GEE_SERVICE_ACCOUNT_FILE, GEE_PROJECT
     try:
@@ -54,25 +54,12 @@ def gee_init_for_thread():
         creds = _sa_t.Credentials.from_service_account_file(
             GEE_SERVICE_ACCOUNT_FILE, scopes=scopes)
         creds.refresh(_req_t.Request())
-
-        # Directly patch ee.data internals to force fresh initialization
-        # These are the exact variables checked by ee.Initialize() and getAlgorithms()
-        import ee.data as _eed
-        import ee.apifunction as _eeaf
-        _eed._cloud_api_resource = None
-        _eed._cloud_api_resource_raw = None
-        if hasattr(_eed, '_cloud_projects'):
-            _eed._cloud_projects = None
-        if hasattr(_eed, '_initialized'):
-            _eed._initialized = False
-        _eeaf.ApiFunction._api = None
-        _eeaf.ApiFunction._bound_signatures = set()
-
-        # Now initialize with correct project — won't be blocked by stale state
         ee.Initialize(creds, project=GEE_PROJECT,
                       opt_url='https://earthengine.googleapis.com')
     except Exception as e:
-        print(f'  gee_init_for_thread: {e}')
+        err = str(e)
+        if 'already' not in err.lower():
+            print(f'  gee_init_for_thread: {e}')
 
 
 
