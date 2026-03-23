@@ -1062,14 +1062,21 @@ def compute_lulc(study_area, start_date, end_date, region_name):
         sorted_ids    = sorted([s['class_id'] for s in area_stats.values()])
         sorted_colors = [ESRI_CLASSES[c][1] for c in sorted_ids]
 
-        # Remap: e.g. [2,5,7,11] → [0,1,2,3] so palette index matches exactly
-        remapped = classified.remap(sorted_ids, list(range(len(sorted_ids))))
-
-        vis_params = {
-            'min'    : 0,
-            'max'    : len(sorted_ids) - 1,
-            'palette': sorted_colors,
-        }
+        # Build SLD style — assigns exact hex color to each class ID value
+        # No remap() needed, no extra GEE API calls
+        sld_entries = ''.join(
+            f'<ColorMapEntry color="{color}" quantity="{cid}" label="{ESRI_CLASSES[cid][0]}" opacity="1"/>'
+            for cid, color in zip(sorted_ids, sorted_colors)
+        )
+        sld_style = (
+            '<RasterSymbolizer>'
+            '<ColorMap type="values" extended="false">'
+            + sld_entries +
+            '</ColorMap>'
+            '</RasterSymbolizer>'
+        )
+        vis_params  = {'sld_style': sld_style}
+        remapped    = classified
 
         return {
             'success'   : True,

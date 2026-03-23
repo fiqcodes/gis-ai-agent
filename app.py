@@ -406,7 +406,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 lulc_result = compute_lulc(study_area_lulc, start_date, end_date, region_name)
                 if lulc_result['success']:
                     all_stats['LULC'] = lulc_result['stats']
-                    map_id = lulc_result['lulc_img'].clip(study_area_lulc).getMapId(lulc_result['vis_params'])
+                    lulc_vis = lulc_result['vis_params']
+                    lulc_clipped = lulc_result['lulc_img'].clip(study_area_lulc)
+                    if 'sld_style' in lulc_vis:
+                        map_id = lulc_clipped.sldStyle(lulc_vis['sld_style']).getMapId({})
+                    else:
+                        map_id = lulc_clipped.getMapId(lulc_vis)
                     layers.append({
                         'name'    : 'Land Cover Classification',
                         'tile_url': map_id['tile_fetcher'].url_format,
