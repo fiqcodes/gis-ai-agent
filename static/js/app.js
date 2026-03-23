@@ -239,7 +239,7 @@ function addTileLayer(name, tileUrl, bbox) {
   });
   tileLayer.addTo(map);
 
-  // Zoom to bbox when first tile layer is added — after tiles are rendered
+  // Zoom to this region's bbox — always zoom to first tile layer in each batch
   const existingTiles = mapLayers.filter(l => l.type === 'tile').length;
   if (bbox && existingTiles === 0) {
     const [w, s, e, n] = bbox;
@@ -587,7 +587,8 @@ function handleResult(result) {
   // Analysis result
   const { region, start_date, end_date, variables, stats, layers, geo, insight } = result;
 
-  // 1. Load GEE tile layers onto map
+  // 1. Clear previous layers and load new GEE tile layers onto map
+  clearAllLayers();  // Remove old region's layers before adding new ones
   if (layers && layers.length > 0) {
     console.log('Loading', layers.length, 'tile layers onto map');
     layers.forEach((lyr, i) => {
@@ -595,7 +596,6 @@ function handleResult(result) {
       if (lyr.tile_url && lyr.type === 'tile') {
         addTileLayer(lyr.name, lyr.tile_url, lyr.bbox);
       } else if ((lyr.url || lyr.image) && lyr.bbox) {
-        // fallback for static image
         addImageOverlay(lyr.name, lyr.url || lyr.image, lyr.bbox);
       } else {
         console.warn('Layer missing tile_url or bbox:', lyr.name, lyr);
