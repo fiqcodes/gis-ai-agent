@@ -32,17 +32,13 @@ from config import (GEE_PROJECT as _GEE_PROJECT,
 _GEE_CREDENTIALS = None
 
 def _build_gee_credentials():
-    """Build fresh credentials and reset GEE internal state."""
+    """Build fresh credentials from service account file."""
     import google.oauth2.service_account as _sa
     import google.auth.transport.requests as _ga_req
     scopes = ['https://www.googleapis.com/auth/earthengine',
               'https://www.googleapis.com/auth/cloud-platform']
     creds = _sa.Credentials.from_service_account_file(_SA_FILE, scopes=scopes)
     creds.refresh(_ga_req.Request())
-    # Reset GEE API function registry so it re-fetches with correct project
-    try:
-        _ee.ApiFunction._api = None
-    except: pass
     return creds
 
 try:
@@ -144,29 +140,20 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         from config import GEE_PROJECT
 
         def init_gee():
-            """Re-initialize GEE with fresh credentials — force reset every time."""
-            import os, ee as _ee_inner
+            """Re-initialize GEE using ee.Reset() + ee.Initialize() — reliable reset."""
+            import os
             from config import GEE_SERVICE_ACCOUNT_FILE, GEE_PROJECT
             try:
                 if os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
                     fresh = _build_gee_credentials()
-                    # Force reset internal GEE state before re-initializing
-                    try:
-                        _ee_inner.data._cloud_api_resource = None
-                        _ee_inner.data._cloud_api_resource_raw = None
-                        _ee_inner.ApiFunction._api = None
-                    except: pass
-                    # ee.Initialize with force_use_service_account not needed
-                    # Just call Reset first to clear "already initialized" state
-                    try:
-                        _ee_inner.data.resetProfiles()
-                    except: pass
-                    _ee_inner.Initialize(fresh, project=GEE_PROJECT,
-                                         opt_url='https://earthengine.googleapis.com')
+                    ee.Reset()  # Official GEE API to clear all internal state
+                    ee.Initialize(fresh, project=GEE_PROJECT,
+                                  opt_url='https://earthengine.googleapis.com')
                     print('  GEE initialized ✓')
                     return True
                 else:
-                    _ee_inner.Initialize(project=GEE_PROJECT)
+                    ee.Reset()
+                    ee.Initialize(project=GEE_PROJECT)
                     return True
             except Exception as e:
                 print(f'  GEE init error: {e}')
