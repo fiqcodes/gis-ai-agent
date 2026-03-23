@@ -35,27 +35,31 @@ from PIL import Image as PILImage
 from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR
 
 def ensure_gee():
-    """Refresh GEE credentials in place — no re-Initialize."""
+    """Kept for compatibility — calls gee_init_for_thread()."""
+    gee_init_for_thread()
+
+
+def gee_init_for_thread():
+    """Initialize GEE fresh in the current thread — same pattern as Jupyter notebook.
+    Safe to call multiple times: ee.Reset() clears old state first."""
     import os
     from config import GEE_SERVICE_ACCOUNT_FILE, GEE_PROJECT
     try:
         if os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
-            import google.oauth2.service_account as _sa_g
-            import google.auth.transport.requests as _req_g
+            import google.oauth2.service_account as _sa_t
+            import google.auth.transport.requests as _req_t
             scopes = ['https://www.googleapis.com/auth/earthengine',
                       'https://www.googleapis.com/auth/cloud-platform']
-            creds = _sa_g.Credentials.from_service_account_file(
+            creds = _sa_t.Credentials.from_service_account_file(
                 GEE_SERVICE_ACCOUNT_FILE, scopes=scopes)
-            creds.refresh(_req_g.Request())
-            # Only re-initialize if GEE is not responding
-            try:
-                ee.Number(1).getInfo()
-            except Exception:
-                ee.Initialize(creds, project=GEE_PROJECT,
-                              opt_url='https://earthengine.googleapis.com')
+            creds.refresh(_req_t.Request())
+            ee.Reset()
+            ee.Initialize(creds, project=GEE_PROJECT,
+                          opt_url='https://earthengine.googleapis.com')
     except Exception as e:
         if 'already' not in str(e).lower():
-            print(f'  ensure_gee: {e}')
+            print(f'  gee_init_for_thread: {e}')
+
 
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
@@ -78,6 +82,7 @@ def apply_cloud_mask(image):
     return image.updateMask(mask)
 
 def load_landsat(study_area, start, end):
+    gee_init_for_thread()
     col = (ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
              .filterDate(start, end)
              .filterBounds(study_area)
@@ -883,23 +888,8 @@ def compute_lulc(study_area, start_date, end_date, region_name):
     5. Area stats in hectares and percentage
     """
     try:
-        # Re-initialize GEE in this thread using ee.Reset() + ee.Initialize()
-        # ee.Reset() is the official API to clear state for re-initialization
-        try:
-            import os as _os
-            import google.oauth2.service_account as _sa_lulc
-            import google.auth.transport.requests as _req_lulc
-            _sa_file = GEE_SERVICE_ACCOUNT_FILE
-            if _os.path.exists(_sa_file):
-                _scopes = ['https://www.googleapis.com/auth/earthengine',
-                           'https://www.googleapis.com/auth/cloud-platform']
-                _creds = _sa_lulc.Credentials.from_service_account_file(_sa_file, scopes=_scopes)
-                _creds.refresh(_req_lulc.Request())
-                ee.Reset()  # Official GEE API to clear all state
-                ee.Initialize(_creds, project=GEE_PROJECT,
-                              opt_url='https://earthengine.googleapis.com')
-        except Exception as _gee_init_err:
-            pass  # Already initialized or other non-fatal error
+        # Re-initialize GEE fresh in this thread (same as notebook workflow)
+        gee_init_for_thread()
 
         # ── Step 1: Get relevant classes from LLM ────────────────────────────
         relevant_ids = get_relevant_classes(region_name)

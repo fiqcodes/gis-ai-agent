@@ -140,21 +140,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         from config import GEE_PROJECT
 
         def init_gee():
-            """Re-initialize GEE using ee.Reset() + ee.Initialize() — reliable reset."""
-            import os
-            from config import GEE_SERVICE_ACCOUNT_FILE, GEE_PROJECT
+            """Initialize GEE fresh for this thread — delegates to gis_functions."""
             try:
-                if os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
-                    fresh = _build_gee_credentials()
-                    ee.Reset()  # Official GEE API to clear all internal state
-                    ee.Initialize(fresh, project=GEE_PROJECT,
-                                  opt_url='https://earthengine.googleapis.com')
-                    print('  GEE initialized ✓')
-                    return True
-                else:
-                    ee.Reset()
-                    ee.Initialize(project=GEE_PROJECT)
-                    return True
+                from gis_functions import gee_init_for_thread
+                gee_init_for_thread()
+                print('  GEE initialized ✓')
+                return True
             except Exception as e:
                 print(f'  GEE init error: {e}')
                 return False
