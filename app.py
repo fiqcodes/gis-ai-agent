@@ -144,27 +144,31 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         from config import GEE_PROJECT
 
         def init_gee():
-            """Re-initialize GEE with fresh credentials before every job."""
-            import os
+            """Re-initialize GEE with fresh credentials — force reset every time."""
+            import os, ee as _ee_inner
             from config import GEE_SERVICE_ACCOUNT_FILE, GEE_PROJECT
             try:
                 if os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
-                    # Always build fresh credentials + re-initialize
-                    # This is the only reliable way to prevent earthengine-legacy fallback
                     fresh = _build_gee_credentials()
-                    ee.Initialize(fresh, project=GEE_PROJECT,
-                                  opt_url='https://earthengine.googleapis.com')
+                    # Force reset internal GEE state before re-initializing
+                    try:
+                        _ee_inner.data._cloud_api_resource = None
+                        _ee_inner.data._cloud_api_resource_raw = None
+                        _ee_inner.ApiFunction._api = None
+                    except: pass
+                    # ee.Initialize with force_use_service_account not needed
+                    # Just call Reset first to clear "already initialized" state
+                    try:
+                        _ee_inner.data.resetProfiles()
+                    except: pass
+                    _ee_inner.Initialize(fresh, project=GEE_PROJECT,
+                                         opt_url='https://earthengine.googleapis.com')
                     print('  GEE initialized ✓')
                     return True
                 else:
-                    ee.Initialize(project=GEE_PROJECT)
+                    _ee_inner.Initialize(project=GEE_PROJECT)
                     return True
             except Exception as e:
-                err = str(e).lower()
-                if 'already' in err:
-                    # Already initialized in this thread — still valid
-                    print('  GEE initialized ✓')
-                    return True
                 print(f'  GEE init error: {e}')
                 return False
 
