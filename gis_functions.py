@@ -66,7 +66,7 @@ def gee_init_for_thread():
         if hasattr(_eed, '_initialized'):
             _eed._initialized = False
         _eeaf.ApiFunction._api = None
-        _eeaf.ApiFunction._bound_signatures = {}
+        _eeaf.ApiFunction._bound_signatures = set()
 
         # Now initialize with correct project — won't be blocked by stale state
         ee.Initialize(creds, project=GEE_PROJECT,
