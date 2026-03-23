@@ -78,7 +78,6 @@ def apply_cloud_mask(image):
     return image.updateMask(mask)
 
 def load_landsat(study_area, start, end):
-    ensure_gee()
     col = (ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
              .filterDate(start, end)
              .filterBounds(study_area)
@@ -91,7 +90,6 @@ def load_landsat(study_area, start, end):
 # =============================================================================
 
 def resolve_region(region_name):
-    ensure_gee()
     print(f'  Resolving region: "{region_name}"...')
     try:
         gaul1 = ee.FeatureCollection('FAO/GAUL/2015/level1')
@@ -878,7 +876,6 @@ def compute_lulc(study_area, start_date, end_date, region_name):
     """
     try:
         # Ensure GEE is initialized in this scope
-        ensure_gee()
 
         # ── Step 1: Get relevant classes from LLM ────────────────────────────
         relevant_ids = get_relevant_classes(region_name)
@@ -903,7 +900,6 @@ def compute_lulc(study_area, start_date, end_date, region_name):
 
         # ── Step 3: Load Landsat 8 composite as features ─────────────────────
         print('  Loading Landsat 8 features...')
-        ensure_gee()
         landsat_col, composite = load_landsat(study_area, start_date, end_date)
         count = landsat_col.size().getInfo()
         if count == 0:
@@ -1022,12 +1018,10 @@ def compute_lulc(study_area, start_date, end_date, region_name):
         )
 
         # ── Step 6: Classify ──────────────────────────────────────────────────
-        ensure_gee()
         print('  Classifying image...')
         classified = features.classify(classifier).rename('classification')
 
         # ── Step 7: Area statistics at appropriate scale ──────────────────────
-        ensure_gee()
         print('  Computing area statistics...')
         bbox_area     = study_area.area(maxError=1).getInfo()
         stats_scale   = 100 if bbox_area < 5e9 else 300  # 100m cities, 300m countries
