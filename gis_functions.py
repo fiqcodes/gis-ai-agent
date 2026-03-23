@@ -986,7 +986,9 @@ def compute_lulc(study_area, start_date, end_date, region_name):
 
         # ── Step 5: Train Random Forest ───────────────────────────────────────
         print('  Training Random Forest (200 trees)...')
-        band_names = features.bandNames().getInfo()
+        # Known feature bands — no getInfo() call needed
+        band_names = ['SR_B2','SR_B3','SR_B4','SR_B5','SR_B6','SR_B7',
+                      'NDVI','NDBI','NDWI','MNDWI','SAVI','BSI']
         classifier = ee.Classifier.smileRandomForest(
             numberOfTrees     = 200,
             variablesPerSplit = None,
