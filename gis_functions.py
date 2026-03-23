@@ -91,6 +91,23 @@ def load_landsat(study_area, start, end):
 
 def resolve_region(region_name):
     print(f'  Resolving region: "{region_name}"...')
+
+    # Step 1: Try Nominatim FIRST (no GEE calls, always works for cities/boroughs)
+    nom_geom = None
+    try:
+        url     = 'https://nominatim.openstreetmap.org/search?q=' + region_name + '&format=json&limit=1'
+        headers = {'User-Agent': 'SatelliteAgent/1.0'}
+        resp    = requests.get(url, headers=headers, timeout=10).json()
+        if resp:
+            bb   = resp[0]['boundingbox']
+            s, n, w, e = float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])
+            nom_geom = ee.Geometry.Rectangle([w, s, e, n])
+            print(f'  Found via Nominatim  bbox: [{w:.2f},{s:.2f},{e:.2f},{n:.2f}]')
+    except Exception as ex:
+        print(f'  Nominatim failed: {ex}')
+
+    # Step 2: Try GAUL for precise polygon boundaries (states, provinces, countries)
+    # GAUL gives better clipping than bbox, try it for known admin regions
     try:
         gaul1 = ee.FeatureCollection('FAO/GAUL/2015/level1')
         match = gaul1.filter(ee.Filter.stringContains('ADM1_NAME', region_name))
@@ -112,18 +129,11 @@ def resolve_region(region_name):
             print('  Found in GAUL Level 2 (district/city)')
             return match.first().geometry()
     except: pass
-    try:
-        url     = 'https://nominatim.openstreetmap.org/search?q=' + region_name + '&format=json&limit=1'
-        headers = {'User-Agent': 'SatelliteAgent/1.0'}
-        resp    = requests.get(url, headers=headers, timeout=10).json()
-        if resp:
-            bb   = resp[0]['boundingbox']
-            s, n, w, e = float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])
-            geom = ee.Geometry.Rectangle([w, s, e, n])
-            print(f'  Found via Nominatim  bbox: [{w:.2f},{s:.2f},{e:.2f},{n:.2f}]')
-            return geom
-    except Exception as ex:
-        print(f'  Nominatim failed: {ex}')
+
+    # Step 3: Fall back to Nominatim bbox if GAUL failed
+    if nom_geom is not None:
+        return nom_geom
+
     raise ValueError(f'Could not resolve region: "{region_name}"')
 
 # =============================================================================
