@@ -92,8 +92,21 @@ def load_landsat(study_area, start, end):
 def resolve_region(region_name):
     print(f'  Resolving region: "{region_name}"...')
 
-    # Step 1: GAUL — uses filterBounds trick to avoid size().getInfo() session expiry
-    # Use .limit(1).size().getInfo() is still 1 call but fast — only runs if session OK
+    # Step 1: Nominatim HTTP only — store raw coords, NO ee.Geometry yet
+    nom_coords = None
+    try:
+        url     = 'https://nominatim.openstreetmap.org/search?q=' + region_name + '&format=json&limit=1'
+        headers = {'User-Agent': 'SatelliteAgent/1.0'}
+        resp    = requests.get(url, headers=headers, timeout=10).json()
+        if resp:
+            bb   = resp[0]['boundingbox']
+            s, n, w, e = float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])
+            nom_coords = [w, s, e, n]
+            print(f'  Found via Nominatim  bbox: [{w:.2f},{s:.2f},{e:.2f},{n:.2f}]')
+    except Exception as ex:
+        print(f'  Nominatim HTTP failed: {ex}')
+
+    # Step 2: GAUL — precise polygon boundaries (states, provinces, countries)
     for gaul_id, level_name, field in [
         ('FAO/GAUL/2015/level1', 'GAUL Level 1 (province/state)', 'ADM1_NAME'),
         ('FAO/GAUL/2015/level0', 'GAUL Level 0 (country)',        'ADM0_NAME'),
@@ -103,26 +116,21 @@ def resolve_region(region_name):
             fc    = ee.FeatureCollection(gaul_id)
             match = fc.filter(ee.Filter.stringContains(field, region_name)).limit(1)
             feat  = match.first()
-            # Use getInfo() on the feature directly — avoids size() call
             info  = feat.getInfo()
             if info and info.get('geometry'):
                 print(f'  Found in {level_name}')
                 return feat.geometry()
         except: pass
 
-    # Step 2: Nominatim fallback for cities/boroughs not in GAUL
-    try:
-        url     = 'https://nominatim.openstreetmap.org/search?q=' + region_name + '&format=json&limit=1'
-        headers = {'User-Agent': 'SatelliteAgent/1.0'}
-        resp    = requests.get(url, headers=headers, timeout=10).json()
-        if resp:
-            bb   = resp[0]['boundingbox']
-            s, n, w, e = float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])
+    # Step 3: Fall back to Nominatim — create ee.Geometry NOW (GEE session still OK here)
+    if nom_coords:
+        try:
+            w, s, e, n = nom_coords
             geom = ee.Geometry.Rectangle([w, s, e, n])
-            print(f'  Found via Nominatim  bbox: [{w:.2f},{s:.2f},{e:.2f},{n:.2f}]')
+            print(f'  Using Nominatim bbox (GAUL not available)')
             return geom
-    except Exception as ex:
-        print(f'  Nominatim failed: {ex}')
+        except Exception as ex:
+            print(f'  Nominatim GEE geometry failed: {ex}')
 
     raise ValueError(f'Could not resolve region: "{region_name}"')
 
