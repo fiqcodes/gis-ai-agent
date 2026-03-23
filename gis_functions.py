@@ -40,25 +40,40 @@ def ensure_gee():
 
 
 def gee_init_for_thread():
-    """Initialize GEE fresh in the current thread — same pattern as Jupyter notebook.
-    Safe to call multiple times: ee.Reset() clears old state first."""
+    """Initialize GEE fresh in the current thread.
+    Directly patches ee internals to force re-initialization."""
     import os
     from config import GEE_SERVICE_ACCOUNT_FILE, GEE_PROJECT
     try:
-        if os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
-            import google.oauth2.service_account as _sa_t
-            import google.auth.transport.requests as _req_t
-            scopes = ['https://www.googleapis.com/auth/earthengine',
-                      'https://www.googleapis.com/auth/cloud-platform']
-            creds = _sa_t.Credentials.from_service_account_file(
-                GEE_SERVICE_ACCOUNT_FILE, scopes=scopes)
-            creds.refresh(_req_t.Request())
-            ee.Reset()
-            ee.Initialize(creds, project=GEE_PROJECT,
-                          opt_url='https://earthengine.googleapis.com')
+        if not os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
+            return
+        import google.oauth2.service_account as _sa_t
+        import google.auth.transport.requests as _req_t
+        scopes = ['https://www.googleapis.com/auth/earthengine',
+                  'https://www.googleapis.com/auth/cloud-platform']
+        creds = _sa_t.Credentials.from_service_account_file(
+            GEE_SERVICE_ACCOUNT_FILE, scopes=scopes)
+        creds.refresh(_req_t.Request())
+
+        # Directly patch ee.data internals to force fresh initialization
+        # These are the exact variables checked by ee.Initialize() and getAlgorithms()
+        import ee.data as _eed
+        import ee.apifunction as _eeaf
+        _eed._cloud_api_resource = None
+        _eed._cloud_api_resource_raw = None
+        if hasattr(_eed, '_cloud_projects'):
+            _eed._cloud_projects = None
+        if hasattr(_eed, '_initialized'):
+            _eed._initialized = False
+        _eeaf.ApiFunction._api = None
+        _eeaf.ApiFunction._bound_signatures = {}
+
+        # Now initialize with correct project — won't be blocked by stale state
+        ee.Initialize(creds, project=GEE_PROJECT,
+                      opt_url='https://earthengine.googleapis.com')
     except Exception as e:
-        if 'already' not in str(e).lower():
-            print(f'  gee_init_for_thread: {e}')
+        print(f'  gee_init_for_thread: {e}')
+
 
 
 import matplotlib.colors as mcolors
