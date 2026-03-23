@@ -254,7 +254,8 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         atmo_keys    = list(ATMO_INDEX_MAP.keys()) + ['ffpi']
         layers = []   # will collect GEE tile URLs
 
-        # Get precise bbox from GEE geometry (more accurate than Nominatim)
+        # Resolve region ONCE — reused for surface, LULC, and atmo
+        study_area_main = None
         try:
             study_area_main = resolve_region(region_name)
             coords = study_area_main.bounds().getInfo()['coordinates'][0]
@@ -282,7 +283,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     load_landsat, compute_lst, compute_uhi,
                     get_stats, SURFACE_INDEX_MAP, VIS,
                 )
-                study_area_surf = resolve_region(region_name)
+                study_area_surf = study_area_main
                 landsat_col, composite = load_landsat(study_area_surf, start_date, end_date)
                 count = landsat_col.size().getInfo()
                 print(f'  {count} Landsat scenes loaded')
@@ -359,7 +360,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         if atmo_vars:
             try:
                 from gis_functions import ATMO_INDEX_MAP, VIS, get_stats, compute_ffpi
-                study_area_atmo = resolve_region(region_name)
+                study_area_atmo = study_area_main
 
                 for v in atmo_vars:
                     try:
@@ -402,7 +403,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             update_step(3, 'running', 70)
             try:
                 from gis_functions import compute_lulc
-                study_area_lulc = resolve_region(region_name)
+                study_area_lulc = study_area_main
                 lulc_result = compute_lulc(study_area_lulc, start_date, end_date, region_name)
                 if lulc_result['success']:
                     all_stats['LULC'] = lulc_result['stats']
