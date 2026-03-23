@@ -32,13 +32,17 @@ from config import (GEE_PROJECT as _GEE_PROJECT,
 _GEE_CREDENTIALS = None
 
 def _build_gee_credentials():
-    """Build fresh credentials from service account file."""
+    """Build fresh credentials and reset GEE internal state."""
     import google.oauth2.service_account as _sa
     import google.auth.transport.requests as _ga_req
     scopes = ['https://www.googleapis.com/auth/earthengine',
               'https://www.googleapis.com/auth/cloud-platform']
     creds = _sa.Credentials.from_service_account_file(_SA_FILE, scopes=scopes)
     creds.refresh(_ga_req.Request())
+    # Reset GEE API function registry so it re-fetches with correct project
+    try:
+        _ee.ApiFunction._api = None
+    except: pass
     return creds
 
 try:
@@ -140,30 +144,29 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         from config import GEE_PROJECT
 
         def init_gee():
-            """Refresh GEE token — no re-Initialize needed."""
+            """Re-initialize GEE with fresh credentials before every job."""
             import os
             from config import GEE_SERVICE_ACCOUNT_FILE, GEE_PROJECT
             try:
-                if os.path.exists(GEE_SERVICE_ACCOUNT_FILE) and _GEE_CREDENTIALS:
-                    import google.auth.transport.requests as _ga_r
-                    _GEE_CREDENTIALS.refresh(_ga_r.Request())
-                _ = ee.Number(1).getInfo()
-                print('  GEE initialized ✓')
-                return True
-            except Exception as e:
-                if 'already' in str(e).lower():
-                    return True
-                print(f'  GEE init error: {e}')
-                try:
+                if os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
+                    # Always build fresh credentials + re-initialize
+                    # This is the only reliable way to prevent earthengine-legacy fallback
                     fresh = _build_gee_credentials()
                     ee.Initialize(fresh, project=GEE_PROJECT,
                                   opt_url='https://earthengine.googleapis.com')
+                    print('  GEE initialized ✓')
                     return True
-                except Exception as e2:
-                    if 'already' in str(e2).lower():
-                        return True
-                    print(f'  GEE fallback: {e2}')
-                    return False
+                else:
+                    ee.Initialize(project=GEE_PROJECT)
+                    return True
+            except Exception as e:
+                err = str(e).lower()
+                if 'already' in err:
+                    # Already initialized in this thread — still valid
+                    print('  GEE initialized ✓')
+                    return True
+                print(f'  GEE init error: {e}')
+                return False
 
         if not init_gee():
             job['status'] = 'error'
