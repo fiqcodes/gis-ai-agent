@@ -758,7 +758,7 @@ function renderChartsInBubble(bubble, stats, variables) {
             marker : { color: cols },
             text   : vals.map(v => v.toFixed(4)),
             textposition: 'outside',
-            textfont: { color: '#8892a4', size: 10 },
+            textfont: { color: '#4a5568', size: 10 },
           }], plotlyLayout(`${varName} Statistics`, 200), plotlyConfig());
         }
       }
@@ -778,9 +778,9 @@ function renderChartsInBubble(bubble, stats, variables) {
             type        : 'pie',
             labels      : names,
             values      : pcts,
-            marker      : { colors, line: { color: '#0f1117', width: 1.5 } },
+            marker      : { colors, line: { color: '#f5f6f8', width: 1.5 } },
             textinfo    : 'label+percent',
-            textfont    : { color: '#fff', size: 11, family: 'DM Sans' },
+            textfont    : { color: '#1a1d23', size: 11, family: 'DM Sans' },
             hole        : 0.38,
             pull        : names.map((_, i) => i === 0 ? 0.04 : 0),
           }], {
@@ -799,7 +799,7 @@ function renderChartsInBubble(bubble, stats, variables) {
             marker      : { color: sorted.map(n => s.classes[n].color || '#00d4b8') },
             text        : sorted.map(n => s.classes[n].percentage.toFixed(1) + '%'),
             textposition: 'outside',
-            textfont    : { color: '#8892a4', size: 10 },
+            textfont    : { color: '#4a5568', size: 10 },
           }], plotlyLayout('Area by Class (%)', 220), plotlyConfig());
         }
       }
@@ -809,14 +809,14 @@ function renderChartsInBubble(bubble, stats, variables) {
 
 function plotlyLayout(title, height = 200) {
   return {
-    title      : { text: title, font: { size: 12, color: '#8892a4', family: 'DM Sans' } },
+    title      : { text: title, font: { size: 12, color: '#4a5568', family: 'DM Sans' } },
     height,
     margin     : { l: 50, r: 20, t: 35, b: 40 },
     paper_bgcolor: 'transparent',
     plot_bgcolor : 'transparent',
-    font        : { color: '#8892a4', family: 'DM Sans', size: 11 },
-    xaxis: { gridcolor: 'rgba(255,255,255,0.05)', tickcolor: 'rgba(255,255,255,0.1)', linecolor: 'rgba(255,255,255,0.05)' },
-    yaxis: { gridcolor: 'rgba(255,255,255,0.05)', tickcolor: 'rgba(255,255,255,0.1)', linecolor: 'rgba(255,255,255,0.05)' },
+    font        : { color: '#4a5568', family: 'DM Sans', size: 11 },
+    xaxis: { gridcolor: 'rgba(0,0,0,0.06)', tickcolor: 'rgba(0,0,0,0.1)', linecolor: 'rgba(0,0,0,0.08)' },
+    yaxis: { gridcolor: 'rgba(0,0,0,0.06)', tickcolor: 'rgba(0,0,0,0.1)', linecolor: 'rgba(0,0,0,0.08)' },
     showlegend  : false,
   };
 }
