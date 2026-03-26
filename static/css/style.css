@@ -97,7 +97,7 @@ html, body {
   display: flex;
   flex-direction: column;
   z-index: 100;
-  transition: width 0.3s ease;
+  /* NO transition — JS controls width, transition causes desync with resizer */
 }
 
 .map-panel {
@@ -106,7 +106,7 @@ html, body {
   top: 0; right: 0; bottom: 0;
   background: var(--bg);
   z-index: 50;
-  transition: left 0.3s ease;
+  /* NO transition — JS controls left, transition causes desync with resizer */
 }
 
 .map-panel.collapsed {

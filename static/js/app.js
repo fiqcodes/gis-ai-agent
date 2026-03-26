@@ -980,10 +980,12 @@ function updateAssetsBadge() {
     if (typeof map !== 'undefined' && map) map.invalidateSize({ animate: false });
   }
 
-  // Init from CSS default (40% of window minus nav)
+  // Init: read actual rendered chatPanel width AFTER CSS has been applied
   function initLayout() {
-    const defaultChatW = Math.round(window.innerWidth * 0.40) - NAV_W;
-    setLayout(defaultChatW);
+    // chatPanel.offsetWidth reads the true CSS-rendered width including calc()
+    const chatW = chatPanel.offsetWidth;
+    // Only override if it's valid (non-zero), else fall back to formula
+    setLayout(chatW > 0 ? chatW : Math.round(window.innerWidth * 0.40) - NAV_W);
   }
 
   resizer.addEventListener('mousedown', (e) => {
@@ -1034,7 +1036,12 @@ function updateAssetsBadge() {
   });
 
   window.addEventListener('resize', initLayout);
-  initLayout();
+  // Run after DOM is fully rendered so offsetWidth is accurate
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initLayout);
+  } else {
+    initLayout();
+  }
 })();
 
 function checkHealth() {
