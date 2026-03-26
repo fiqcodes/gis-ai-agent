@@ -878,6 +878,45 @@ html, body {
 .leaflet-popup-tip { background: var(--bg2) !important; }
 
 /* ════════════════════════════════════════════════════════
+   PANEL RESIZER
+════════════════════════════════════════════════════════ */
+.panel-resizer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 40%;
+  width: 8px;
+  z-index: 150;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateX(-50%);
+  transition: background 0.15s;
+}
+
+.panel-resizer:hover .resizer-handle,
+.panel-resizer.dragging .resizer-handle {
+  opacity: 1;
+  background: var(--accent);
+}
+
+.resizer-handle {
+  width: 3px;
+  height: 48px;
+  background: var(--border2);
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+  pointer-events: none;
+}
+
+/* Show handle on hover near the edge */
+.panel-resizer:hover {
+  background: rgba(0,196,170,0.04);
+}
+
+/* ════════════════════════════════════════════════════════
    RESPONSIVE
 ════════════════════════════════════════════════════════ */
 @media (max-width: 900px) {
