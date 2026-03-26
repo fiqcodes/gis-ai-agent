@@ -20,6 +20,14 @@ document.addEventListener('DOMContentLoaded', () => {
   initMap();
   checkHealth();
   setInterval(checkHealth, 30000);
+  // Ensure resizer is positioned correctly after layout
+  requestAnimationFrame(() => {
+    const resizer   = document.getElementById('panelResizer');
+    const chatPanel = document.getElementById('chatPanel');
+    if (resizer && chatPanel) {
+      resizer.style.left = (chatPanel.getBoundingClientRect().right - 8) + 'px';
+    }
+  });
 });
 
 // ════════════════════════════════════════════════════════
@@ -959,32 +967,34 @@ function updateAssetsBadge() {
   const resizer   = document.getElementById('panelResizer');
   const chatPanel = document.getElementById('chatPanel');
   const mapPanel  = document.getElementById('mapPanel');
-  const navW      = 52; // matches --nav-w
+  const navW      = 52;
   const MIN_CHAT  = 280;
-  const MAX_CHAT  = window.innerWidth - navW - 200;
 
   let isDragging = false;
   let startX     = 0;
   let startWidth = 0;
 
+  function syncResizerToPanel() {
+    // Place resizer so its center aligns with the right edge of chatPanel
+    const chatRight = chatPanel.getBoundingClientRect().right;
+    resizer.style.left = (chatRight - 8) + 'px'; // 8 = half of 16px resizer width
+  }
+
   function applyWidth(chatW) {
-    // Clamp
     chatW = Math.max(MIN_CHAT, Math.min(chatW, window.innerWidth - navW - 200));
-
-    const boundary = navW + chatW; // absolute px from left edge of screen
-
     chatPanel.style.width = chatW + 'px';
-    mapPanel.style.left   = boundary + 'px';
-    resizer.style.left    = (boundary - 8) + 'px'; // half of resizer width (16px / 2 = 8)
-
+    mapPanel.style.left   = (navW + chatW) + 'px';
+    syncResizerToPanel();
     if (map) map.invalidateSize({ animate: false });
   }
+
+  // Sync on load
+  syncResizerToPanel();
 
   resizer.addEventListener('mousedown', (e) => {
     isDragging = true;
     startX     = e.clientX;
     startWidth = chatPanel.getBoundingClientRect().width;
-
     resizer.classList.add('dragging');
     document.body.style.cursor     = 'col-resize';
     document.body.style.userSelect = 'none';
@@ -1029,6 +1039,9 @@ function updateAssetsBadge() {
     mapPanel.style.pointerEvents = '';
     if (map) setTimeout(() => map.invalidateSize(), 50);
   });
+
+  // Keep in sync on window resize
+  window.addEventListener('resize', syncResizerToPanel);
 })();
 
 function checkHealth() {
