@@ -621,7 +621,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, i
   const varList = (variables || []).map(v => v.toUpperCase()).join(', ');
   const dateStr = `${startDate} → ${endDate}`;
 
-  let html = `<h3>📡 Analysis Complete</h3>`;
+  let html = `<h3>Analysis Complete</h3>`;
   html += `<p><strong>Region:</strong> ${escapeHtml(region)} &nbsp;|&nbsp; <strong>Period:</strong> ${dateStr}</p>`;
   html += `<p><strong>Variables:</strong> ${varList}</p>`;
 
@@ -632,7 +632,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, i
 
   // AI Insight
   if (insight) {
-    html += `<h3>🤖 AI Insight</h3>`;
+    html += `<h3>AI Insight</h3>`;
     html += `<div class="insight-text">${parseMarkdown(insight)}</div>`;
   }
 
@@ -673,7 +673,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, i
 }
 
 function buildStatsHTML(stats) {
-  let html = `<h3>📊 Statistics</h3>`;
+  let html = `<h3>Statistics</h3>`;
 
   for (const [varName, s] of Object.entries(stats)) {
     if (!s) continue;
