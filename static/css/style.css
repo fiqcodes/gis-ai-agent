@@ -884,14 +884,13 @@ html, body {
   position: fixed;
   top: 0;
   bottom: 0;
-  left: 40%;
+  left: calc(40% - 8px);
   width: 16px;
   z-index: 150;
   cursor: col-resize;
   display: flex;
   align-items: center;
   justify-content: center;
-  transform: translateX(-50%);
 }
 
 /* Thin line running full height */

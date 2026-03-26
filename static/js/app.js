@@ -956,16 +956,29 @@ function updateAssetsBadge() {
 // PANEL RESIZER
 // ════════════════════════════════════════════════════════
 (function initResizer() {
-  const resizer    = document.getElementById('panelResizer');
-  const chatPanel  = document.getElementById('chatPanel');
-  const mapPanel   = document.getElementById('mapPanel');
-  const navW       = 52; // matches --nav-w
-  const MIN_CHAT   = 280;
-  const MAX_CHAT   = window.innerWidth * 0.75;
+  const resizer   = document.getElementById('panelResizer');
+  const chatPanel = document.getElementById('chatPanel');
+  const mapPanel  = document.getElementById('mapPanel');
+  const navW      = 52; // matches --nav-w
+  const MIN_CHAT  = 280;
+  const MAX_CHAT  = window.innerWidth - navW - 200;
 
   let isDragging = false;
   let startX     = 0;
   let startWidth = 0;
+
+  function applyWidth(chatW) {
+    // Clamp
+    chatW = Math.max(MIN_CHAT, Math.min(chatW, window.innerWidth - navW - 200));
+
+    const boundary = navW + chatW; // absolute px from left edge of screen
+
+    chatPanel.style.width = chatW + 'px';
+    mapPanel.style.left   = boundary + 'px';
+    resizer.style.left    = (boundary - 8) + 'px'; // half of resizer width (16px / 2 = 8)
+
+    if (map) map.invalidateSize({ animate: false });
+  }
 
   resizer.addEventListener('mousedown', (e) => {
     isDragging = true;
@@ -973,71 +986,40 @@ function updateAssetsBadge() {
     startWidth = chatPanel.getBoundingClientRect().width;
 
     resizer.classList.add('dragging');
-    document.body.style.cursor    = 'col-resize';
+    document.body.style.cursor     = 'col-resize';
     document.body.style.userSelect = 'none';
-
-    // Prevent map interactions while dragging
-    mapPanel.style.pointerEvents = 'none';
+    mapPanel.style.pointerEvents   = 'none';
+    e.preventDefault();
   });
 
   document.addEventListener('mousemove', (e) => {
     if (!isDragging) return;
-
-    const delta    = e.clientX - startX;
-    let newWidth   = startWidth + delta;
-
-    // Clamp between min and max
-    newWidth = Math.max(MIN_CHAT, Math.min(newWidth, window.innerWidth - navW - 200));
-
-    const pct = (newWidth + navW) / window.innerWidth * 100;
-
-    // Update chat panel width
-    chatPanel.style.width = (newWidth) + 'px';
-
-    // Update map panel left
-    mapPanel.style.left = (newWidth + navW) + 'px';
-
-    // Keep resizer in sync
-    resizer.style.left = (newWidth + navW) + 'px';
-
-    // Invalidate map size so tiles re-render correctly
-    if (map) map.invalidateSize({ animate: false });
+    applyWidth(startWidth + (e.clientX - startX));
   });
 
   document.addEventListener('mouseup', () => {
     if (!isDragging) return;
     isDragging = false;
-
     resizer.classList.remove('dragging');
     document.body.style.cursor     = '';
     document.body.style.userSelect = '';
     mapPanel.style.pointerEvents   = '';
-
-    // Final map refresh
     if (map) setTimeout(() => map.invalidateSize(), 50);
   });
 
   // Touch support
   resizer.addEventListener('touchstart', (e) => {
     const touch = e.touches[0];
-    isDragging = true;
-    startX     = touch.clientX;
-    startWidth = chatPanel.getBoundingClientRect().width;
+    isDragging  = true;
+    startX      = touch.clientX;
+    startWidth  = chatPanel.getBoundingClientRect().width;
     resizer.classList.add('dragging');
     mapPanel.style.pointerEvents = 'none';
   }, { passive: true });
 
   document.addEventListener('touchmove', (e) => {
     if (!isDragging) return;
-    const touch  = e.touches[0];
-    const delta  = touch.clientX - startX;
-    let newWidth = Math.max(MIN_CHAT, Math.min(startWidth + delta, window.innerWidth - navW - 200));
-
-    chatPanel.style.width = newWidth + 'px';
-    mapPanel.style.left   = (newWidth + navW) + 'px';
-    resizer.style.left    = (newWidth + navW) + 'px';
-
-    if (map) map.invalidateSize({ animate: false });
+    applyWidth(startWidth + (e.touches[0].clientX - startX));
   }, { passive: true });
 
   document.addEventListener('touchend', () => {
