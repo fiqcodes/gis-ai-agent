@@ -885,35 +885,60 @@ html, body {
   top: 0;
   bottom: 0;
   left: 40%;
-  width: 8px;
+  width: 16px;
   z-index: 150;
   cursor: col-resize;
   display: flex;
   align-items: center;
   justify-content: center;
   transform: translateX(-50%);
-  transition: background 0.15s;
+}
+
+/* Thin line running full height */
+.panel-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--border2);
+  transform: translateX(-50%);
+  transition: background 0.2s;
+}
+.panel-resizer:hover::before,
+.panel-resizer.dragging::before {
+  background: var(--accent);
+}
+
+/* Floating grip pill in the center */
+.resizer-handle {
+  position: relative;
+  z-index: 1;
+  width: 20px;
+  height: 44px;
+  background: var(--bg2);
+  border: 1.5px solid var(--border2);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  color: var(--text3);
 }
 
 .panel-resizer:hover .resizer-handle,
 .panel-resizer.dragging .resizer-handle {
-  opacity: 1;
-  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0,196,170,0.12), var(--shadow);
+  color: var(--accent);
 }
 
-.resizer-handle {
-  width: 3px;
-  height: 48px;
-  background: var(--border2);
-  border-radius: 3px;
-  opacity: 0;
-  transition: opacity 0.2s, background 0.2s;
-  pointer-events: none;
-}
-
-/* Show handle on hover near the edge */
-.panel-resizer:hover {
-  background: rgba(0,196,170,0.04);
+/* Three dot rows inside the grip */
+.resizer-handle::before,
+.resizer-handle::after {
+  display: none;
 }
 
 /* ════════════════════════════════════════════════════════
