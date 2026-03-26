@@ -854,12 +854,37 @@ function focusLayer(name) {
 // ════════════════════════════════════════════════════════
 // PLAN WIDGET
 // ════════════════════════════════════════════════════════
-const STEP_ICONS = {
-  pending: '○',
-  running: '◎',
-  done   : '✓',
-  error  : '✗',
+// Step SVG icons — one per semantic meaning, matching images 2 & 3
+const STEP_SVG = {
+  // Detect / identify
+  detect: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12H4M20 12h2"/></svg>`,
+  // Geolocate / pin
+  geo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="11" r="3"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>`,
+  // Analyze / GEE / globe
+  analyze: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+  // Parse / request
+  parse: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>`,
+  // Init / boot
+  init: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>`,
+  // Layer / output
+  layer: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
+  // AI insight
+  insight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.7-3.3 6l-.7 4H9l-.7-4A7 7 0 0 1 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="17" x2="15" y2="17"/></svg>`,
+  // Generic
+  default: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>`,
 };
+
+function getStepIcon(label) {
+  const l = label.toLowerCase();
+  if (l.includes('init'))                                                    return STEP_SVG.init;
+  if (l.includes('detect') || l.includes('identify') || l.includes('type')) return STEP_SVG.detect;
+  if (l.includes('geo') || l.includes('locat') || l.includes('region'))     return STEP_SVG.geo;
+  if (l.includes('layer') || l.includes('output') || l.includes('process')) return STEP_SVG.layer;
+  if (l.includes('analyz') || l.includes('running') || l.includes('gee'))   return STEP_SVG.analyze;
+  if (l.includes('pars'))                                                    return STEP_SVG.parse;
+  if (l.includes('insight') || l.includes('generat') || l.includes('ai'))   return STEP_SVG.insight;
+  return STEP_SVG.default;
+}
 
 function showPlanWidget() {
   const widget = document.getElementById('planWidget');
@@ -896,25 +921,18 @@ function updatePlanSteps(steps) {
 
   steps.forEach((step, i) => {
     const div = document.createElement('div');
-    div.className = 'plan-step';
+    div.className = `plan-step step-${step.status}`;
     div.style.animationDelay = (i * 0.08) + 's';
 
-    const iconContent = step.status === 'running'
-      ? `<span class="step-spin">◎</span>`
-      : STEP_ICONS[step.status] || '○';
-
-    const progressHTML = step.status === 'running' ? `
-      <div class="step-progress">
-        <div class="step-progress-bar" style="width:${step.progress || 0}%"></div>
-      </div>
-      <div class="step-sub">${step.progress || 0}%</div>
-    ` : '';
+    const svgIcon = getStepIcon(step.label);
 
     div.innerHTML = `
-      <div class="step-icon ${step.status}">${iconContent}</div>
+      <div class="step-icon-wrap step-icon-${step.status}">
+        ${svgIcon}
+        ${step.status === 'running' ? '<div class="step-ring"></div>' : ''}
+      </div>
       <div class="step-body">
-        <div class="step-label ${step.status}">${escapeHtml(step.label)}</div>
-        ${progressHTML}
+        <div class="step-label-text step-label-${step.status}">${escapeHtml(step.label)}</div>
       </div>
     `;
     container.appendChild(div);
