@@ -585,7 +585,7 @@ function handleResult(result) {
   }
 
   // Analysis result
-  const { region, start_date, end_date, variables, stats, layers, geo, insight } = result;
+  const { region, start_date, end_date, variables, stats, layers, geo, insight, figures } = result;
 
   // 1. Clear previous layers and load new GEE tile layers onto map
   clearAllLayers();  // Remove old region's layers before adding new ones
@@ -610,49 +610,86 @@ function handleResult(result) {
   }
 
   // 2. Build chat message
-  let html = buildResultHTML(region, start_date, end_date, variables, stats, layers, insight);
-  const bubble = appendAIMessage(html);
-
-  // 3. Render Plotly charts inside the bubble
-  renderChartsInBubble(bubble, stats, variables);
+  let html = buildResultHTML(region, start_date, end_date, variables, stats, layers, insight, figures);
+  appendAIMessage(html);
 }
 
-function buildResultHTML(region, startDate, endDate, variables, stats, layers, insight) {
+function buildResultHTML(region, startDate, endDate, variables, stats, layers, insight, figures) {
   const varList = (variables || []).map(v => v.toUpperCase()).join(', ');
   const dateStr = `${startDate} → ${endDate}`;
+  let html = '';
 
-  let html = `<h3>Analysis Complete</h3>`;
+  // ── SECTION 1: Introduction header ───────────────────────────────────────
+  html += `<h3>Analysis Complete</h3>`;
   html += `<p><strong>Region:</strong> ${escapeHtml(region)} &nbsp;|&nbsp; <strong>Period:</strong> ${dateStr}</p>`;
   html += `<p><strong>Variables:</strong> ${varList}</p>`;
 
-  // Stats table
+  // Composite method note
+  const nMonths = stats && Object.values(stats)[0]?.monthly
+    ? Object.keys(Object.values(stats)[0].monthly).length : 0;
+  const method = nMonths > 1 ? 'Median composite (Landsat 8/9, all scenes)' : 'Median composite (Landsat 8/9)';
+  html += `<p style="color:var(--text2);font-size:12.5px">${method} · ${nMonths > 0 ? nMonths + ' months' : dateStr}</p>`;
+
+  // ── SECTION 2: RGB overview map (intro) ──────────────────────────────────
+  // Check if any figure has an rgb_overview
+  const firstFig = figures && Object.values(figures)[0];
+  if (firstFig && firstFig.rgb_overview) {
+    html += `<div class="result-section-label">Study Area</div>`;
+    html += `<div class="result-img-wrap">
+      <img src="${firstFig.rgb_overview}" class="result-img" loading="lazy"/>
+      <div class="result-img-caption">Study Area Overview (${escapeHtml(region)}) — True Color RGB</div>
+    </div>`;
+  }
+
+  // ── SECTION 3: Statistics (plain text style) ──────────────────────────────
   if (stats && Object.keys(stats).length > 0) {
+    html += `<h3>Statistics</h3>`;
     html += buildStatsHTML(stats);
   }
 
-  // AI Insight
+  // ── SECTION 4: Per-variable analysis map + charts ─────────────────────────
+  if (figures && Object.keys(figures).length > 0) {
+    for (const [varLabel, fig] of Object.entries(figures)) {
+      if (!fig) continue;
+
+      // Analysis map with colorbar
+      if (fig.analysis_map) {
+        html += `<div class="result-section-label">${escapeHtml(varLabel)} Map</div>`;
+        html += `<div class="result-img-wrap">
+          <img src="${fig.analysis_map}" class="result-img" loading="lazy"/>
+          <div class="result-img-caption">${escapeHtml(varLabel)} — ${escapeHtml(region)} · ${dateStr}</div>
+        </div>`;
+      }
+
+      // Charts (histogram, class bar, monthly trend)
+      if (fig.charts && fig.charts.length > 0) {
+        const hasTwo = fig.charts.length >= 2;
+        if (hasTwo) {
+          html += `<div class="result-charts-row">`;
+          for (const [chartType, chartB64] of fig.charts) {
+            html += `<div class="result-chart-cell">
+              <img src="${chartB64}" class="result-img" loading="lazy"/>
+            </div>`;
+          }
+          html += `</div>`;
+        } else {
+          for (const [chartType, chartB64] of fig.charts) {
+            html += `<div class="result-img-wrap">
+              <img src="${chartB64}" class="result-img" loading="lazy"/>
+            </div>`;
+          }
+        }
+      }
+    }
+  }
+
+  // ── SECTION 5: AI Insight ─────────────────────────────────────────────────
   if (insight) {
     html += `<h3>AI Insight</h3>`;
     html += `<div class="insight-text">${parseMarkdown(insight)}</div>`;
   }
 
-  // Chart containers — unique IDs per message to avoid conflicts
-  const msgId = Date.now();
-  if (stats) {
-    Object.keys(stats).forEach(varName => {
-      const s = stats[varName];
-      if (s && s.mean !== undefined && s.mean !== null) {
-        html += `<div class="chart-container" id="chart_${sanitizeId(varName)}_${msgId}" style="height:220px;min-height:220px"></div>`;
-      }
-      if (s && s.classes) {
-        html += `<div class="chart-container" id="chart_lulc_pie_${msgId}" style="height:260px;min-height:260px"></div>`;
-        html += `<div class="chart-container" id="chart_lulc_bar_${msgId}" style="height:220px;min-height:220px"></div>`;
-      }
-    });
-  }
-  html += `<div data-msg-id="${msgId}" style="display:none"></div>`;
-
-  // Map open cards for each layer
+  // ── SECTION 6: Map open cards ─────────────────────────────────────────────
   if (layers && layers.length > 0) {
     layers.slice(0, 4).forEach(lyr => {
       html += `
@@ -664,17 +701,28 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, i
             <span>${escapeHtml(lyr.name)}</span>
             <span class="card-sub">Click to open map</span>
           </div>
-        </div>
-      `;
+        </div>`;
     });
   }
+
+  // ── SECTION 7: Attributions ───────────────────────────────────────────────
+  html += `<div class="result-attribution">
+    <div class="attr-title">Attributions</div>
+    <ul class="attr-list">
+      <li>Data source: Landsat Collection 2 Level-2 Surface Reflectance (USGS/NASA)</li>
+      <li>Platform: Google Earth Engine</li>
+      <li>Method: ${method}</li>
+      <li>Region: ${escapeHtml(region)}</li>
+      <li>Time period: ${startDate} – ${endDate}</li>
+      <li>Analysis date: ${new Date().toISOString().slice(0,10)}</li>
+    </ul>
+  </div>`;
 
   return html;
 }
 
 function buildStatsHTML(stats) {
-  let html = `<h3>Statistics</h3>`;
-
+  let html = '';
   for (const [varName, s] of Object.entries(stats)) {
     if (!s) continue;
 
@@ -689,31 +737,25 @@ function buildStatsHTML(stats) {
       continue;
     }
 
-    // UHI special
+    // UHI
     if (s.lst_mean !== undefined) {
       html += `<p><strong>UHI</strong> — LST mean: ${s.lst_mean.toFixed(2)}°C, std: ${s.lst_std.toFixed(2)}°C</p>`;
       continue;
     }
 
-    // Standard stats
+    // Standard stats — plain text style (pict 7)
     if (s.mean !== null && s.mean !== undefined) {
-      html += `
-        <table class="stats-table">
-          <thead><tr>
-            <th>${escapeHtml(varName)}</th><th>Value</th>
-          </tr></thead>
-          <tbody>
-            <tr><td>Mean</td><td>${s.mean.toFixed(4)}</td></tr>
-            <tr><td>Median</td><td>${(s.median||0).toFixed(4)}</td></tr>
-            <tr><td>Std Dev</td><td>${(s.std||0).toFixed(4)}</td></tr>
-            <tr><td>Min / Max</td><td>${(s.min||0).toFixed(4)} / ${(s.max||0).toFixed(4)}</td></tr>
-            <tr><td>P10 / P90</td><td>${(s.p10||0).toFixed(4)} / ${(s.p90||0).toFixed(4)}</td></tr>
-          </tbody>
-        </table>
-      `;
+      const fmt = v => v != null ? v.toFixed(4) : 'N/A';
+      html += `<div class="stats-plain">
+        <div class="stats-plain-var">${escapeHtml(varName)}</div>
+        <div class="stats-plain-row"><span>Mean</span><span>${fmt(s.mean)}</span></div>
+        <div class="stats-plain-row"><span>Median</span><span>${fmt(s.median)}</span></div>
+        <div class="stats-plain-row"><span>Std Dev</span><span>${fmt(s.std)}</span></div>
+        <div class="stats-plain-row"><span>Min / Max</span><span>${fmt(s.min)} / ${fmt(s.max)}</span></div>
+        <div class="stats-plain-row"><span>P10 / P90</span><span>${fmt(s.p10)} / ${fmt(s.p90)}</span></div>
+      </div>`;
     }
   }
-
   return html;
 }
 

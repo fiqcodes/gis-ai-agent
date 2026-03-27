@@ -287,32 +287,45 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         lulc_vars    = ['lulc'] if 'lulc' in variables else []
 
         all_stats  = {}
-        layer_imgs = {}   # variable → base64 image
+        layers     = []
+        figures    = {}   # label → { 'overview': b64, 'analysis_map': b64, 'charts': [...] }
 
-        # Surface analysis — getMapId() for interactive tile layers
+        # Surface analysis — tile layers + static figures
         if surface_vars:
             update_step(3, 'running', 30)
             try:
                 from gis_functions import (
                     load_landsat, compute_lst, compute_uhi,
                     get_stats, SURFACE_INDEX_MAP, VIS,
+                    get_thumb, make_rgb_overview, make_analysis_map, make_stats_charts,
                 )
                 study_area_surf = study_area_main
                 landsat_col, composite = load_landsat(study_area_surf, start_date, end_date)
                 count = landsat_col.size().getInfo()
                 print(f'  {count} Landsat scenes loaded')
                 lst_img = None
+                bbox    = geo.get('bbox')
+
+                # ── RGB overview map (static, for intro section) ──────────────
+                rgb_overview_b64 = None
+                if bbox and composite:
+                    try:
+                        rgb_overview_b64 = make_rgb_overview(
+                            composite, study_area_surf, region_name, bbox)
+                        print('  ✓ RGB overview map generated')
+                    except Exception as re:
+                        print(f'  RGB overview failed: {re}')
 
                 for v in surface_vars:
                     try:
                         if v == 'rgb':
-                            map_id = composite.clip(study_area_surf).getMapId(VIS['rgb'])
+                            map_id   = composite.clip(study_area_surf).getMapId(VIS['rgb'])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({
-                                'name'     : 'True Color (RGB)',
-                                'tile_url' : tile_url,
-                                'type'     : 'tile',
-                                'bbox'     : geo.get('bbox'),
+                                'name'    : 'True Color (RGB)',
+                                'tile_url': tile_url,
+                                'type'    : 'tile',
+                                'bbox'    : bbox,
                             })
                             print('  ✓ RGB tile layer ready')
 
@@ -320,45 +333,79 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             lst_img, _ = compute_lst(composite, study_area_surf)
                             s = get_stats(lst_img, 'LST', study_area_surf, scale=90)
                             all_stats['LST'] = s
-                            map_id = lst_img.clip(study_area_surf).getMapId(VIS['lst'])
+                            map_id   = lst_img.clip(study_area_surf).getMapId(VIS['lst'])
                             tile_url = map_id['tile_fetcher'].url_format
-                            layers.append({
-                                'name'    : 'LST (°C)',
-                                'tile_url': tile_url,
-                                'type'    : 'tile',
-                                'bbox'    : geo.get('bbox'),
-                            })
-                            print('  ✓ LST tile layer ready')
+                            layers.append({'name': 'LST (°C)', 'tile_url': tile_url,
+                                           'type': 'tile', 'bbox': bbox})
+                            # Static analysis map
+                            if bbox:
+                                arr = get_thumb(lst_img.clip(study_area_surf), VIS['lst'], study_area_surf, dim=512)
+                                analysis_b64 = make_analysis_map(arr, VIS['lst'], 'LST (°C)', region_name, bbox)
+                                charts = make_stats_charts(all_stats, 'LST', 'LST')
+                                figures['LST'] = {'analysis_map': analysis_b64, 'charts': charts,
+                                                  'rgb_overview': rgb_overview_b64}
+                            print('  ✓ LST ready')
 
                         elif v == 'uhi':
                             if lst_img is None:
                                 lst_img, _ = compute_lst(composite, study_area_surf)
                             uhi_img, lst_mean, lst_std = compute_uhi(lst_img, study_area_surf)
                             all_stats['UHI'] = {'mean': 0.0, 'lst_mean': lst_mean, 'lst_std': lst_std}
-                            map_id = uhi_img.clip(study_area_surf).getMapId(VIS['uhi'])
+                            map_id   = uhi_img.clip(study_area_surf).getMapId(VIS['uhi'])
                             tile_url = map_id['tile_fetcher'].url_format
-                            layers.append({
-                                'name'    : f'UHI (mean={lst_mean:.1f}°C)',
-                                'tile_url': tile_url,
-                                'type'    : 'tile',
-                                'bbox'    : geo.get('bbox'),
-                            })
-                            print('  ✓ UHI tile layer ready')
+                            layers.append({'name': f'UHI (mean={lst_mean:.1f}°C)', 'tile_url': tile_url,
+                                           'type': 'tile', 'bbox': bbox})
+                            print('  ✓ UHI ready')
 
                         elif v in SURFACE_INDEX_MAP:
                             label, func, vis_key, scale = SURFACE_INDEX_MAP[v]
                             img = func(composite)
                             s   = get_stats(img, label, study_area_surf, scale=scale)
+                            # Monthly stats
+                            try:
+                                import datetime
+                                monthly  = {}
+                                start_dt = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+                                end_dt   = datetime.datetime.strptime(end_date,   '%Y-%m-%d')
+                                cur = start_dt.replace(day=1)
+                                while cur <= end_dt:
+                                    m_s = cur.strftime('%Y-%m-%d')
+                                    m_e = (cur.replace(year=cur.year+1, month=1, day=1)
+                                           if cur.month == 12
+                                           else cur.replace(month=cur.month+1, day=1)).strftime('%Y-%m-%d')
+                                    m_scenes = landsat_col.filterDate(m_s, m_e)
+                                    if m_scenes.size().getInfo() > 0:
+                                        m_comp = m_scenes.median()
+                                        m_img  = func(m_comp)
+                                        ms = m_img.reduceRegion(
+                                            reducer=ee.Reducer.mean(),
+                                            geometry=study_area_surf, scale=scale, maxPixels=1e9
+                                        ).getInfo()
+                                        val = ms.get(label)
+                                        if val is not None:
+                                            monthly[cur.strftime('%Y-%m')] = round(val, 6)
+                                    cur = (cur.replace(year=cur.year+1, month=1)
+                                           if cur.month == 12
+                                           else cur.replace(month=cur.month+1))
+                                s['monthly'] = monthly
+                            except Exception as me:
+                                s['monthly'] = {}
                             all_stats[label] = s
-                            map_id = img.clip(study_area_surf).getMapId(VIS[vis_key])
+                            map_id   = img.clip(study_area_surf).getMapId(VIS[vis_key])
                             tile_url = map_id['tile_fetcher'].url_format
-                            layers.append({
-                                'name'    : label,
-                                'tile_url': tile_url,
-                                'type'    : 'tile',
-                                'bbox'    : geo.get('bbox'),
-                            })
-                            print(f'  ✓ {label} tile layer ready')
+                            layers.append({'name': label, 'tile_url': tile_url,
+                                           'type': 'tile', 'bbox': bbox})
+                            # Static analysis map + charts
+                            if bbox:
+                                arr          = get_thumb(img.clip(study_area_surf), VIS[vis_key], study_area_surf, dim=512)
+                                analysis_b64 = make_analysis_map(arr, VIS[vis_key], label, region_name, bbox)
+                                charts       = make_stats_charts(all_stats, v, label)
+                                figures[label] = {
+                                    'analysis_map': analysis_b64,
+                                    'charts'      : charts,
+                                    'rgb_overview': rgb_overview_b64,
+                                }
+                            print(f'  ✓ {label} ready')
 
                     except Exception as ve:
                         print(f'  [{v}] failed: {ve}')
@@ -370,11 +417,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
 
         update_step(3, 'running', 55)
 
-        # Atmospheric analysis — tile layers
+        # Atmospheric analysis — tile layers + static figures
         if atmo_vars:
             try:
-                from gis_functions import ATMO_INDEX_MAP, VIS, get_stats, compute_ffpi
+                from gis_functions import ATMO_INDEX_MAP, VIS, get_stats, compute_ffpi, get_thumb, make_analysis_map, make_stats_charts
                 study_area_atmo = study_area_main
+                bbox = geo.get('bbox')
 
                 for v in atmo_vars:
                     try:
@@ -382,13 +430,17 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             ffpi_img, _ = compute_ffpi(study_area_atmo, start_date, end_date)
                             s = get_stats(ffpi_img, 'FFPI', study_area_atmo, scale=3500)
                             all_stats['FFPI'] = s
-                            map_id = ffpi_img.clip(study_area_atmo).getMapId(VIS['ffpi'])
-                            layers.append({
-                                'name'    : 'FFPI Score',
-                                'tile_url': map_id['tile_fetcher'].url_format,
-                                'type'    : 'tile',
-                                'bbox'    : geo.get('bbox'),
-                            })
+                            map_id   = ffpi_img.clip(study_area_atmo).getMapId(VIS['ffpi'])
+                            tile_url = map_id['tile_fetcher'].url_format
+                            layers.append({'name': 'FFPI Score', 'tile_url': tile_url,
+                                           'type': 'tile', 'bbox': bbox})
+                            if bbox:
+                                arr = get_thumb(ffpi_img.clip(study_area_atmo), VIS['ffpi'], study_area_atmo, dim=512)
+                                figures['FFPI'] = {
+                                    'analysis_map': make_analysis_map(arr, VIS['ffpi'], 'FFPI Score', region_name, bbox),
+                                    'charts'      : make_stats_charts(all_stats, 'ffpi', 'FFPI'),
+                                    'rgb_overview': None,
+                                }
 
                         elif v in ATMO_INDEX_MAP:
                             label, func, vis_key, unit = ATMO_INDEX_MAP[v]
@@ -398,14 +450,18 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 band_name = img.bandNames().getInfo()[0]
                                 s = get_stats(img, band_name, study_area_atmo, scale=3500)
                                 all_stats[label] = s
-                                map_id = img.clip(study_area_surf).getMapId(VIS[vis_key])
-                                layers.append({
-                                    'name'    : f'{label} ({unit})',
-                                    'tile_url': map_id['tile_fetcher'].url_format,
-                                    'type'    : 'tile',
-                                    'bbox'    : geo.get('bbox'),
-                                })
-                                print(f'  ✓ {label} tile layer ready')
+                                map_id   = img.clip(study_area_atmo).getMapId(VIS[vis_key])
+                                tile_url = map_id['tile_fetcher'].url_format
+                                layers.append({'name': f'{label} ({unit})', 'tile_url': tile_url,
+                                               'type': 'tile', 'bbox': bbox})
+                                if bbox:
+                                    arr = get_thumb(img.clip(study_area_atmo), VIS[vis_key], study_area_atmo, dim=512)
+                                    figures[label] = {
+                                        'analysis_map': make_analysis_map(arr, VIS[vis_key], f'{label} ({unit})', region_name, bbox),
+                                        'charts'      : make_stats_charts(all_stats, v, label),
+                                        'rgb_overview': None,
+                                    }
+                                print(f'  ✓ {label} ready')
                     except Exception as ve:
                         print(f'  [{v}] atmo failed: {ve}')
 
@@ -460,6 +516,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             'variables'  : variables,
             'stats'      : all_stats,
             'layers'     : layers,
+            'figures'    : figures,
             'geo'        : geo,
             'insight'    : insight or '',
             'web_context': web_context or '',

@@ -254,8 +254,98 @@ html, body {
   border-bottom: 1px solid var(--border);
 }
 
-/* Stats table inside message */
-.stats-table {
+/* Result section label */
+.result-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text3);
+  margin: 14px 0 6px;
+}
+
+/* Result image */
+.result-img-wrap {
+  margin: 6px 0 10px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.result-img {
+  width: 100%;
+  display: block;
+}
+.result-img-caption {
+  font-size: 11px;
+  color: var(--text3);
+  padding: 5px 8px;
+  background: var(--bg3);
+  border-top: 1px solid var(--border);
+}
+
+/* Two-chart side-by-side row */
+.result-charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+.result-chart-cell {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.result-chart-cell img { width: 100%; display: block; }
+
+/* Plain stats (pict 7 style) */
+.stats-plain {
+  margin: 8px 0 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.stats-plain-var {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.stats-plain-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.stats-plain-row:last-child { border-bottom: none; }
+.stats-plain-row span:first-child { color: var(--text2); }
+.stats-plain-row span:last-child  { color: var(--text); font-family: var(--font-mono); font-size: 12.5px; }
+
+/* Attribution block */
+.result-attribution {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+.attr-title {
+  font-weight: 600;
+  color: var(--text2);
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.attr-list {
+  list-style: disc;
+  padding-left: 16px;
+  color: var(--text3);
+  line-height: 1.8;
+}
+
+
   width: 100%;
   border-collapse: collapse;
   margin: 10px 0;
