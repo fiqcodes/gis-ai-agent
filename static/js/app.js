@@ -619,19 +619,85 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, i
   const dateStr = `${startDate} → ${endDate}`;
   let html = '';
 
-  // ── SECTION 1: Introduction header ───────────────────────────────────────
+  // ── SECTION 1: Narrative introduction (pict 1 style) ─────────────────────
   html += `<h3>Analysis Complete</h3>`;
-  html += `<p><strong>Region:</strong> ${escapeHtml(region)} &nbsp;|&nbsp; <strong>Period:</strong> ${dateStr}</p>`;
-  html += `<p><strong>Variables:</strong> ${varList}</p>`;
 
-  // Composite method note
-  const nMonths = stats && Object.values(stats)[0]?.monthly
-    ? Object.keys(Object.values(stats)[0].monthly).length : 0;
-  const method = nMonths > 1 ? 'Median composite (Landsat 8/9, all scenes)' : 'Median composite (Landsat 8/9)';
-  html += `<p style="color:var(--text2);font-size:12.5px">${method} · ${nMonths > 0 ? nMonths + ' months' : dateStr}</p>`;
+  // Count months with data
+  const firstStats = stats && Object.values(stats).find(s => s && s.monthly);
+  const monthlyData = firstStats ? firstStats.monthly : {};
+  const nMonths = Object.keys(monthlyData).length;
 
-  // ── SECTION 2: RGB overview map (intro) ──────────────────────────────────
-  // Check if any figure has an rgb_overview
+  // Date range description
+  const startYear = startDate.slice(0, 4);
+  const endYear   = endDate.slice(0, 4);
+  const sameYear  = startYear === endYear;
+  const yearRange = sameYear ? startYear : `${startYear}–${endYear}`;
+
+  // Method description
+  const isMultiYear = startYear !== endYear;
+  const compositeType = isMultiYear
+    ? 'a single multi-year median composite'
+    : 'a median composite';
+  const compositeDesc = isMultiYear
+    ? `represents typical conditions over those periods rather than year-by-year change`
+    : `represents the typical surface conditions over that period`;
+
+  // Variable descriptions
+  const varDescMap = {
+    'NDVI'   : 'Normalized Difference Vegetation Index (NDVI)',
+    'EVI'    : 'Enhanced Vegetation Index (EVI)',
+    'SAVI'   : 'Soil-Adjusted Vegetation Index (SAVI)',
+    'NDWI'   : 'Normalized Difference Water Index (NDWI)',
+    'MNDWI'  : 'Modified Normalized Difference Water Index (MNDWI)',
+    'NDBI'   : 'Normalized Difference Built-up Index (NDBI)',
+    'UI'     : 'Urban Index (UI)',
+    'NBI'    : 'New Built-up Index (NBI)',
+    'BSI'    : 'Bare Soil Index (BSI)',
+    'NDSI'   : 'Normalized Difference Snow Index (NDSI)',
+    'LST'    : 'Land Surface Temperature (LST)',
+    'UHI'    : 'Urban Heat Island index (UHI)',
+    'RGB'    : 'True Color composite (RGB)',
+    'NO2'    : 'tropospheric NO₂ column density',
+    'CO'     : 'carbon monoxide (CO) column density',
+    'SO2'    : 'sulfur dioxide (SO₂) column density',
+    'CH4'    : 'methane (CH₄) column mixing ratio',
+    'O3'     : 'ozone (O₃) column density',
+    'AEROSOL': 'absorbing aerosol index (AAI)',
+    'GPP'    : 'Gross Primary Production (GPP)',
+    'BURNED' : 'burned area detection',
+    'FFPI'   : 'Fossil Fuel Pollution Index (FFPI)',
+    'LULC'   : 'Land Use / Land Cover classification (LULC)',
+  };
+  const varFullNames = (variables || [])
+    .map(v => varDescMap[v.toUpperCase()] || v.toUpperCase())
+    .join(' and ');
+
+  const atmoVars = ['no2','co','so2','ch4','o3','aerosol','gpp','burned','ffpi'];
+  const isAtmo = (variables || []).some(v => atmoVars.includes(v.toLowerCase()));
+  const isMixed = (variables || []).some(v => atmoVars.includes(v.toLowerCase())) &&
+                  (variables || []).some(v => !atmoVars.includes(v.toLowerCase()));
+  const satellite = isMixed
+    ? 'Landsat 8/9 and Sentinel-5P (Copernicus) satellite data'
+    : isAtmo
+      ? 'Sentinel-5P (Copernicus) satellite data'
+      : 'Landsat 8/9 Collection 2 Level-2 Surface Reflectance data';
+
+  // Build the narrative paragraph
+  html += `<p>
+    The analysis was completed for <strong>${escapeHtml(region)}</strong>, covering the period
+    from <strong>${startDate}</strong> to <strong>${endDate}</strong>.
+    It used ${satellite} to compute ${varFullNames}.
+    The result is ${compositeType}, so it ${compositeDesc}.
+  </p>`;
+
+  if (nMonths > 1) {
+    html += `<p>
+      A total of <strong>${nMonths} monthly composites</strong> were processed across ${yearRange},
+      allowing seasonal patterns and temporal variability to be assessed.
+    </p>`;
+  }
+
+  // ── SECTION 2: RGB overview map ───────────────────────────────────────────
   const firstFig = figures && Object.values(figures)[0];
   if (firstFig && firstFig.rgb_overview) {
     html += `<div class="result-section-label">Study Area</div>`;
