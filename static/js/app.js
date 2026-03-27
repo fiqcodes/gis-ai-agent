@@ -714,11 +714,11 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, i
   }
 
   // ── SECTION 4: Per-variable analysis map + charts ─────────────────────────
+  // figures may be null/empty if static image generation failed — graceful fallback
   if (figures && Object.keys(figures).length > 0) {
     for (const [varLabel, fig] of Object.entries(figures)) {
       if (!fig) continue;
 
-      // Analysis map with colorbar
       if (fig.analysis_map) {
         html += `<div class="result-section-label">${escapeHtml(varLabel)} Map</div>`;
         html += `<div class="result-img-wrap">
@@ -727,7 +727,6 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, i
         </div>`;
       }
 
-      // Charts (histogram, class bar, monthly trend)
       if (fig.charts && fig.charts.length > 0) {
         const hasTwo = fig.charts.length >= 2;
         if (hasTwo) {
@@ -772,12 +771,15 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, i
   }
 
   // ── SECTION 7: Attributions ───────────────────────────────────────────────
+  const methodStr = isMultiYear
+    ? `Multi-year median composite (${yearRange})`
+    : `Median composite (${startYear})`;
   html += `<div class="result-attribution">
     <div class="attr-title">Attributions</div>
     <ul class="attr-list">
-      <li>Data source: Landsat Collection 2 Level-2 Surface Reflectance (USGS/NASA)</li>
+      <li>Data source: ${satellite}</li>
       <li>Platform: Google Earth Engine</li>
-      <li>Method: ${method}</li>
+      <li>Method: ${methodStr}</li>
       <li>Region: ${escapeHtml(region)}</li>
       <li>Time period: ${startDate} – ${endDate}</li>
       <li>Analysis date: ${new Date().toISOString().slice(0,10)}</li>
