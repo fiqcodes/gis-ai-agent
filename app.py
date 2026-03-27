@@ -221,8 +221,34 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
 
         # ── Step 3: Geocode / resolve region ─────────────────────────────────
         update_step(2, 'running', 30)
-        geo = geocode_region(region_name)
-        job['geo'] = geo
+
+        # If a custom ROI was drawn by the user, build GEE geometry from it directly
+        # and skip Nominatim geocoding — this is the fix for ROI being ignored
+        if roi_geojson:
+            try:
+                geom = roi_geojson.get('geometry') or roi_geojson
+                study_area_main = ee.Geometry(geom)
+                coords = study_area_main.bounds().getInfo()['coordinates'][0]
+                xs = [c[0] for c in coords]
+                ys = [c[1] for c in coords]
+                precise_bbox = [min(xs), min(ys), max(xs), max(ys)]
+                geo = {
+                    'success': True,
+                    'bbox'   : precise_bbox,
+                    'center' : [(min(ys)+max(ys))/2, (min(xs)+max(xs))/2],
+                }
+                job['geo'] = geo
+                print(f'  Using custom ROI geometry, bbox: {precise_bbox}')
+            except Exception as roi_err:
+                print(f'  ROI geometry error: {roi_err}, falling back to geocode')
+                geo = geocode_region(region_name)
+                job['geo'] = geo
+                study_area_main = None
+        else:
+            geo = geocode_region(region_name)
+            job['geo'] = geo
+            study_area_main = None
+
         update_step(2, 'done', 100)
 
         # Record existing files BEFORE analysis so we can find NEW ones after
@@ -240,18 +266,21 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         layers = []   # will collect GEE tile URLs
 
         # Resolve region ONCE — reused for surface, LULC, and atmo
-        study_area_main = None
-        try:
-            study_area_main = resolve_region(region_name)
-            coords = study_area_main.bounds().getInfo()['coordinates'][0]
-            xs = [c[0] for c in coords]
-            ys = [c[1] for c in coords]
-            precise_bbox = [min(xs), min(ys), max(xs), max(ys)]
-            geo['bbox'] = precise_bbox
-            job['geo']  = geo
-            print(f'  Precise bbox from GEE: {precise_bbox}')
-        except Exception as bbox_err:
-            print(f'  Bbox from GEE failed: {bbox_err}, using Nominatim bbox')
+        # Skip if already resolved from custom ROI above
+        if study_area_main is None:
+            try:
+                study_area_main = resolve_region(region_name)
+                coords = study_area_main.bounds().getInfo()['coordinates'][0]
+                xs = [c[0] for c in coords]
+                ys = [c[1] for c in coords]
+                precise_bbox = [min(xs), min(ys), max(xs), max(ys)]
+                geo['bbox'] = precise_bbox
+                job['geo']  = geo
+                print(f'  Precise bbox from GEE: {precise_bbox}')
+            except Exception as bbox_err:
+                print(f'  Bbox from GEE failed: {bbox_err}, using Nominatim bbox')
+        else:
+            print(f'  Using pre-resolved ROI geometry')
 
         surface_vars = [v for v in variables_with_rgb if v in surface_keys]
         atmo_vars    = [v for v in variables if v in atmo_keys]
