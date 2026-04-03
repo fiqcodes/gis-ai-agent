@@ -1130,21 +1130,21 @@ html, body {
   white-space: nowrap;
 }
 
-/* Per-map AI insight block */
+/* Per-map AI insight block — plain box matching stats table */
 .var-insight-block {
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  background: linear-gradient(135deg, rgba(0,196,170,0.06), rgba(0,196,170,0.02));
-  border: 1px solid rgba(0,196,170,0.18);
+  background: var(--bg1, #fff);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 11px 13px;
   margin: 10px 0 14px 0;
 }
 .var-insight-icon {
   flex-shrink: 0;
-  color: var(--accent);
-  margin-top: 1px;
+  color: var(--text3);
+  margin-top: 2px;
 }
 .var-insight-text {
   font-size: 13px;

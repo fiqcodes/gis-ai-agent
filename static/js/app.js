@@ -758,7 +758,6 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
             for (const chart of sideBySide) {
               html += `<div class="result-chart-cell">
                 <img src="${chart[1]}" class="result-img" loading="lazy"/>
-                <div class="result-img-caption" style="font-size:11px;margin-top:4px">${chart[0] === 'histogram' ? 'Distribution' : 'Class Composition'}</div>
               </div>`;
             }
             html += `</div>`;
