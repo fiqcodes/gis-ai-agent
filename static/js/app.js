@@ -593,8 +593,8 @@ function handleResult(result) {
   if (layers && layers.length > 0) {
     console.log('Loading', layers.length, 'tile layers onto map');
     const sorted = [
-      ...layers.filter(l => !l.name.toLowerCase().includes('rgb') && !l.name.toLowerCase().includes('true color')),
       ...layers.filter(l =>  l.name.toLowerCase().includes('rgb') ||  l.name.toLowerCase().includes('true color')),
+      ...layers.filter(l => !l.name.toLowerCase().includes('rgb') && !l.name.toLowerCase().includes('true color')),
     ];
     sorted.forEach((lyr, i) => {
       console.log('Layer', i, lyr.name, 'type:', lyr.type, 'has tile_url:', !!lyr.tile_url);
