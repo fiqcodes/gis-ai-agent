@@ -1215,3 +1215,45 @@ html, body {
 
 /* Default 60:40 chat:map split — resizer still works, just starts wider */
 
+
+/* ════════════════════════════════════════════════════════
+   PERSISTENT FLOATING LAYERS BUTTON
+════════════════════════════════════════════════════════ */
+.layers-float-btn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg2, #fff);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 11px;
+  cursor: pointer;
+  color: var(--text1);
+  font-size: 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.layers-float-btn:hover {
+  background: var(--bg3, #f0f0f0);
+  box-shadow: 0 3px 12px rgba(0,0,0,0.16);
+}
+.layers-float-count {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  min-width: 16px;
+  text-align: center;
+  line-height: 1.6;
+}
+.layers-float-count.zero {
+  background: var(--text3);
+}

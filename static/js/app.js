@@ -311,6 +311,14 @@ function renderLayersList() {
   if (!list) return;
   list.innerHTML = '';
 
+  // Update floating button count badge
+  const countEl = document.getElementById('layersFloatCount');
+  if (countEl) {
+    const n = mapLayers.length;
+    countEl.textContent = n;
+    countEl.classList.toggle('zero', n === 0);
+  }
+
   if (mapLayers.length === 0) {
     list.innerHTML = '<div style="padding:12px;color:var(--text3);font-size:12px;text-align:center">No layers yet</div>';
     return;
