@@ -1130,21 +1130,13 @@ html, body {
   white-space: nowrap;
 }
 
-/* Per-map AI insight block — plain box matching stats table */
+/* Per-map AI insight block — plain box matching stats table, no icon */
 .var-insight-block {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
   background: var(--bg1, #fff);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 11px 13px;
   margin: 10px 0 14px 0;
-}
-.var-insight-icon {
-  flex-shrink: 0;
-  color: var(--text3);
-  margin-top: 2px;
 }
 .var-insight-text {
   font-size: 13px;
@@ -1221,9 +1213,11 @@ html, body {
   color: var(--text1);
 }
 
-/* Side-by-side chart caption */
-.result-chart-cell .result-img-caption {
-  font-size: 11px;
-  margin-top: 4px;
-  text-align: center;
+/* Default 60:40 chat:map split */
+.chat-panel {
+  width: calc(60% - var(--nav-w)) !important;
 }
+.map-panel {
+  left: 60% !important;
+}
+

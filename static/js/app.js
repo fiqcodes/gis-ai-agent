@@ -720,12 +720,6 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
       // 3. Map-level AI insight
       if (varInsight) {
         html += `<div class="var-insight-block">
-          <div class="var-insight-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.7-3.3 6l-.7 4H9l-.7-4A7 7 0 0 1 5 9a7 7 0 0 1 7-7z"/>
-              <line x1="9" y1="17" x2="15" y2="17"/>
-            </svg>
-          </div>
           <div class="var-insight-text">${escapeHtml(varInsight)}</div>
         </div>`;
       }
@@ -1283,7 +1277,7 @@ function updateAssetsBadge() {
     // chatPanel.offsetWidth reads the true CSS-rendered width including calc()
     const chatW = chatPanel.offsetWidth;
     // Only override if it's valid (non-zero), else fall back to formula
-    setLayout(chatW > 0 ? chatW : Math.round(window.innerWidth * 0.40) - NAV_W);
+    setLayout(chatW > 0 ? chatW : Math.round(window.innerWidth * 0.60) - NAV_W);
   }
 
   resizer.addEventListener('mousedown', (e) => {
