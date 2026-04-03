@@ -585,10 +585,10 @@ function handleResult(result) {
   }
 
   // Analysis result
-  const { region, start_date, end_date, variables, stats, layers, geo, insight, figures } = result;
+  const { region, start_date, end_date, variables, stats, layers, geo, insight, figures, var_insights, conclusion } = result;
 
   // 1. Clear previous layers and load new GEE tile layers onto map
-  clearAllLayers();  // Remove old region's layers before adding new ones
+  clearAllLayers();
   if (layers && layers.length > 0) {
     console.log('Loading', layers.length, 'tile layers onto map');
     layers.forEach((lyr, i) => {
@@ -610,70 +610,47 @@ function handleResult(result) {
   }
 
   // 2. Build chat message
-  let html = buildResultHTML(region, start_date, end_date, variables, stats, layers, insight, figures);
+  let html = buildResultHTML(region, start_date, end_date, variables, stats, layers, figures, var_insights || {}, conclusion || insight || '');
   appendAIMessage(html);
 }
 
-function buildResultHTML(region, startDate, endDate, variables, stats, layers, insight, figures) {
-  const varList = (variables || []).map(v => v.toUpperCase()).join(', ');
-  const dateStr = `${startDate} → ${endDate}`;
-  let html = '';
+// ── Shared variable description map ──────────────────────────────────────────
+const VAR_DESC_MAP = {
+  'NDVI'   : 'Normalized Difference Vegetation Index (NDVI)',
+  'EVI'    : 'Enhanced Vegetation Index (EVI)',
+  'SAVI'   : 'Soil-Adjusted Vegetation Index (SAVI)',
+  'NDWI'   : 'Normalized Difference Water Index (NDWI)',
+  'MNDWI'  : 'Modified Normalized Difference Water Index (MNDWI)',
+  'NDBI'   : 'Normalized Difference Built-up Index (NDBI)',
+  'UI'     : 'Urban Index (UI)',
+  'NBI'    : 'New Built-up Index (NBI)',
+  'BSI'    : 'Bare Soil Index (BSI)',
+  'NDSI'   : 'Normalized Difference Snow Index (NDSI)',
+  'LST'    : 'Land Surface Temperature (LST)',
+  'UHI'    : 'Urban Heat Island index (UHI)',
+  'RGB'    : 'True Color composite (RGB)',
+  'NO2'    : 'tropospheric NO₂ column density',
+  'CO'     : 'carbon monoxide (CO) column density',
+  'SO2'    : 'sulfur dioxide (SO₂) column density',
+  'CH4'    : 'methane (CH₄) column mixing ratio',
+  'O3'     : 'ozone (O₃) column density',
+  'AEROSOL': 'absorbing aerosol index (AAI)',
+  'GPP'    : 'Gross Primary Production (GPP)',
+  'BURNED' : 'burned area detection',
+  'FFPI'   : 'Fossil Fuel Pollution Index (FFPI)',
+  'LULC'   : 'Land Use / Land Cover classification (LULC)',
+};
 
-  // ── SECTION 1: Narrative introduction (pict 1 style) ─────────────────────
-  html += `<h3>Analysis Complete</h3>`;
-
-  // Count months with data
-  const firstStats = stats && Object.values(stats).find(s => s && s.monthly);
-  const monthlyData = firstStats ? firstStats.monthly : {};
-  const nMonths = Object.keys(monthlyData).length;
-
-  // Date range description
+function buildResultHTML(region, startDate, endDate, variables, stats, layers, figures, varInsights, conclusion) {
+  const dateStr   = `${startDate} → ${endDate}`;
   const startYear = startDate.slice(0, 4);
   const endYear   = endDate.slice(0, 4);
   const sameYear  = startYear === endYear;
   const yearRange = sameYear ? startYear : `${startYear}–${endYear}`;
-
-  // Method description
   const isMultiYear = startYear !== endYear;
-  const compositeType = isMultiYear
-    ? 'a single multi-year median composite'
-    : 'a median composite';
-  const compositeDesc = isMultiYear
-    ? `represents typical conditions over those periods rather than year-by-year change`
-    : `represents the typical surface conditions over that period`;
-
-  // Variable descriptions
-  const varDescMap = {
-    'NDVI'   : 'Normalized Difference Vegetation Index (NDVI)',
-    'EVI'    : 'Enhanced Vegetation Index (EVI)',
-    'SAVI'   : 'Soil-Adjusted Vegetation Index (SAVI)',
-    'NDWI'   : 'Normalized Difference Water Index (NDWI)',
-    'MNDWI'  : 'Modified Normalized Difference Water Index (MNDWI)',
-    'NDBI'   : 'Normalized Difference Built-up Index (NDBI)',
-    'UI'     : 'Urban Index (UI)',
-    'NBI'    : 'New Built-up Index (NBI)',
-    'BSI'    : 'Bare Soil Index (BSI)',
-    'NDSI'   : 'Normalized Difference Snow Index (NDSI)',
-    'LST'    : 'Land Surface Temperature (LST)',
-    'UHI'    : 'Urban Heat Island index (UHI)',
-    'RGB'    : 'True Color composite (RGB)',
-    'NO2'    : 'tropospheric NO₂ column density',
-    'CO'     : 'carbon monoxide (CO) column density',
-    'SO2'    : 'sulfur dioxide (SO₂) column density',
-    'CH4'    : 'methane (CH₄) column mixing ratio',
-    'O3'     : 'ozone (O₃) column density',
-    'AEROSOL': 'absorbing aerosol index (AAI)',
-    'GPP'    : 'Gross Primary Production (GPP)',
-    'BURNED' : 'burned area detection',
-    'FFPI'   : 'Fossil Fuel Pollution Index (FFPI)',
-    'LULC'   : 'Land Use / Land Cover classification (LULC)',
-  };
-  const varFullNames = (variables || [])
-    .map(v => varDescMap[v.toUpperCase()] || v.toUpperCase())
-    .join(' and ');
 
   const atmoVars = ['no2','co','so2','ch4','o3','aerosol','gpp','burned','ffpi'];
-  const isAtmo = (variables || []).some(v => atmoVars.includes(v.toLowerCase()));
+  const isAtmo  = (variables || []).some(v => atmoVars.includes(v.toLowerCase()));
   const isMixed = (variables || []).some(v => atmoVars.includes(v.toLowerCase())) &&
                   (variables || []).some(v => !atmoVars.includes(v.toLowerCase()));
   const satellite = isMixed
@@ -681,24 +658,34 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, i
     : isAtmo
       ? 'Sentinel-5P (Copernicus) satellite data'
       : 'Landsat 8/9 Collection 2 Level-2 Surface Reflectance data';
+  const compositeType = isMultiYear ? 'a multi-year median composite' : 'a median composite';
+  const compositeDesc = isMultiYear
+    ? 'represents typical conditions over those periods'
+    : 'represents the typical surface conditions over that period';
 
-  // Build the narrative paragraph
+  const firstStats   = stats && Object.values(stats).find(s => s && s.monthly);
+  const nMonths      = firstStats ? Object.keys(firstStats.monthly || {}).length : 0;
+  const varFullNames = (variables || []).map(v => VAR_DESC_MAP[v.toUpperCase()] || v.toUpperCase()).join(' and ');
+
+  let html = '';
+
+  // ── HEADER ────────────────────────────────────────────────────────────────
+  html += `<h3>Analysis Complete</h3>`;
   html += `<p>
-    The analysis was completed for <strong>${escapeHtml(region)}</strong>, covering the period
-    from <strong>${startDate}</strong> to <strong>${endDate}</strong>.
+    The analysis was completed for <strong>${escapeHtml(region)}</strong>, covering
+    <strong>${startDate}</strong> to <strong>${endDate}</strong>.
     It used ${satellite} to compute ${varFullNames}.
     The result is ${compositeType}, so it ${compositeDesc}.
   </p>`;
-
   if (nMonths > 1) {
     html += `<p>
-      A total of <strong>${nMonths} monthly composites</strong> were processed across ${yearRange},
-      allowing seasonal patterns and temporal variability to be assessed.
+      <strong>${nMonths} monthly composites</strong> were processed across ${yearRange},
+      enabling seasonal pattern analysis.
     </p>`;
   }
 
-  // ── SECTION 2: RGB overview map ───────────────────────────────────────────
-  const firstFig = figures && Object.values(figures)[0];
+  // ── RGB OVERVIEW (once, at top) ───────────────────────────────────────────
+  const firstFig = figures && Object.values(figures).find(f => f && f.rgb_overview);
   if (firstFig && firstFig.rgb_overview) {
     html += `<div class="result-section-label">Study Area</div>`;
     html += `<div class="result-img-wrap">
@@ -707,18 +694,16 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, i
     </div>`;
   }
 
-  // ── SECTION 3: Statistics (plain text style) ──────────────────────────────
-  if (stats && Object.keys(stats).length > 0) {
-    html += `<h3>Statistics</h3>`;
-    html += buildStatsHTML(stats);
-  }
-
-  // ── SECTION 4: Per-variable analysis map + charts ─────────────────────────
-  // figures may be null/empty if static image generation failed — graceful fallback
+  // ── PER-VARIABLE STORY BLOCKS ─────────────────────────────────────────────
   if (figures && Object.keys(figures).length > 0) {
     for (const [varLabel, fig] of Object.entries(figures)) {
       if (!fig) continue;
+      const varStats   = stats && stats[varLabel];
+      const varInsight = varInsights && varInsights[varLabel];
 
+      html += `<div class="var-section">`;
+
+      // 1. Analysis Map
       if (fig.analysis_map) {
         html += `<div class="result-section-label">${escapeHtml(varLabel)} Map</div>`;
         html += `<div class="result-img-wrap">
@@ -727,36 +712,96 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, i
         </div>`;
       }
 
+      // 2. Stats table (below the map)
+      if (varStats) {
+        html += buildSingleStatHTML(varLabel, varStats);
+      }
+
+      // 3. Map-level AI insight
+      if (varInsight) {
+        html += `<div class="var-insight-block">
+          <div class="var-insight-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.7-3.3 6l-.7 4H9l-.7-4A7 7 0 0 1 5 9a7 7 0 0 1 7-7z"/>
+              <line x1="9" y1="17" x2="15" y2="17"/>
+            </svg>
+          </div>
+          <div class="var-insight-text">${escapeHtml(varInsight)}</div>
+        </div>`;
+      }
+
+      // 4. Charts: monthly first (full width + highlights), then dist+class side-by-side
       if (fig.charts && fig.charts.length > 0) {
-        const hasTwo = fig.charts.length >= 2;
-        if (hasTwo) {
-          html += `<div class="result-charts-row">`;
-          for (const [chartType, chartB64] of fig.charts) {
-            html += `<div class="result-chart-cell">
-              <img src="${chartB64}" class="result-img" loading="lazy"/>
+        const charts = fig.charts; // array of [chartType, b64]
+        const monthly = charts.find(c => c[0] === 'monthly_trend');
+        const hist    = charts.find(c => c[0] === 'histogram');
+        const classBar= charts.find(c => c[0] === 'class_bar');
+
+        // Monthly trend chart
+        if (monthly) {
+          html += `<div class="result-section-label" style="margin-top:16px">Monthly Trend</div>`;
+          html += `<div class="result-img-wrap">
+            <img src="${monthly[1]}" class="result-img" loading="lazy"/>
+          </div>`;
+          // Monthly highlights auto-computed from stats
+          if (varStats && varStats.monthly && Object.keys(varStats.monthly).length > 0) {
+            html += buildMonthlyHighlights(varLabel, varStats.monthly);
+          }
+        }
+
+        // Distribution + Class bar side by side
+        const sideBySide = [hist, classBar].filter(Boolean);
+        if (sideBySide.length > 0) {
+          html += `<div class="result-section-label" style="margin-top:16px">Distribution &amp; Class Composition</div>`;
+          if (sideBySide.length === 2) {
+            html += `<div class="result-charts-row">`;
+            for (const chart of sideBySide) {
+              html += `<div class="result-chart-cell">
+                <img src="${chart[1]}" class="result-img" loading="lazy"/>
+                <div class="result-img-caption" style="font-size:11px;margin-top:4px">${chart[0] === 'histogram' ? 'Distribution' : 'Class Composition'}</div>
+              </div>`;
+            }
+            html += `</div>`;
+            // Combined explanation for dist+class
+            if (varStats) {
+              html += buildDistClassExplanation(varLabel, varStats);
+            }
+          } else {
+            // Only one of the two
+            const chart = sideBySide[0];
+            html += `<div class="result-img-wrap">
+              <img src="${chart[1]}" class="result-img" loading="lazy"/>
             </div>`;
           }
-          html += `</div>`;
-        } else {
-          for (const [chartType, chartB64] of fig.charts) {
+        }
+
+        // Any other chart types (just show them)
+        const shown = new Set([monthly, hist, classBar].filter(Boolean).map(c => c[0]));
+        for (const [type, b64] of charts) {
+          if (!shown.has(type)) {
             html += `<div class="result-img-wrap">
-              <img src="${chartB64}" class="result-img" loading="lazy"/>
+              <img src="${b64}" class="result-img" loading="lazy"/>
             </div>`;
           }
         }
       }
+
+      html += `</div>`; // end .var-section
     }
   }
 
-  // ── SECTION 5: AI Insight ─────────────────────────────────────────────────
-  if (insight) {
-    html += `<h3>AI Insight</h3>`;
-    html += `<div class="insight-text">${parseMarkdown(insight)}</div>`;
+  // ── LULC special handling (stats + layer card, no figure blocks above) ────
+  if (stats && stats['LULC']) {
+    html += `<div class="var-section">`;
+    html += `<div class="result-section-label">Land Cover Classification (LULC)</div>`;
+    html += buildSingleStatHTML('LULC', stats['LULC']);
+    html += `</div>`;
   }
 
-  // ── SECTION 6: Map open cards ─────────────────────────────────────────────
+  // ── MAP LAYER CARDS ───────────────────────────────────────────────────────
   if (layers && layers.length > 0) {
-    layers.slice(0, 4).forEach(lyr => {
+    html += `<div class="result-section-label" style="margin-top:20px">Interactive Map Layers</div>`;
+    layers.slice(0, 6).forEach(lyr => {
       html += `
         <div class="map-open-card" onclick="focusLayer('${escapeHtml(lyr.name)}')">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -764,13 +809,27 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, i
           </svg>
           <div>
             <span>${escapeHtml(lyr.name)}</span>
-            <span class="card-sub">Click to open map</span>
+            <span class="card-sub">Click to open in map</span>
           </div>
         </div>`;
     });
   }
 
-  // ── SECTION 7: Attributions ───────────────────────────────────────────────
+  // ── CONCLUSION ────────────────────────────────────────────────────────────
+  if (conclusion) {
+    html += `<div class="conclusion-block">
+      <div class="conclusion-header">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 16v-4M12 8h.01"/>
+        </svg>
+        Conclusion
+      </div>
+      <div class="conclusion-text">${escapeHtml(conclusion)}</div>
+    </div>`;
+  }
+
+  // ── ATTRIBUTIONS ─────────────────────────────────────────────────────────
   const methodStr = isMultiYear
     ? `Multi-year median composite (${yearRange})`
     : `Median composite (${startYear})`;
@@ -789,42 +848,154 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, i
   return html;
 }
 
-function buildStatsHTML(stats) {
+// ── Build stats table for a single variable ───────────────────────────────────
+function buildSingleStatHTML(varLabel, s) {
+  if (!s) return '';
   let html = '';
-  for (const [varName, s] of Object.entries(stats)) {
-    if (!s) continue;
 
-    // LULC classes
-    if (s.classes) {
-      html += `<p><strong>${escapeHtml(varName)}</strong> — ${s.n_classes} classes, ${(s.total_ha || 0).toLocaleString()} ha total</p>`;
-      html += `<ul>`;
-      Object.entries(s.classes).forEach(([cls, info]) => {
-        html += `<li><strong>${escapeHtml(cls)}:</strong> ${info.percentage.toFixed(1)}% (${info.hectares.toLocaleString()} ha)</li>`;
-      });
-      html += `</ul>`;
-      continue;
-    }
+  // LULC classes
+  if (s.classes) {
+    html += `<div class="stats-table-wrap">`;
+    html += `<table class="stats-table">
+      <thead><tr><th>Land Cover Class</th><th>Area (ha)</th><th>Share</th></tr></thead>
+      <tbody>`;
+    Object.entries(s.classes).forEach(([cls, info]) => {
+      const pct = info.percentage.toFixed(1);
+      html += `<tr>
+        <td><span class="lulc-dot" style="background:${info.color || '#00d4b8'}"></span>${escapeHtml(cls)}</td>
+        <td>${(info.hectares || 0).toLocaleString()}</td>
+        <td>
+          <div class="pct-bar-wrap">
+            <div class="pct-bar" style="width:${Math.min(pct,100)}%"></div>
+            <span>${pct}%</span>
+          </div>
+        </td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+    if (s.total_ha) html += `<div class="stats-total">Total: ${s.total_ha.toLocaleString()} ha across ${s.n_classes} classes</div>`;
+    html += `</div>`;
+    return html;
+  }
 
-    // UHI
-    if (s.lst_mean !== undefined) {
-      html += `<p><strong>UHI</strong> — LST mean: ${s.lst_mean.toFixed(2)}°C, std: ${s.lst_std.toFixed(2)}°C</p>`;
-      continue;
-    }
+  // UHI special
+  if (s.lst_mean !== undefined) {
+    html += `<div class="stats-table-wrap">
+      <table class="stats-table">
+        <tbody>
+          <tr><td>LST Mean</td><td>${s.lst_mean.toFixed(2)}°C</td></tr>
+          <tr><td>LST Std Dev</td><td>${s.lst_std.toFixed(2)}°C</td></tr>
+          <tr><td>UHI</td><td>z-score normalised</td></tr>
+        </tbody>
+      </table>
+    </div>`;
+    return html;
+  }
 
-    // Standard stats — plain text style (pict 7)
-    if (s.mean !== null && s.mean !== undefined) {
-      const fmt = v => v != null ? v.toFixed(4) : 'N/A';
-      html += `<div class="stats-plain">
-        <div class="stats-plain-var">${escapeHtml(varName)}</div>
-        <div class="stats-plain-row"><span>Mean</span><span>${fmt(s.mean)}</span></div>
-        <div class="stats-plain-row"><span>Median</span><span>${fmt(s.median)}</span></div>
-        <div class="stats-plain-row"><span>Std Dev</span><span>${fmt(s.std)}</span></div>
-        <div class="stats-plain-row"><span>Min / Max</span><span>${fmt(s.min)} / ${fmt(s.max)}</span></div>
-        <div class="stats-plain-row"><span>P10 / P90</span><span>${fmt(s.p10)} / ${fmt(s.p90)}</span></div>
-      </div>`;
-    }
+  // Standard numeric stats
+  if (s.mean !== null && s.mean !== undefined) {
+    const fmt = v => v != null ? v.toFixed(4) : '—';
+    html += `<div class="stats-table-wrap">
+      <table class="stats-table">
+        <tbody>
+          <tr><td>Mean</td><td>${fmt(s.mean)}</td></tr>
+          <tr><td>Median</td><td>${fmt(s.median)}</td></tr>
+          <tr><td>Std Dev</td><td>${fmt(s.std)}</td></tr>
+          <tr><td>Min / Max</td><td>${fmt(s.min)} / ${fmt(s.max)}</td></tr>
+          <tr><td>P10 / P90</td><td>${fmt(s.p10)} / ${fmt(s.p90)}</td></tr>
+        </tbody>
+      </table>
+    </div>`;
   }
   return html;
+}
+
+// ── Monthly highlights auto-computed from monthly stats ───────────────────────
+function buildMonthlyHighlights(varLabel, monthly) {
+  if (!monthly || Object.keys(monthly).length < 2) return '';
+
+  const MONTH_NAMES = {
+    '01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'May','06':'Jun',
+    '07':'Jul','08':'Aug','09':'Sep','10':'Oct','11':'Nov','12':'Dec'
+  };
+
+  const entries  = Object.entries(monthly).sort((a,b) => a[0].localeCompare(b[0]));
+  const values   = entries.map(e => e[1]);
+  const maxEntry = entries.reduce((a,b) => b[1] > a[1] ? b : a);
+  const minEntry = entries.reduce((a,b) => b[1] < a[1] ? b : a);
+  const avg      = values.reduce((s,v) => s + v, 0) / values.length;
+  const range    = maxEntry[1] - minEntry[1];
+
+  const fmtMonth = key => {
+    const [yr, mo] = key.split('-');
+    return `${MONTH_NAMES[mo] || mo} ${yr}`;
+  };
+  const fmt4 = v => v.toFixed(4);
+
+  // Trend direction (compare first half vs second half)
+  const half   = Math.floor(values.length / 2);
+  const avgFirst = values.slice(0, half).reduce((s,v) => s+v, 0) / half;
+  const avgLast  = values.slice(half).reduce((s,v) => s+v, 0) / (values.length - half);
+  const trend    = avgLast > avgFirst + 0.002 ? '↑ increasing' : avgLast < avgFirst - 0.002 ? '↓ decreasing' : '→ stable';
+
+  return `<div class="monthly-highlights">
+    <div class="mh-item mh-peak">
+      <span class="mh-label">Peak</span>
+      <span class="mh-value">${fmtMonth(maxEntry[0])} — ${fmt4(maxEntry[1])}</span>
+    </div>
+    <div class="mh-item mh-low">
+      <span class="mh-label">Lowest</span>
+      <span class="mh-value">${fmtMonth(minEntry[0])} — ${fmt4(minEntry[1])}</span>
+    </div>
+    <div class="mh-item">
+      <span class="mh-label">Period avg</span>
+      <span class="mh-value">${fmt4(avg)}</span>
+    </div>
+    <div class="mh-item">
+      <span class="mh-label">Range</span>
+      <span class="mh-value">${fmt4(range)}</span>
+    </div>
+    <div class="mh-item">
+      <span class="mh-label">Trend</span>
+      <span class="mh-value">${trend}</span>
+    </div>
+  </div>`;
+}
+
+// ── Distribution + class explanation (auto-computed, no LLM) ─────────────────
+function buildDistClassExplanation(varLabel, s) {
+  if (!s || s.mean == null) return '';
+
+  const fmt  = v => v != null ? v.toFixed(4) : '—';
+  const spread = s.p90 != null && s.p10 != null ? (s.p90 - s.p10).toFixed(4) : null;
+
+  // NDVI-specific class interpretation
+  let classNote = '';
+  if (varLabel.toUpperCase().includes('NDVI') && s.mean != null) {
+    const m = s.mean;
+    if (m < 0.1)      classNote = 'The area is predominantly bare or non-vegetated.';
+    else if (m < 0.3) classNote = 'Vegetation is sparse to moderately stressed across most of the area.';
+    else if (m < 0.5) classNote = 'Moderate vegetation cover dominates, typical of mixed urban-green areas.';
+    else              classNote = 'Dense, healthy vegetation is the dominant land signal.';
+  }
+
+  let text = `The distribution centers around a mean of <strong>${fmt(s.mean)}</strong>`;
+  if (s.median != null) text += ` (median ${fmt(s.median)})`;
+  if (s.std != null)    text += `, with a standard deviation of <strong>${fmt(s.std)}</strong>`;
+  text += '. ';
+
+  if (spread) {
+    text += `The interquartile spread from P10 (${fmt(s.p10)}) to P90 (${fmt(s.p90)}) `;
+    const spreadVal = parseFloat(spread);
+    if (spreadVal < 0.1)       text += 'is narrow, indicating spatially uniform conditions.';
+    else if (spreadVal < 0.25) text += 'shows moderate spatial variability across the region.';
+    else                       text += 'is wide, pointing to significant spatial contrasts — hotspots and low-value zones coexist.';
+    text += ' ';
+  }
+
+  if (classNote) text += classNote;
+
+  return `<div class="dist-explanation">${text}</div>`;
 }
 
 function renderChartsInBubble(bubble, stats, variables) {

@@ -1034,3 +1034,196 @@ html, body {
   .chat-panel { width: calc(100% - var(--nav-w)); }
   .map-panel  { display: none; }
 }
+
+/* ════════════════════════════════════════════════════════
+   PER-VARIABLE STORY LAYOUT (new output structure)
+════════════════════════════════════════════════════════ */
+
+/* Container for each variable's block */
+.var-section {
+  margin: 20px 0 28px 0;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.var-section:last-of-type {
+  border-bottom: none;
+}
+
+/* Stats table below each map */
+.stats-table-wrap {
+  margin: 10px 0 14px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.stats-table thead th {
+  background: var(--bg2);
+  color: var(--text2);
+  font-weight: 500;
+  padding: 7px 12px;
+  text-align: left;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--border);
+}
+.stats-table tbody tr {
+  border-bottom: 1px solid var(--border);
+}
+.stats-table tbody tr:last-child {
+  border-bottom: none;
+}
+.stats-table tbody td {
+  padding: 7px 12px;
+  color: var(--text1);
+  vertical-align: middle;
+}
+.stats-table tbody td:first-child {
+  color: var(--text2);
+  font-size: 12px;
+}
+.stats-table tbody td:last-child {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  text-align: right;
+}
+.stats-total {
+  padding: 6px 12px;
+  font-size: 11.5px;
+  color: var(--text3);
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+}
+
+/* LULC color dot */
+.lulc-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* Percentage bar in LULC table */
+.pct-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pct-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: 0.7;
+  min-width: 2px;
+}
+.pct-bar-wrap span {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11.5px;
+  color: var(--text2);
+  white-space: nowrap;
+}
+
+/* Per-map AI insight block */
+.var-insight-block {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: linear-gradient(135deg, rgba(0,196,170,0.06), rgba(0,196,170,0.02));
+  border: 1px solid rgba(0,196,170,0.18);
+  border-radius: 8px;
+  padding: 11px 13px;
+  margin: 10px 0 14px 0;
+}
+.var-insight-icon {
+  flex-shrink: 0;
+  color: var(--accent);
+  margin-top: 1px;
+}
+.var-insight-text {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text1);
+}
+
+/* Monthly highlights strip */
+.monthly-highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 14px 0;
+}
+.mh-item {
+  flex: 1 1 120px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mh-label {
+  font-size: 10.5px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+}
+.mh-value {
+  font-size: 12.5px;
+  color: var(--text1);
+  font-family: 'IBM Plex Mono', monospace;
+}
+.mh-peak .mh-value { color: #22c55e; }
+.mh-low  .mh-value { color: #f59e0b; }
+
+/* Distribution + class explanation */
+.dist-explanation {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text2);
+  background: var(--bg2);
+  border-radius: 7px;
+  padding: 10px 13px;
+  margin: 10px 0 0 0;
+  border: 1px solid var(--border);
+}
+
+/* Conclusion block */
+.conclusion-block {
+  margin: 24px 0 16px 0;
+  border: 1px solid rgba(0,196,170,0.25);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.conclusion-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: linear-gradient(90deg, rgba(0,196,170,0.12), transparent);
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  border-bottom: 1px solid rgba(0,196,170,0.15);
+}
+.conclusion-text {
+  padding: 13px 15px;
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--text1);
+}
+
+/* Side-by-side chart caption */
+.result-chart-cell .result-img-caption {
+  font-size: 11px;
+  margin-top: 4px;
+  text-align: center;
+}

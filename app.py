@@ -501,25 +501,45 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         print(f'  {len(layers)} layers ready for map display')
         update_step(4, 'done', 100)
 
-        # ── Step 6: Generate AI insight ───────────────────────────────────────
-        update_step(5, 'running', 50)
+        # ── Step 6: Generate AI insights ──────────────────────────────────────
+        update_step(5, 'running', 20)
         web_context = fetch_web_context(region_name, start_date, end_date, variables)
-        insight     = generate_insight(region_name, start_date, end_date, all_stats, variables)
+
+        # Per-variable focused insights (one short LLM call per variable)
+        var_insights = {}
+        non_lulc_vars = [v for v in all_stats if 'LULC' not in v.upper()]
+        for i, var_label in enumerate(non_lulc_vars):
+            pct = 20 + int((i + 1) / max(len(non_lulc_vars), 1) * 50)
+            update_step(5, 'running', pct)
+            insight_text = generate_var_insight(
+                var_label, all_stats, region_name, start_date, end_date)
+            if insight_text:
+                var_insights[var_label] = insight_text
+
+        # Overall conclusion (web context + all stats)
+        update_step(5, 'running', 80)
+        conclusion = generate_conclusion(
+            region_name, start_date, end_date, all_stats, variables, web_context or '')
+
+        # Keep legacy insight for backward compat (just reuse conclusion)
+        insight = conclusion
         update_step(5, 'done', 100)
 
         job['status'] = 'complete'
         job['result'] = {
-            'type'       : 'analysis',
-            'region'     : region_name,
-            'start_date' : start_date,
-            'end_date'   : end_date,
-            'variables'  : variables,
-            'stats'      : all_stats,
-            'layers'     : layers,
-            'figures'    : figures,
-            'geo'        : geo,
-            'insight'    : insight or '',
-            'web_context': web_context or '',
+            'type'        : 'analysis',
+            'region'      : region_name,
+            'start_date'  : start_date,
+            'end_date'    : end_date,
+            'variables'   : variables,
+            'stats'       : all_stats,
+            'layers'      : layers,
+            'figures'     : figures,
+            'geo'         : geo,
+            'insight'     : insight or '',
+            'var_insights': var_insights,
+            'conclusion'  : conclusion or '',
+            'web_context' : web_context or '',
         }
 
     except Exception as ex:
@@ -527,6 +547,112 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         _tb.print_exc()
         job['status'] = 'error'
         job['error']  = str(ex)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PER-VARIABLE INSIGHT + CONCLUSION GENERATORS
+# ─────────────────────────────────────────────────────────────────────────────
+
+UNIT_LOOKUP_INLINE = {
+    'NDVI': 'index (-1 to 1)', 'EVI': 'index (-1 to 1)', 'SAVI': 'index (-1 to 1)',
+    'NDWI': 'index (-1 to 1)', 'MNDWI': 'index (-1 to 1)', 'NDBI': 'index (-1 to 1)',
+    'UI': 'index (-1 to 1)', 'BSI': 'index (-1 to 1)', 'NDSI': 'index (-1 to 1)',
+    'NBI': 'index (0 to 0.5)', 'LST': '°C', 'CO': 'mol/m²', 'NO2': 'mol/m²',
+    'SO2': 'mol/m²', 'CH4': 'ppb', 'O3': 'Dobson Units', 'Aerosol': 'unitless AAI',
+    'GPP': 'kgC/m²/8-day', 'FFPI': '0–1 normalized',
+}
+
+def generate_var_insight(var_label: str, stats: dict, region: str, start_date: str, end_date: str) -> str:
+    """Generate a short focused LLM insight for a single variable's map + stats."""
+    import requests as req
+    from config import OLLAMA_URL, OLLAMA_MODEL
+
+    s = stats.get(var_label) or {}
+    if not s or s.get('mean') is None:
+        return ''
+
+    unit = next((v for k, v in UNIT_LOOKUP_INLINE.items() if k.upper() in var_label.upper()), 'index')
+    fmt = lambda v: f'{v:.4f}' if v is not None else 'N/A'
+
+    stats_text = (
+        f'Variable: {var_label} [{unit}]\n'
+        f'Region: {region} | Period: {start_date} to {end_date}\n'
+        f'Mean: {fmt(s.get("mean"))} | Median: {fmt(s.get("median"))} | '
+        f'Std Dev: {fmt(s.get("std"))}\n'
+        f'Min: {fmt(s.get("min"))} | Max: {fmt(s.get("max"))}\n'
+        f'P10: {fmt(s.get("p10"))} | P90: {fmt(s.get("p90"))}'
+    )
+
+    prompt = (
+        f'You are a satellite remote sensing scientist. '
+        f'Write a concise 3–4 sentence insight about the {var_label} map shown for {region}.\n\n'
+        f'{stats_text}\n\n'
+        f'Focus only on: what the mean value indicates, what the spatial range (p10 vs p90) reveals '
+        f'about hotspots or uniformity, and one key finding or implication. '
+        f'Be specific, scientific, and direct. No bullet points. No headers. Plain paragraph only.'
+    )
+
+    try:
+        resp = req.post(OLLAMA_URL,
+            json={'model': OLLAMA_MODEL,
+                  'messages': [{'role': 'user', 'content': prompt}],
+                  'stream': False},
+            timeout=60)
+        return resp.json()['message']['content'].strip()
+    except Exception as e:
+        return f'Insight unavailable: {e}'
+
+
+def generate_conclusion(region: str, start_date: str, end_date: str,
+                        all_stats: dict, variables: list, web_context: str) -> str:
+    """Generate a short concluding synthesis using all stats + web context."""
+    import requests as req
+    from config import OLLAMA_URL, OLLAMA_MODEL
+
+    if not all_stats:
+        return ''
+
+    stats_lines = []
+    for var, s in all_stats.items():
+        if isinstance(s, dict) and s.get('mean') is not None:
+            stats_lines.append(
+                f'  {var}: mean={s["mean"]:.4f}, p10={s.get("p10","N/A")}, p90={s.get("p90","N/A")}'
+            )
+        elif isinstance(s, dict) and 'lst_mean' in s:
+            stats_lines.append(f'  UHI: LST mean={s["lst_mean"]:.2f}°C, std={s["lst_std"]:.2f}°C')
+        elif isinstance(s, dict) and 'classes' in s:
+            top = sorted(s['classes'].items(), key=lambda x: -x[1].get('percentage', 0))[:3]
+            top_str = ', '.join(f'{k} {v["percentage"]:.1f}%' for k, v in top)
+            stats_lines.append(f'  LULC: top classes — {top_str}')
+
+    web_section = (
+        f'\nReal-world context (use to ground conclusions):\n{web_context}\n'
+        if web_context else ''
+    )
+
+    prompt = (
+        f'You are a satellite remote sensing scientist writing the conclusion of an analysis report.\n'
+        f'Region: {region} | Period: {start_date} to {end_date}\n'
+        f'Variables analyzed: {", ".join(v.upper() for v in variables)}\n\n'
+        f'Summary statistics:\n' + '\n'.join(stats_lines) +
+        web_section +
+        '\n\nWrite a concise conclusion (4–6 sentences) that:\n'
+        '1. Synthesizes the key findings across all variables\n'
+        '2. Connects patterns to real-world conditions or events (use web context if relevant)\n'
+        '3. Highlights the most important concern or positive finding\n'
+        '4. Ends with one concrete, actionable recommendation\n\n'
+        'Write in flowing prose. No bullet points. No headers. No markdown. Plain paragraphs only.'
+    )
+
+    try:
+        resp = req.post(OLLAMA_URL,
+            json={'model': OLLAMA_MODEL,
+                  'messages': [{'role': 'user', 'content': prompt}],
+                  'stream': False},
+            timeout=90)
+        return resp.json()['message']['content'].strip()
+    except Exception as e:
+        return f'Conclusion unavailable: {e}'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
