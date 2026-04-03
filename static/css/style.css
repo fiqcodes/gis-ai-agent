@@ -1220,6 +1220,7 @@ html, body {
    PERSISTENT FLOATING LAYERS BUTTON
 ════════════════════════════════════════════════════════ */
 .layers-float-btn {
+  display: none;  /* hidden by default — shown only when layers panel is closed */
   position: absolute;
   top: 12px;
   left: 12px;

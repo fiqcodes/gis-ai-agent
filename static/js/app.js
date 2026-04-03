@@ -219,10 +219,11 @@ function addImageOverlay(name, base64Img, bbox) {
 
   renderLayersList();
   updateLayerBadge(name);
-  // Show layers panel automatically
   const lp = document.getElementById('layersPanel');
   lp.style.display = 'block';
   lp.classList.remove('panel-hidden');
+  const fb2 = document.getElementById('layersFloatBtn');
+  if (fb2) fb2.style.display = 'none';
 }
 
 function addROIOverlayFromBbox(regionName, bbox) {
@@ -269,6 +270,8 @@ function addTileLayer(name, tileUrl, bbox) {
   const panel = document.getElementById('layersPanel');
   panel.style.display = 'block';
   panel.classList.remove('panel-hidden');
+  const fb = document.getElementById('layersFloatBtn');
+  if (fb) fb.style.display = 'none';
   console.log('✓ Tile layer added:', name);
 }
 
@@ -363,17 +366,20 @@ function updateLayerBadge(name) {
 }
 
 function toggleLayersPanel() {
-  const panel = document.getElementById('layersPanel');
+  const panel   = document.getElementById('layersPanel');
+  const floatBtn = document.getElementById('layersFloatBtn');
   const isHidden = panel.classList.contains('panel-hidden') ||
                    panel.style.display === 'none' ||
                    getComputedStyle(panel).display === 'none';
   if (isHidden) {
     panel.style.display = 'block';
     panel.classList.remove('panel-hidden');
+    if (floatBtn) floatBtn.style.display = 'none';
     renderLayersList();
   } else {
     panel.style.display = 'none';
     panel.classList.add('panel-hidden');
+    if (floatBtn) floatBtn.style.display = 'flex';
   }
 }
 
