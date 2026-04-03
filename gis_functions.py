@@ -446,7 +446,7 @@ def make_rgb_overview(composite, study_area, region_name, bbox):
         ax.set_yticks(lat_ticks)
         ax.set_xticklabels([f'{v:.2f}°' for v in lon_ticks], fontsize=8, color='#555')
         ax.set_yticklabels([f'{v:.2f}°' for v in lat_ticks], fontsize=8, color='#555')
-        ax.grid(True, color='white', linestyle='--', linewidth=0.4, alpha=0.6)
+        ax.grid(False)
         ax.set_xlabel('Longitude', fontsize=9, color='#555')
         ax.set_ylabel('Latitude',  fontsize=9, color='#555')
         ax.set_title(f'Study Area Overview ({region_name})', fontsize=11, fontweight='bold', pad=10)
@@ -505,7 +505,7 @@ def make_analysis_map(img_arr, vis_params, label, region_name, bbox):
         ax.set_yticks(lat_ticks)
         ax.set_xticklabels([f'{v:.2f}°' for v in lon_ticks], fontsize=8, color='#555')
         ax.set_yticklabels([f'{v:.2f}°' for v in lat_ticks], fontsize=8, color='#555')
-        ax.grid(True, color='white', linestyle='--', linewidth=0.3, alpha=0.5)
+        ax.grid(False)
         ax.set_title(f'{label} — {region_name}', fontsize=11, fontweight='bold', pad=10)
 
         for spine in ax.spines.values():
@@ -619,7 +619,7 @@ def make_stats_charts(stats, var_name, label):
 
             classes = ['bare', 'stressed', 'moderate', 'healthy']
             pcts    = [bare_pct, stressed_pct, moderate_pct, healthy_pct]
-            colors  = ['#F4A56A', '#F4A56A', '#88C9A0', '#88C9A0']
+            colors  = ['#C1704A', '#F0A500', '#5BAD72', '#1A7A40']
             # only show non-zero classes
             pairs   = [(c, p, col) for c, p, col in zip(classes, pcts, colors) if p > 0.5]
             if pairs:

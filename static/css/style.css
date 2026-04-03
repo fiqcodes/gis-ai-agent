@@ -91,7 +91,7 @@ html, body {
   position: fixed;
   left: var(--nav-w);
   top: 0; bottom: 0;
-  width: calc(40% - var(--nav-w));
+  width: calc(60% - var(--nav-w));
   background: var(--bg2);
   border-right: 1px solid var(--border);
   display: flex;
@@ -102,7 +102,7 @@ html, body {
 
 .map-panel {
   position: fixed;
-  left: 40%;
+  left: 60%;
   top: 0; right: 0; bottom: 0;
   background: var(--bg);
   z-index: 50;
@@ -1213,11 +1213,5 @@ html, body {
   color: var(--text1);
 }
 
-/* Default 60:40 chat:map split */
-.chat-panel {
-  width: calc(60% - var(--nav-w)) !important;
-}
-.map-panel {
-  left: 60% !important;
-}
+/* Default 60:40 chat:map split — resizer still works, just starts wider */
 
