@@ -220,7 +220,9 @@ function addImageOverlay(name, base64Img, bbox) {
   renderLayersList();
   updateLayerBadge(name);
   // Show layers panel automatically
-  document.getElementById('layersPanel').style.display = 'block';
+  const lp = document.getElementById('layersPanel');
+  lp.style.display = 'block';
+  lp.classList.remove('panel-hidden');
 }
 
 function addROIOverlayFromBbox(regionName, bbox) {
@@ -264,7 +266,9 @@ function addTileLayer(name, tileUrl, bbox) {
 
   renderLayersList();
   updateLayerBadge(name);
-  document.getElementById('layersPanel').style.display = 'block';
+  const panel = document.getElementById('layersPanel');
+  panel.style.display = 'block';
+  panel.classList.remove('panel-hidden');
   console.log('✓ Tile layer added:', name);
 }
 
@@ -352,11 +356,16 @@ function updateLayerBadge(name) {
 
 function toggleLayersPanel() {
   const panel = document.getElementById('layersPanel');
-  if (panel.style.display === 'none') {
+  const isHidden = panel.classList.contains('panel-hidden') ||
+                   panel.style.display === 'none' ||
+                   getComputedStyle(panel).display === 'none';
+  if (isHidden) {
     panel.style.display = 'block';
+    panel.classList.remove('panel-hidden');
     renderLayersList();
   } else {
     panel.style.display = 'none';
+    panel.classList.add('panel-hidden');
   }
 }
 
