@@ -588,10 +588,15 @@ function handleResult(result) {
   const { region, start_date, end_date, variables, stats, layers, geo, insight, figures, var_insights, conclusion } = result;
 
   // 1. Clear previous layers and load new GEE tile layers onto map
+  // RGB goes last so it sits at the bottom of the layer stack
   clearAllLayers();
   if (layers && layers.length > 0) {
     console.log('Loading', layers.length, 'tile layers onto map');
-    layers.forEach((lyr, i) => {
+    const sorted = [
+      ...layers.filter(l => !l.name.toLowerCase().includes('rgb') && !l.name.toLowerCase().includes('true color')),
+      ...layers.filter(l =>  l.name.toLowerCase().includes('rgb') ||  l.name.toLowerCase().includes('true color')),
+    ];
+    sorted.forEach((lyr, i) => {
       console.log('Layer', i, lyr.name, 'type:', lyr.type, 'has tile_url:', !!lyr.tile_url);
       if (lyr.tile_url && lyr.type === 'tile') {
         addTileLayer(lyr.name, lyr.tile_url, lyr.bbox);
@@ -789,23 +794,6 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
     html += `<div class="result-section-label">Land Cover Classification (LULC)</div>`;
     html += buildSingleStatHTML('LULC', stats['LULC']);
     html += `</div>`;
-  }
-
-  // ── MAP LAYER CARDS ───────────────────────────────────────────────────────
-  if (layers && layers.length > 0) {
-    html += `<div class="result-section-label" style="margin-top:20px">Interactive Map Layers</div>`;
-    layers.slice(0, 6).forEach(lyr => {
-      html += `
-        <div class="map-open-card" onclick="focusLayer('${escapeHtml(lyr.name)}')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polygon points="3 11 22 2 13 21 11 13 3 11"/>
-          </svg>
-          <div>
-            <span>${escapeHtml(lyr.name)}</span>
-            <span class="card-sub">Click to open in map</span>
-          </div>
-        </div>`;
-    });
   }
 
   // ── CONCLUSION ────────────────────────────────────────────────────────────
