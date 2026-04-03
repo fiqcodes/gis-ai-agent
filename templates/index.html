@@ -214,17 +214,17 @@
   </div>
 
   <!-- Map container -->
-  <div id="map"></div>
-
-  <!-- Persistent floating layers toggle — always visible -->
-  <button class="layers-float-btn" id="layersFloatBtn" onclick="toggleLayersPanel()" title="Toggle layers">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-      <polyline points="2 17 12 22 22 17"/>
-      <polyline points="2 12 12 17 22 12"/>
-    </svg>
-    <span class="layers-float-count" id="layersFloatCount">0</span>
-  </button>
+  <div id="map">
+    <!-- Persistent floating layers toggle — always visible inside map -->
+    <button class="layers-float-btn" id="layersFloatBtn" onclick="toggleLayersPanel()" title="Toggle layers">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+        <polyline points="2 17 12 22 22 17"/>
+        <polyline points="2 12 12 17 22 12"/>
+      </svg>
+      <span class="layers-float-count" id="layersFloatCount">0</span>
+    </button>
+  </div>
 
   <!-- Map Layers panel -->
   <div class="layers-panel" id="layersPanel" style="display:none">
