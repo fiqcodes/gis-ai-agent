@@ -332,10 +332,10 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                         elif v == 'lst':
                             lst_img, _ = compute_lst(composite, study_area_surf)
                             s = get_stats(lst_img, 'LST', study_area_surf, scale=90)
-                            # Compute monthly LST stats
+                            # Monthly LST — use ST_B10 thermal band directly (avoids NDVI issues on small composites)
                             try:
                                 import datetime as _dt
-                                monthly = {}
+                                monthly  = {}
                                 start_dt = _dt.datetime.strptime(start_date, '%Y-%m-%d').replace(day=1)
                                 end_dt   = _dt.datetime.strptime(end_date,   '%Y-%m-%d')
                                 cur = start_dt
@@ -344,22 +344,26 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                     m_e = (cur.replace(year=cur.year+1, month=1, day=1)
                                            if cur.month == 12
                                            else cur.replace(month=cur.month+1, day=1)).strftime('%Y-%m-%d')
-                                    m_scenes = landsat_col.filterDate(m_s, m_e)
-                                    if m_scenes.size().getInfo() > 0:
-                                        m_comp   = m_scenes.median()
-                                        m_lst, _ = compute_lst(m_comp, study_area_surf)
-                                        ms = m_lst.reduceRegion(
-                                            reducer=ee.Reducer.mean(),
-                                            geometry=study_area_surf, scale=90, maxPixels=1e9
-                                        ).getInfo()
-                                        val = ms.get('LST')
-                                        if val is not None:
-                                            monthly[cur.strftime('%Y-%m')] = round(val, 4)
+                                    try:
+                                        m_scenes = landsat_col.filterDate(m_s, m_e)
+                                        if m_scenes.size().getInfo() > 0:
+                                            # Convert ST_B10 (scaled) to Celsius directly
+                                            thermal = (m_scenes.select('ST_B10').median()
+                                                       .multiply(0.00341802).add(149.0)
+                                                       .subtract(273.15))
+                                            ms = thermal.reduceRegion(
+                                                reducer=ee.Reducer.mean(),
+                                                geometry=study_area_surf, scale=90, maxPixels=1e9
+                                            ).getInfo()
+                                            val = list(ms.values())[0] if ms else None
+                                            if val is not None:
+                                                monthly[cur.strftime('%Y-%m')] = round(val, 4)
+                                    except: pass
                                     cur = (cur.replace(year=cur.year+1, month=1, day=1)
                                            if cur.month == 12
                                            else cur.replace(month=cur.month+1, day=1))
                                 s['monthly'] = monthly
-                                print(f'  ✓ LST monthly stats: {len(monthly)} months')
+                                print(f'  ✓ LST monthly: {len(monthly)} months')
                             except Exception as lst_me:
                                 s['monthly'] = {}
                                 print(f'  LST monthly failed: {lst_me}')
@@ -368,7 +372,6 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': 'LST (°C)', 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
-                            # Static analysis map + charts
                             if bbox:
                                 arr          = get_thumb(lst_img.clip(study_area_surf), VIS['lst'], study_area_surf, dim=512)
                                 analysis_b64 = make_analysis_map(arr, VIS['lst'], 'LST (°C)', region_name, bbox)
@@ -503,13 +506,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         if lulc_vars:
             update_step(3, 'running', 70)
             try:
-                from gis_functions import compute_lulc, get_thumb, make_lulc_charts, fig_to_base64
-                import matplotlib
-                matplotlib.use('Agg')
-                import matplotlib.pyplot as plt
-                import matplotlib.colors as mcolors
-                import matplotlib.cm as cm_mpl
-
+                from gis_functions import compute_lulc, make_lulc_charts
                 study_area_lulc = study_area_main
                 lulc_result = compute_lulc(study_area_lulc, start_date, end_date, region_name)
                 if lulc_result['success']:
@@ -529,31 +526,25 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     })
                     print('  ✓ LULC tile layer ready')
 
-                    # Static map thumbnail for chat
+                    # Static map thumbnail
                     bbox = geo.get('bbox')
                     lulc_map_b64 = None
                     if bbox:
                         try:
-                            # Build a legend-annotated static map
-                            arr = get_thumb(lulc_clipped, {}, study_area_lulc, dim=512)
-                            lulc_stats_data = lulc_result['stats']
-                            classes_data = lulc_stats_data.get('classes', {})
-
                             import numpy as np
+                            import matplotlib.pyplot as plt
+                            import matplotlib.patches as mpatches
+                            arr = get_thumb(lulc_clipped, {}, study_area_lulc, dim=512)
+                            classes_data = lulc_result['stats'].get('classes', {})
                             w, s_bb, e, n_bb = bbox
                             fig, ax = plt.subplots(figsize=(7, 6))
                             ax.imshow(arr, extent=[w, e, s_bb, n_bb], aspect='auto', origin='upper')
-
-                            # Legend patches
-                            import matplotlib.patches as mpatches
-                            patches = [
-                                mpatches.Patch(color=info['color'], label=f"{cls} ({info['percentage']:.1f}%)")
-                                for cls, info in classes_data.items()
-                            ]
+                            patches = [mpatches.Patch(color=info['color'],
+                                       label=f"{cls} ({info['percentage']:.1f}%)")
+                                       for cls, info in classes_data.items()]
                             ax.legend(handles=patches, loc='lower right', fontsize=7,
                                       framealpha=0.85, edgecolor='#ccc',
                                       title='Land Cover', title_fontsize=8)
-
                             lon_ticks = np.linspace(w, e, 5)
                             lat_ticks = np.linspace(s_bb, n_bb, 5)
                             ax.set_xticks(lon_ticks)
@@ -563,27 +554,24 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             ax.grid(False)
                             ax.set_title(f'Land Cover — {region_name}', fontsize=11, fontweight='bold', pad=10)
                             for spine in ax.spines.values():
-                                spine.set_edgecolor('#cccccc')
-                                spine.set_linewidth(0.8)
+                                spine.set_edgecolor('#cccccc'); spine.set_linewidth(0.8)
                             ax.text(0.01, 0.01, '© Landsat / Google Earth Engine',
                                     transform=ax.transAxes, fontsize=7, color='white',
                                     bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.4))
                             plt.tight_layout()
+                            from gis_functions import fig_to_base64
                             lulc_map_b64 = fig_to_base64(fig)
                             print('  ✓ LULC static map generated')
                         except Exception as lme:
                             print(f'  LULC static map failed: {lme}')
 
-                    # Charts: pie + horizontal bar
                     lulc_charts = make_lulc_charts(lulc_result['stats'])
-
                     figures['LULC'] = {
                         'analysis_map': lulc_map_b64,
                         'charts'      : lulc_charts,
                         'rgb_overview': None,
                     }
                     print(f'  ✓ LULC figures ready ({len(lulc_charts)} charts)')
-
             except Exception as le:
                 import traceback as _tb4; _tb4.print_exc()
                 print(f'LULC analysis error: {le}')
