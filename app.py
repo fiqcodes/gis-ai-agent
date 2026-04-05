@@ -347,9 +347,9 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                     try:
                                         m_scenes = landsat_col.filterDate(m_s, m_e)
                                         if m_scenes.size().getInfo() > 0:
-                                            # Convert ST_B10 (scaled) to Celsius directly
+                                            # landsat_col already has apply_scaling applied,
+                                            # so ST_B10 is already in Kelvin — just subtract 273.15
                                             thermal = (m_scenes.select('ST_B10').median()
-                                                       .multiply(0.00341802).add(149.0)
                                                        .subtract(273.15))
                                             ms = thermal.reduceRegion(
                                                 reducer=ee.Reducer.mean(),
@@ -566,10 +566,23 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             print(f'  LULC static map failed: {lme}')
 
                     lulc_charts = make_lulc_charts(lulc_result['stats'])
+
+                    # Generate RGB overview for LULC if surface analysis didn't already do it
+                    lulc_rgb_overview = rgb_overview_b64 if 'rgb_overview_b64' in dir() and rgb_overview_b64 else None
+                    if lulc_rgb_overview is None and bbox:
+                        try:
+                            from gis_functions import make_rgb_overview, load_landsat
+                            _, lulc_composite = load_landsat(study_area_lulc, start_date, end_date)
+                            lulc_rgb_overview = make_rgb_overview(
+                                lulc_composite, study_area_lulc, region_name, bbox)
+                            print('  ✓ LULC RGB overview generated')
+                        except Exception as lrge:
+                            print(f'  LULC RGB overview failed: {lrge}')
+
                     figures['LULC'] = {
                         'analysis_map': lulc_map_b64,
                         'charts'      : lulc_charts,
-                        'rgb_overview': None,
+                        'rgb_overview': lulc_rgb_overview,
                     }
                     print(f'  ✓ LULC figures ready ({len(lulc_charts)} charts)')
             except Exception as le:

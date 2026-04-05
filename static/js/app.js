@@ -728,102 +728,129 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
       if (!fig) continue;
       const varStats   = stats && stats[varLabel];
       const varInsight = varInsights && varInsights[varLabel];
+      const isLULC     = varLabel.toUpperCase() === 'LULC';
 
       html += `<div class="var-section">`;
 
-      // 1. Analysis Map
-      if (fig.analysis_map) {
-        html += `<div class="result-section-label">${escapeHtml(varLabel)} Map</div>`;
-        html += `<div class="result-img-wrap">
-          <img src="${fig.analysis_map}" class="result-img" loading="lazy"/>
-          <div class="result-img-caption">${escapeHtml(varLabel)} — ${escapeHtml(region)} · ${dateStr}</div>
-        </div>`;
-      }
-
-      // 2. Stats table (below the map)
-      if (varStats) {
-        html += buildSingleStatHTML(varLabel, varStats);
-      }
-
-      // 3. Map-level AI insight
-      if (varInsight) {
-        html += `<div class="var-insight-block">
-          <div class="var-insight-text">${escapeHtml(varInsight)}</div>
-        </div>`;
-      }
-
-      // 4. Charts: monthly first (full width + highlights), then dist+class side-by-side
-      if (fig.charts && fig.charts.length > 0) {
-        const charts = fig.charts; // array of [chartType, b64]
-        const monthly  = charts.find(c => c[0] === 'monthly_trend');
-        const hist     = charts.find(c => c[0] === 'histogram');
-        const classBar = charts.find(c => c[0] === 'class_bar');
-        const lulcPie  = charts.find(c => c[0] === 'lulc_pie');
-        const lulcBar  = charts.find(c => c[0] === 'lulc_bar');
-
-        // Monthly trend chart
-        if (monthly) {
-          html += `<div class="result-section-label" style="margin-top:16px">Monthly Trend</div>`;
+      // For LULC: show RGB overview first (same as non-LULC vars), then LULC map
+      if (isLULC) {
+        // 1a. RGB overview (same as study area block for other vars)
+        if (fig.rgb_overview) {
+          html += `<div class="result-section-label">Study Area</div>`;
           html += `<div class="result-img-wrap">
-            <img src="${monthly[1]}" class="result-img" loading="lazy"/>
+            <img src="${fig.rgb_overview}" class="result-img" loading="lazy"/>
+            <div class="result-img-caption">Study Area Overview (${escapeHtml(region)}) — True Color RGB</div>
           </div>`;
-          if (varStats && varStats.monthly && Object.keys(varStats.monthly).length > 0) {
-            html += buildMonthlyHighlights(varLabel, varStats.monthly);
+        }
+        // 1b. LULC analysis map
+        if (fig.analysis_map) {
+          html += `<div class="result-section-label">Land Cover Map</div>`;
+          html += `<div class="result-img-wrap">
+            <img src="${fig.analysis_map}" class="result-img" loading="lazy"/>
+            <div class="result-img-caption">Land Cover Classification — ${escapeHtml(region)} · ${dateStr}</div>
+          </div>`;
+        }
+        // 2. Stats table
+        if (varStats) {
+          html += buildSingleStatHTML(varLabel, varStats);
+        }
+        // 3. Charts: only pie chart (bar chart removed)
+        if (fig.charts && fig.charts.length > 0) {
+          const lulcPie = fig.charts.find(c => c[0] === 'lulc_pie');
+          if (lulcPie) {
+            html += `<div class="result-section-label" style="margin-top:16px">Area Distribution</div>`;
+            html += `<div class="result-img-wrap">
+              <img src="${lulcPie[1]}" class="result-img" loading="lazy"/>
+            </div>`;
           }
         }
+        // 4. LULC text explanation (auto-computed from class stats)
+        if (varStats && varStats.classes) {
+          html += buildLulcExplanation(varStats);
+        }
+        // 5. AI insight
+        if (varInsight) {
+          html += `<div class="var-insight-block">
+            <div class="var-insight-text">${escapeHtml(varInsight)}</div>
+          </div>`;
+        }
 
-        // LULC pie + bar side by side
-        if (lulcPie || lulcBar) {
-          html += `<div class="result-section-label" style="margin-top:16px">Area Distribution</div>`;
-          const lulcPair = [lulcPie, lulcBar].filter(Boolean);
-          if (lulcPair.length === 2) {
-            html += `<div class="result-charts-row">`;
-            for (const chart of lulcPair) {
-              html += `<div class="result-chart-cell">
+      } else {
+        // ── Non-LULC variables (NDVI, LST, etc.) — original layout ────────────
+
+        // 1. Analysis Map
+        if (fig.analysis_map) {
+          html += `<div class="result-section-label">${escapeHtml(varLabel)} Map</div>`;
+          html += `<div class="result-img-wrap">
+            <img src="${fig.analysis_map}" class="result-img" loading="lazy"/>
+            <div class="result-img-caption">${escapeHtml(varLabel)} — ${escapeHtml(region)} · ${dateStr}</div>
+          </div>`;
+        }
+
+        // 2. Stats table (below the map)
+        if (varStats) {
+          html += buildSingleStatHTML(varLabel, varStats);
+        }
+
+        // 3. Map-level AI insight
+        if (varInsight) {
+          html += `<div class="var-insight-block">
+            <div class="var-insight-text">${escapeHtml(varInsight)}</div>
+          </div>`;
+        }
+
+        // 4. Charts: monthly first (full width + highlights), then dist+class side-by-side
+        if (fig.charts && fig.charts.length > 0) {
+          const charts   = fig.charts;
+          const monthly  = charts.find(c => c[0] === 'monthly_trend');
+          const hist     = charts.find(c => c[0] === 'histogram');
+          const classBar = charts.find(c => c[0] === 'class_bar');
+
+          // Monthly trend chart
+          if (monthly) {
+            html += `<div class="result-section-label" style="margin-top:16px">Monthly Trend</div>`;
+            html += `<div class="result-img-wrap">
+              <img src="${monthly[1]}" class="result-img" loading="lazy"/>
+            </div>`;
+            if (varStats && varStats.monthly && Object.keys(varStats.monthly).length > 0) {
+              html += buildMonthlyHighlights(varLabel, varStats.monthly);
+            }
+          }
+
+          // Distribution + Class bar side by side
+          const sideBySide = [hist, classBar].filter(Boolean);
+          if (sideBySide.length > 0) {
+            html += `<div class="result-section-label" style="margin-top:16px">Distribution &amp; Class Composition</div>`;
+            if (sideBySide.length === 2) {
+              html += `<div class="result-charts-row">`;
+              for (const chart of sideBySide) {
+                html += `<div class="result-chart-cell">
+                  <img src="${chart[1]}" class="result-img" loading="lazy"/>
+                </div>`;
+              }
+              html += `</div>`;
+              if (varStats) {
+                html += buildDistClassExplanation(varLabel, varStats);
+              }
+            } else {
+              const chart = sideBySide[0];
+              html += `<div class="result-img-wrap">
                 <img src="${chart[1]}" class="result-img" loading="lazy"/>
               </div>`;
+              if (varStats) {
+                html += buildDistClassExplanation(varLabel, varStats);
+              }
             }
-            html += `</div>`;
-          } else {
-            html += `<div class="result-img-wrap">
-              <img src="${lulcPair[0][1]}" class="result-img" loading="lazy"/>
-            </div>`;
           }
-        }
 
-        // Distribution + Class bar side by side
-        const sideBySide = [hist, classBar].filter(Boolean);
-        if (sideBySide.length > 0) {
-          html += `<div class="result-section-label" style="margin-top:16px">Distribution &amp; Class Composition</div>`;
-          if (sideBySide.length === 2) {
-            html += `<div class="result-charts-row">`;
-            for (const chart of sideBySide) {
-              html += `<div class="result-chart-cell">
-                <img src="${chart[1]}" class="result-img" loading="lazy"/>
+          // Any other chart types
+          const shown = new Set([monthly, hist, classBar].filter(Boolean).map(c => c[0]));
+          for (const [type, b64] of charts) {
+            if (!shown.has(type)) {
+              html += `<div class="result-img-wrap">
+                <img src="${b64}" class="result-img" loading="lazy"/>
               </div>`;
             }
-            html += `</div>`;
-            if (varStats) {
-              html += buildDistClassExplanation(varLabel, varStats);
-            }
-          } else {
-            const chart = sideBySide[0];
-            html += `<div class="result-img-wrap">
-              <img src="${chart[1]}" class="result-img" loading="lazy"/>
-            </div>`;
-            if (varStats) {
-              html += buildDistClassExplanation(varLabel, varStats);
-            }
-          }
-        }
-
-        // Any other chart types
-        const shown = new Set([monthly, hist, classBar, lulcPie, lulcBar].filter(Boolean).map(c => c[0]));
-        for (const [type, b64] of charts) {
-          if (!shown.has(type)) {
-            html += `<div class="result-img-wrap">
-              <img src="${b64}" class="result-img" loading="lazy"/>
-            </div>`;
           }
         }
       }
@@ -1011,6 +1038,54 @@ function buildDistClassExplanation(varLabel, s) {
   }
 
   if (classNote) text += classNote;
+
+  return `<div class="dist-explanation">${text}</div>`;
+}
+
+// ── LULC class explanation (auto-computed from class stats) ──────────────────
+function buildLulcExplanation(s) {
+  if (!s || !s.classes) return '';
+
+  const classes  = s.classes;
+  const totalHa  = s.total_ha || 0;
+  const nClasses = s.n_classes || Object.keys(classes).length;
+
+  // Sort classes by percentage descending
+  const sorted = Object.entries(classes)
+    .sort((a, b) => b[1].percentage - a[1].percentage);
+
+  if (sorted.length === 0) return '';
+
+  const [topName, topInfo]    = sorted[0];
+  const [secName, secInfo]    = sorted[1] || [null, null];
+
+  const topPct = topInfo.percentage.toFixed(1);
+  const topHa  = (topInfo.hectares || 0).toLocaleString();
+
+  let text = `The land cover is dominated by <strong>${topName}</strong>, covering <strong>${topPct}%</strong> (${topHa} ha) of the study area`;
+
+  if (secName && secInfo) {
+    text += `, followed by <strong>${secName}</strong> at <strong>${secInfo.percentage.toFixed(1)}%</strong>`;
+  }
+  text += `. `;
+
+  if (totalHa > 0) {
+    text += `The total mapped area spans <strong>${totalHa.toLocaleString()} ha</strong> across ${nClasses} land cover classes. `;
+  }
+
+  // Contextual note based on dominant class
+  const topKey = topName.toLowerCase();
+  if (topKey.includes('built') || topKey.includes('urban') || topKey.includes('impervious')) {
+    text += `The high proportion of built-up surface indicates a highly urbanized landscape, which is associated with reduced permeability, elevated surface temperatures, and diminished green space.`;
+  } else if (topKey.includes('tree') || topKey.includes('forest') || topKey.includes('vegetation')) {
+    text += `The prevalence of tree/forest cover suggests a landscape with significant vegetative carbon storage and biodiversity value, though fragmentation pressure from surrounding land uses warrants monitoring.`;
+  } else if (topKey.includes('water')) {
+    text += `The dominance of water bodies reflects the aquatic character of this region, with implications for flood risk, aquatic biodiversity, and local microclimate regulation.`;
+  } else if (topKey.includes('crop') || topKey.includes('agric') || topKey.includes('farm')) {
+    text += `Agricultural land is the primary land use, highlighting the region's role in food production and the importance of monitoring soil health and irrigation patterns.`;
+  } else if (topKey.includes('bare') || topKey.includes('soil')) {
+    text += `Bare or sparsely vegetated surfaces dominate, indicating degraded land, active construction, or arid conditions that may accelerate erosion and surface heating.`;
+  }
 
   return `<div class="dist-explanation">${text}</div>`;
 }

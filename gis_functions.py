@@ -662,7 +662,8 @@ def make_stats_charts(stats, var_name, label):
             classes = ['Cool\n(<30°C)', 'Moderate\n(30–35°C)', 'Warm\n(35–40°C)',
                        'Hot\n(40–45°C)', 'Extreme\n(>45°C)']
             pcts    = [cool_pct, moderate_pct, warm_pct, hot_pct, extreme_pct]
-            colors  = ['#4575B4', '#91BFDB', '#FEE090', '#FC8D59', '#D73027']
+            # Colors sampled from LST_PALETTE: cool blue → green → yellow → orange → red
+            colors  = ['#307ef3', '#3be285', '#fff705', '#ff8b13', '#de0101']
             pairs   = [(c, p, col) for c, p, col in zip(classes, pcts, colors) if p > 0.1]
             if pairs:
                 cls, pct_vals, col_vals = zip(*pairs)
@@ -726,25 +727,7 @@ def make_lulc_charts(lulc_stats):
     except Exception as e:
         print(f'  LULC pie chart failed: {e}')
 
-    # ── Horizontal bar chart ──────────────────────────────────────────────────
-    try:
-        sorted_pairs = sorted(zip(names, pcts, has, colors), key=lambda x: x[1])
-        s_names, s_pcts, s_has, s_colors = zip(*sorted_pairs)
-        fig, ax = plt.subplots(figsize=(6, max(3, len(names) * 0.65)))
-        bars = ax.barh(s_names, s_pcts, color=s_colors, edgecolor='white',
-                       linewidth=0.5, height=0.6)
-        for bar, pct, ha_val in zip(bars, s_pcts, s_has):
-            ax.text(bar.get_width() + 0.5, bar.get_y() + bar.get_height() / 2,
-                    f'{pct:.1f}%  ({ha_val:,.0f} ha)', va='center', fontsize=8, color='#333')
-        ax.set_xlabel('Area share (%)', fontsize=9)
-        ax.set_title('Land Cover by Class', fontsize=10, fontweight='bold')
-        ax.set_xlim(0, max(s_pcts) * 1.45)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        plt.tight_layout()
-        charts.append(('lulc_bar', fig_to_base64(fig)))
-    except Exception as e:
-        print(f'  LULC bar chart failed: {e}')
+    # ── Horizontal bar chart — removed, pie chart is sufficient ──────────────
 
     return charts
 
