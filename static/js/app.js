@@ -907,7 +907,10 @@ function buildSingleStatHTML(varLabel, s) {
     html += `<table class="stats-table">
       <thead><tr><th>Land Cover Class</th><th>Area (ha)</th><th>Share</th></tr></thead>
       <tbody>`;
-    Object.entries(s.classes).forEach(([cls, info]) => {
+    // Sort by percentage descending (largest share first)
+    Object.entries(s.classes)
+      .sort((a, b) => b[1].percentage - a[1].percentage)
+      .forEach(([cls, info]) => {
       const pct = info.percentage.toFixed(1);
       html += `<tr>
         <td><span class="lulc-dot" style="background:${info.color || '#00d4b8'}"></span>${escapeHtml(cls)}</td>
@@ -1014,34 +1017,75 @@ function buildMonthlyHighlights(varLabel, monthly) {
 function buildDistClassExplanation(varLabel, s) {
   if (!s || s.mean == null) return '';
 
-  const fmt  = v => v != null ? v.toFixed(4) : '—';
+  const fmt    = v => v != null ? v.toFixed(4) : '—';
+  const fmtLST = v => v != null ? v.toFixed(2) : '—';
   const spread = s.p90 != null && s.p10 != null ? (s.p90 - s.p10).toFixed(4) : null;
+  const isLST  = varLabel.toUpperCase().includes('LST');
 
-  // NDVI-specific class interpretation
-  let classNote = '';
-  if (varLabel.toUpperCase().includes('NDVI') && s.mean != null) {
-    const m = s.mean;
-    if (m < 0.1)      classNote = 'The area is predominantly bare or non-vegetated.';
-    else if (m < 0.3) classNote = 'Vegetation is sparse to moderately stressed across most of the area.';
-    else if (m < 0.5) classNote = 'Moderate vegetation cover dominates, typical of mixed urban-green areas.';
-    else              classNote = 'Dense, healthy vegetation is the dominant land signal.';
-  }
-
-  let text = `The distribution centers around a mean of <strong>${fmt(s.mean)}</strong>`;
-  if (s.median != null) text += ` (median ${fmt(s.median)})`;
-  if (s.std != null)    text += `, with a standard deviation of <strong>${fmt(s.std)}</strong>`;
+  // ── Distribution sentence ────────────────────────────────────────────────
+  let text = isLST
+    ? `The distribution centers around a mean of <strong>${fmtLST(s.mean)}°C</strong>`
+    : `The distribution centers around a mean of <strong>${fmt(s.mean)}</strong>`;
+  if (s.median != null) text += isLST ? ` (median ${fmtLST(s.median)}°C)` : ` (median ${fmt(s.median)})`;
+  if (s.std    != null) text += isLST
+    ? `, with a standard deviation of <strong>${fmtLST(s.std)}°C</strong>`
+    : `, with a standard deviation of <strong>${fmt(s.std)}</strong>`;
   text += '. ';
 
   if (spread) {
-    text += `The interquartile spread from P10 (${fmt(s.p10)}) to P90 (${fmt(s.p90)}) `;
+    text += isLST
+      ? `The interquartile spread from P10 (${fmtLST(s.p10)}°C) to P90 (${fmtLST(s.p90)}°C) `
+      : `The interquartile spread from P10 (${fmt(s.p10)}) to P90 (${fmt(s.p90)}) `;
     const spreadVal = parseFloat(spread);
-    if (spreadVal < 0.1)       text += 'is narrow, indicating spatially uniform conditions.';
-    else if (spreadVal < 0.25) text += 'shows moderate spatial variability across the region.';
-    else                       text += 'is wide, pointing to significant spatial contrasts — hotspots and low-value zones coexist.';
+    if (isLST) {
+      if (spreadVal < 5)       text += 'is narrow, indicating spatially uniform surface temperatures.';
+      else if (spreadVal < 12) text += 'shows moderate spatial variability, with cooler vegetated areas and warmer built surfaces coexisting.';
+      else                     text += 'is wide, pointing to significant spatial contrasts — hotspots and low-value zones coexist.';
+    } else {
+      if (spreadVal < 0.1)       text += 'is narrow, indicating spatially uniform conditions.';
+      else if (spreadVal < 0.25) text += 'shows moderate spatial variability across the region.';
+      else                       text += 'is wide, pointing to significant spatial contrasts — hotspots and low-value zones coexist.';
+    }
     text += ' ';
   }
 
-  if (classNote) text += classNote;
+  // ── NDVI class note ──────────────────────────────────────────────────────
+  if (varLabel.toUpperCase().includes('NDVI') && s.mean != null) {
+    const m = s.mean;
+    if (m < 0.1)      text += 'The area is predominantly bare or non-vegetated.';
+    else if (m < 0.3) text += 'Vegetation is sparse to moderately stressed across most of the area.';
+    else if (m < 0.5) text += 'Moderate vegetation cover dominates, typical of mixed urban-green areas.';
+    else              text += 'Dense, healthy vegetation is the dominant land signal.';
+  }
+
+  // ── LST heat class note ──────────────────────────────────────────────────
+  if (isLST && s.mean != null) {
+    const mean = s.mean;
+    const p90  = s.p90  || mean;
+    const p10  = s.p10  || mean;
+
+    // Infer dominant heat class from mean
+    let dominantClass, dominantColor;
+    if      (mean < 30) { dominantClass = 'cool (<30°C)';          dominantColor = '#0502b8'; }
+    else if (mean < 35) { dominantClass = 'moderate (30–35°C)';    dominantColor = '#269db1'; }
+    else if (mean < 40) { dominantClass = 'warm (35–40°C)';        dominantColor = '#3be285'; }
+    else if (mean < 45) { dominantClass = 'hot (40–45°C)';         dominantColor = '#fff705'; }
+    else                { dominantClass = 'extreme (>45°C)';        dominantColor = '#ff500d'; }
+
+    text += `The mean surface temperature places the region predominantly in the <strong style="color:${dominantColor}">${dominantClass}</strong> thermal class. `;
+
+    // Hotspot warning if P90 crosses a danger threshold
+    if (p90 >= 45) {
+      text += `The P90 value of <strong>${fmtLST(p90)}°C</strong> indicates that a significant portion of the landscape reaches extreme heat levels, posing risks for outdoor comfort and urban infrastructure. `;
+    } else if (p90 >= 40) {
+      text += `The P90 value of <strong>${fmtLST(p90)}°C</strong> shows that hot surface zones are present, likely concentrated over impervious surfaces such as roads, rooftops, and industrial areas. `;
+    }
+
+    // Cool refuges note if P10 is meaningfully cooler
+    if (p90 - p10 > 6) {
+      text += `Cooler zones near <strong>${fmtLST(p10)}°C</strong> (P10) likely correspond to vegetated parks, water bodies, or shaded areas that act as thermal refuges within the urban fabric.`;
+    }
+  }
 
   return `<div class="dist-explanation">${text}</div>`;
 }
