@@ -1065,14 +1065,14 @@ function buildDistClassExplanation(varLabel, s) {
     const p10  = s.p10  || mean;
 
     // Infer dominant heat class from mean
-    let dominantClass, dominantColor;
-    if      (mean < 30) { dominantClass = 'cool (<30°C)';          dominantColor = '#0502b8'; }
-    else if (mean < 35) { dominantClass = 'moderate (30–35°C)';    dominantColor = '#269db1'; }
-    else if (mean < 40) { dominantClass = 'warm (35–40°C)';        dominantColor = '#3be285'; }
-    else if (mean < 45) { dominantClass = 'hot (40–45°C)';         dominantColor = '#fff705'; }
-    else                { dominantClass = 'extreme (>45°C)';        dominantColor = '#ff500d'; }
+    let dominantClass;
+    if      (mean < 30) { dominantClass = 'cool (<30°C)';       }
+    else if (mean < 35) { dominantClass = 'moderate (30–35°C)'; }
+    else if (mean < 40) { dominantClass = 'warm (35–40°C)';     }
+    else if (mean < 45) { dominantClass = 'hot (40–45°C)';      }
+    else                { dominantClass = 'extreme (>45°C)';     }
 
-    text += `The mean surface temperature places the region predominantly in the <strong style="color:${dominantColor}">${dominantClass}</strong> thermal class. `;
+    text += `The mean surface temperature places the region predominantly in the <strong>${dominantClass}</strong> thermal class. `;
 
     // Hotspot warning if P90 crosses a danger threshold
     if (p90 >= 45) {
