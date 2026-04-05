@@ -332,16 +332,47 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                         elif v == 'lst':
                             lst_img, _ = compute_lst(composite, study_area_surf)
                             s = get_stats(lst_img, 'LST', study_area_surf, scale=90)
+                            # Compute monthly LST stats
+                            try:
+                                import datetime as _dt
+                                monthly = {}
+                                start_dt = _dt.datetime.strptime(start_date, '%Y-%m-%d').replace(day=1)
+                                end_dt   = _dt.datetime.strptime(end_date,   '%Y-%m-%d')
+                                cur = start_dt
+                                while cur <= end_dt:
+                                    m_s = cur.strftime('%Y-%m-%d')
+                                    m_e = (cur.replace(year=cur.year+1, month=1, day=1)
+                                           if cur.month == 12
+                                           else cur.replace(month=cur.month+1, day=1)).strftime('%Y-%m-%d')
+                                    m_scenes = landsat_col.filterDate(m_s, m_e)
+                                    if m_scenes.size().getInfo() > 0:
+                                        m_comp   = m_scenes.median()
+                                        m_lst, _ = compute_lst(m_comp, study_area_surf)
+                                        ms = m_lst.reduceRegion(
+                                            reducer=ee.Reducer.mean(),
+                                            geometry=study_area_surf, scale=90, maxPixels=1e9
+                                        ).getInfo()
+                                        val = ms.get('LST')
+                                        if val is not None:
+                                            monthly[cur.strftime('%Y-%m')] = round(val, 4)
+                                    cur = (cur.replace(year=cur.year+1, month=1, day=1)
+                                           if cur.month == 12
+                                           else cur.replace(month=cur.month+1, day=1))
+                                s['monthly'] = monthly
+                                print(f'  ✓ LST monthly stats: {len(monthly)} months')
+                            except Exception as lst_me:
+                                s['monthly'] = {}
+                                print(f'  LST monthly failed: {lst_me}')
                             all_stats['LST'] = s
                             map_id   = lst_img.clip(study_area_surf).getMapId(VIS['lst'])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': 'LST (°C)', 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
-                            # Static analysis map
+                            # Static analysis map + charts
                             if bbox:
-                                arr = get_thumb(lst_img.clip(study_area_surf), VIS['lst'], study_area_surf, dim=512)
+                                arr          = get_thumb(lst_img.clip(study_area_surf), VIS['lst'], study_area_surf, dim=512)
                                 analysis_b64 = make_analysis_map(arr, VIS['lst'], 'LST (°C)', region_name, bbox)
-                                charts = make_stats_charts(all_stats, 'LST', 'LST')
+                                charts       = make_stats_charts(all_stats, 'lst', 'LST')
                                 figures['LST'] = {'analysis_map': analysis_b64, 'charts': charts,
                                                   'rgb_overview': rgb_overview_b64}
                             print('  ✓ LST ready')

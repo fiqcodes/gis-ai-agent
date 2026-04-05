@@ -643,12 +643,14 @@ def make_stats_charts(stats, var_name, label):
             print(f'  NDVI class chart failed: {e}')
 
     # ── LST heat class bar chart ──────────────────────────────────────────────
-    if 'LST' in label.upper() and mean_v is not None:
+    if mean_v is not None and any(x in label.upper() for x in ['LST', 'LAND SURFACE TEMP', 'TEMPERATURE']):
         try:
             std_v   = s.get('std', 2.0) or 2.0
+            min_lst = s.get('min', 20) or 20
+            max_lst = s.get('max', 60) or 60
             rng     = np.random.default_rng(42)
             samples = rng.normal(mean_v, std_v, 50000)
-            samples = np.clip(samples, min_v, max_v)
+            samples = np.clip(samples, min_lst, max_lst)
 
             cool_pct     = float(np.mean(samples < 30) * 100)
             moderate_pct = float(np.mean((samples >= 30) & (samples < 35)) * 100)
@@ -660,7 +662,7 @@ def make_stats_charts(stats, var_name, label):
                        'Hot\n(40–45°C)', 'Extreme\n(>45°C)']
             pcts    = [cool_pct, moderate_pct, warm_pct, hot_pct, extreme_pct]
             colors  = ['#4575B4', '#91BFDB', '#FEE090', '#FC8D59', '#D73027']
-            pairs   = [(c, p, col) for c, p, col in zip(classes, pcts, colors) if p > 0.5]
+            pairs   = [(c, p, col) for c, p, col in zip(classes, pcts, colors) if p > 0.1]
             if pairs:
                 cls, pct_vals, col_vals = zip(*pairs)
                 fig, ax = plt.subplots(figsize=(6, 3.5))
@@ -679,6 +681,7 @@ def make_stats_charts(stats, var_name, label):
                 ax.spines['right'].set_visible(False)
                 plt.tight_layout()
                 charts.append(('class_bar', fig_to_base64(fig)))
+                print(f'  ✓ LST heat class chart generated ({len(pairs)} classes)')
         except Exception as e:
             print(f'  LST class chart failed: {e}')
 
