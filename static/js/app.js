@@ -755,9 +755,11 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
       // 4. Charts: monthly first (full width + highlights), then dist+class side-by-side
       if (fig.charts && fig.charts.length > 0) {
         const charts = fig.charts; // array of [chartType, b64]
-        const monthly = charts.find(c => c[0] === 'monthly_trend');
-        const hist    = charts.find(c => c[0] === 'histogram');
-        const classBar= charts.find(c => c[0] === 'class_bar');
+        const monthly  = charts.find(c => c[0] === 'monthly_trend');
+        const hist     = charts.find(c => c[0] === 'histogram');
+        const classBar = charts.find(c => c[0] === 'class_bar');
+        const lulcPie  = charts.find(c => c[0] === 'lulc_pie');
+        const lulcBar  = charts.find(c => c[0] === 'lulc_bar');
 
         // Monthly trend chart
         if (monthly) {
@@ -765,9 +767,27 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           html += `<div class="result-img-wrap">
             <img src="${monthly[1]}" class="result-img" loading="lazy"/>
           </div>`;
-          // Monthly highlights auto-computed from stats
           if (varStats && varStats.monthly && Object.keys(varStats.monthly).length > 0) {
             html += buildMonthlyHighlights(varLabel, varStats.monthly);
+          }
+        }
+
+        // LULC pie + bar side by side
+        if (lulcPie || lulcBar) {
+          html += `<div class="result-section-label" style="margin-top:16px">Area Distribution</div>`;
+          const lulcPair = [lulcPie, lulcBar].filter(Boolean);
+          if (lulcPair.length === 2) {
+            html += `<div class="result-charts-row">`;
+            for (const chart of lulcPair) {
+              html += `<div class="result-chart-cell">
+                <img src="${chart[1]}" class="result-img" loading="lazy"/>
+              </div>`;
+            }
+            html += `</div>`;
+          } else {
+            html += `<div class="result-img-wrap">
+              <img src="${lulcPair[0][1]}" class="result-img" loading="lazy"/>
+            </div>`;
           }
         }
 
@@ -783,21 +803,22 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
               </div>`;
             }
             html += `</div>`;
-            // Combined explanation for dist+class
             if (varStats) {
               html += buildDistClassExplanation(varLabel, varStats);
             }
           } else {
-            // Only one of the two
             const chart = sideBySide[0];
             html += `<div class="result-img-wrap">
               <img src="${chart[1]}" class="result-img" loading="lazy"/>
             </div>`;
+            if (varStats) {
+              html += buildDistClassExplanation(varLabel, varStats);
+            }
           }
         }
 
-        // Any other chart types (just show them)
-        const shown = new Set([monthly, hist, classBar].filter(Boolean).map(c => c[0]));
+        // Any other chart types
+        const shown = new Set([monthly, hist, classBar, lulcPie, lulcBar].filter(Boolean).map(c => c[0]));
         for (const [type, b64] of charts) {
           if (!shown.has(type)) {
             html += `<div class="result-img-wrap">
@@ -809,14 +830,6 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
 
       html += `</div>`; // end .var-section
     }
-  }
-
-  // ── LULC special handling (stats + layer card, no figure blocks above) ────
-  if (stats && stats['LULC']) {
-    html += `<div class="var-section">`;
-    html += `<div class="result-section-label">Land Cover Classification (LULC)</div>`;
-    html += buildSingleStatHTML('LULC', stats['LULC']);
-    html += `</div>`;
   }
 
   // ── CONCLUSION ────────────────────────────────────────────────────────────

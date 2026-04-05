@@ -468,30 +468,93 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             except Exception as ae:
                 print(f'Atmo analysis error: {ae}')
 
-        # LULC analysis — tile layer
+        # LULC analysis — tile layer + static map + charts
         if lulc_vars:
             update_step(3, 'running', 70)
             try:
-                from gis_functions import compute_lulc
+                from gis_functions import compute_lulc, get_thumb, make_lulc_charts, fig_to_base64
+                import matplotlib
+                matplotlib.use('Agg')
+                import matplotlib.pyplot as plt
+                import matplotlib.colors as mcolors
+                import matplotlib.cm as cm_mpl
+
                 study_area_lulc = study_area_main
                 lulc_result = compute_lulc(study_area_lulc, start_date, end_date, region_name)
                 if lulc_result['success']:
                     all_stats['LULC'] = lulc_result['stats']
-                    lulc_vis = lulc_result['vis_params']
+                    lulc_vis     = lulc_result['vis_params']
                     lulc_clipped = lulc_result['lulc_img'].clip(study_area_lulc)
                     if 'sld_style' in lulc_vis:
                         map_id = lulc_clipped.sldStyle(lulc_vis['sld_style']).getMapId({})
                     else:
                         map_id = lulc_clipped.getMapId(lulc_vis)
                     layers.append({
-                        'name'    : 'Land Cover Classification',
-                        'tile_url': map_id['tile_fetcher'].url_format,
-                        'type'    : 'tile',
-                        'bbox'    : geo.get('bbox'),
+                        'name'      : 'Land Cover Classification',
+                        'tile_url'  : map_id['tile_fetcher'].url_format,
+                        'type'      : 'tile',
+                        'bbox'      : geo.get('bbox'),
                         'lulc_stats': lulc_result['stats'],
                     })
                     print('  ✓ LULC tile layer ready')
+
+                    # Static map thumbnail for chat
+                    bbox = geo.get('bbox')
+                    lulc_map_b64 = None
+                    if bbox:
+                        try:
+                            # Build a legend-annotated static map
+                            arr = get_thumb(lulc_clipped, {}, study_area_lulc, dim=512)
+                            lulc_stats_data = lulc_result['stats']
+                            classes_data = lulc_stats_data.get('classes', {})
+
+                            import numpy as np
+                            w, s_bb, e, n_bb = bbox
+                            fig, ax = plt.subplots(figsize=(7, 6))
+                            ax.imshow(arr, extent=[w, e, s_bb, n_bb], aspect='auto', origin='upper')
+
+                            # Legend patches
+                            import matplotlib.patches as mpatches
+                            patches = [
+                                mpatches.Patch(color=info['color'], label=f"{cls} ({info['percentage']:.1f}%)")
+                                for cls, info in classes_data.items()
+                            ]
+                            ax.legend(handles=patches, loc='lower right', fontsize=7,
+                                      framealpha=0.85, edgecolor='#ccc',
+                                      title='Land Cover', title_fontsize=8)
+
+                            lon_ticks = np.linspace(w, e, 5)
+                            lat_ticks = np.linspace(s_bb, n_bb, 5)
+                            ax.set_xticks(lon_ticks)
+                            ax.set_yticks(lat_ticks)
+                            ax.set_xticklabels([f'{v:.2f}°' for v in lon_ticks], fontsize=8, color='#555')
+                            ax.set_yticklabels([f'{v:.2f}°' for v in lat_ticks], fontsize=8, color='#555')
+                            ax.grid(False)
+                            ax.set_title(f'Land Cover — {region_name}', fontsize=11, fontweight='bold', pad=10)
+                            for spine in ax.spines.values():
+                                spine.set_edgecolor('#cccccc')
+                                spine.set_linewidth(0.8)
+                            ax.text(0.01, 0.01, '© Landsat / Google Earth Engine',
+                                    transform=ax.transAxes, fontsize=7, color='white',
+                                    bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.4))
+                            plt.tight_layout()
+                            lulc_map_b64 = fig_to_base64(fig)
+                            print('  ✓ LULC static map generated')
+                        except Exception as lme:
+                            print(f'  LULC static map failed: {lme}')
+
+                    # Charts: pie + horizontal bar
+                    lulc_charts = make_lulc_charts(lulc_result['stats'])
+
+                    figures['LULC'] = {
+                        'analysis_map': lulc_map_b64,
+                        'charts'      : lulc_charts,
+                        'rgb_overview': None,
+                    }
+                    print(f'  ✓ LULC figures ready ({len(lulc_charts)} charts)')
+
             except Exception as le:
+                import traceback as _tb4; _tb4.print_exc()
                 print(f'LULC analysis error: {le}')
 
         update_step(3, 'done', 100)

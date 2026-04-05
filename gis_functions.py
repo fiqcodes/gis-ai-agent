@@ -446,7 +446,7 @@ def make_rgb_overview(composite, study_area, region_name, bbox):
         ax.set_yticks(lat_ticks)
         ax.set_xticklabels([f'{v:.2f}°' for v in lon_ticks], fontsize=8, color='#555')
         ax.set_yticklabels([f'{v:.2f}°' for v in lat_ticks], fontsize=8, color='#555')
-        ax.grid(False)
+        ax.grid(True, color='white', linestyle='--', linewidth=0.4, alpha=0.6)
         ax.set_xlabel('Longitude', fontsize=9, color='#555')
         ax.set_ylabel('Latitude',  fontsize=9, color='#555')
         ax.set_title(f'Study Area Overview ({region_name})', fontsize=11, fontweight='bold', pad=10)
@@ -505,7 +505,7 @@ def make_analysis_map(img_arr, vis_params, label, region_name, bbox):
         ax.set_yticks(lat_ticks)
         ax.set_xticklabels([f'{v:.2f}°' for v in lon_ticks], fontsize=8, color='#555')
         ax.set_yticklabels([f'{v:.2f}°' for v in lat_ticks], fontsize=8, color='#555')
-        ax.grid(False)
+        ax.grid(True, color='white', linestyle='--', linewidth=0.3, alpha=0.5)
         ax.set_title(f'{label} — {region_name}', fontsize=11, fontweight='bold', pad=10)
 
         for spine in ax.spines.values():
@@ -620,7 +620,6 @@ def make_stats_charts(stats, var_name, label):
             classes = ['bare', 'stressed', 'moderate', 'healthy']
             pcts    = [bare_pct, stressed_pct, moderate_pct, healthy_pct]
             colors  = ['#C1704A', '#F0A500', '#5BAD72', '#1A7A40']
-            # only show non-zero classes
             pairs   = [(c, p, col) for c, p, col in zip(classes, pcts, colors) if p > 0.5]
             if pairs:
                 cls, pct_vals, col_vals = zip(*pairs)
@@ -643,7 +642,113 @@ def make_stats_charts(stats, var_name, label):
         except Exception as e:
             print(f'  NDVI class chart failed: {e}')
 
+    # ── LST heat class bar chart ──────────────────────────────────────────────
+    if 'LST' in label.upper() and mean_v is not None:
+        try:
+            std_v   = s.get('std', 2.0) or 2.0
+            rng     = np.random.default_rng(42)
+            samples = rng.normal(mean_v, std_v, 50000)
+            samples = np.clip(samples, min_v, max_v)
+
+            cool_pct     = float(np.mean(samples < 30) * 100)
+            moderate_pct = float(np.mean((samples >= 30) & (samples < 35)) * 100)
+            warm_pct     = float(np.mean((samples >= 35) & (samples < 40)) * 100)
+            hot_pct      = float(np.mean((samples >= 40) & (samples < 45)) * 100)
+            extreme_pct  = float(np.mean(samples >= 45) * 100)
+
+            classes = ['Cool\n(<30°C)', 'Moderate\n(30–35°C)', 'Warm\n(35–40°C)',
+                       'Hot\n(40–45°C)', 'Extreme\n(>45°C)']
+            pcts    = [cool_pct, moderate_pct, warm_pct, hot_pct, extreme_pct]
+            colors  = ['#4575B4', '#91BFDB', '#FEE090', '#FC8D59', '#D73027']
+            pairs   = [(c, p, col) for c, p, col in zip(classes, pcts, colors) if p > 0.5]
+            if pairs:
+                cls, pct_vals, col_vals = zip(*pairs)
+                fig, ax = plt.subplots(figsize=(6, 3.5))
+                bars = ax.bar(cls, pct_vals, color=col_vals, edgecolor='white',
+                              linewidth=0.5, width=0.6)
+                for bar, pct in zip(bars, pct_vals):
+                    ax.text(bar.get_x() + bar.get_width() / 2,
+                            bar.get_height() + 0.5,
+                            f'{pct:.1f}%', ha='center', fontsize=8,
+                            fontweight='bold', color='#333')
+                ax.set_xlabel('Temperature class', fontsize=9)
+                ax.set_ylabel('Area share (%)', fontsize=9)
+                ax.set_title('LST heat class composition', fontsize=10, fontweight='bold')
+                ax.set_ylim(0, max(pct_vals) * 1.2)
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                plt.tight_layout()
+                charts.append(('class_bar', fig_to_base64(fig)))
+        except Exception as e:
+            print(f'  LST class chart failed: {e}')
+
     return charts
+
+def make_lulc_charts(lulc_stats):
+    """
+    Generate pie chart + horizontal bar chart for LULC class breakdown.
+    Returns list of [('lulc_pie', b64), ('lulc_bar', b64)].
+    """
+    charts = []
+    classes = lulc_stats.get('classes', {})
+    total_ha = lulc_stats.get('total_ha', 0)
+    if not classes:
+        return charts
+
+    names  = list(classes.keys())
+    pcts   = [classes[n]['percentage'] for n in names]
+    has    = [classes[n]['hectares'] for n in names]
+    colors = [classes[n].get('color', '#aaaaaa') for n in names]
+
+    # ── Pie chart ─────────────────────────────────────────────────────────────
+    try:
+        fig, ax = plt.subplots(figsize=(5.5, 4.5))
+        wedges, texts, autotexts = ax.pie(
+            pcts, labels=None, colors=colors,
+            autopct=lambda p: f'{p:.1f}%' if p > 3 else '',
+            startangle=140, pctdistance=0.78,
+            wedgeprops=dict(edgecolor='white', linewidth=1.5),
+        )
+        for at in autotexts:
+            at.set_fontsize(8)
+            at.set_fontweight('bold')
+            at.set_color('white')
+
+        # Legend outside
+        ax.legend(wedges, [f'{n} ({h:,.0f} ha)' for n, h in zip(names, has)],
+                  loc='lower center', bbox_to_anchor=(0.5, -0.18),
+                  ncol=2, fontsize=8, frameon=False)
+        ax.set_title(f'Land Cover Distribution\n(Total: {total_ha:,.0f} ha)',
+                     fontsize=10, fontweight='bold', pad=8)
+        plt.tight_layout()
+        charts.append(('lulc_pie', fig_to_base64(fig)))
+    except Exception as e:
+        print(f'  LULC pie chart failed: {e}')
+
+    # ── Horizontal bar chart ──────────────────────────────────────────────────
+    try:
+        sorted_pairs = sorted(zip(names, pcts, has, colors), key=lambda x: x[1])
+        s_names, s_pcts, s_has, s_colors = zip(*sorted_pairs)
+
+        fig, ax = plt.subplots(figsize=(6, max(3, len(names) * 0.65)))
+        bars = ax.barh(s_names, s_pcts, color=s_colors, edgecolor='white',
+                       linewidth=0.5, height=0.6)
+        for bar, pct, ha_val in zip(bars, s_pcts, s_has):
+            ax.text(bar.get_width() + 0.5, bar.get_y() + bar.get_height() / 2,
+                    f'{pct:.1f}%  ({ha_val:,.0f} ha)',
+                    va='center', fontsize=8, color='#333')
+        ax.set_xlabel('Area share (%)', fontsize=9)
+        ax.set_title('Land Cover by Class', fontsize=10, fontweight='bold')
+        ax.set_xlim(0, max(s_pcts) * 1.45)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        plt.tight_layout()
+        charts.append(('lulc_bar', fig_to_base64(fig)))
+    except Exception as e:
+        print(f'  LULC bar chart failed: {e}')
+
+    return charts
+
 
 def plot_panels(panels, title, ncols=2, dim=300):
     n     = len(panels)
