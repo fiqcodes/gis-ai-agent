@@ -713,7 +713,11 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
   }
 
   // ── RGB OVERVIEW (once, at top) ───────────────────────────────────────────
-  const firstFig = figures && Object.values(figures).find(f => f && f.rgb_overview);
+  // For LULC-only analyses the rgb_overview lives inside the per-variable block below,
+  // so skip it here to avoid rendering it twice.
+  const allFigKeys = figures ? Object.keys(figures) : [];
+  const isLulcOnly = allFigKeys.length === 1 && allFigKeys[0].toUpperCase() === 'LULC';
+  const firstFig = !isLulcOnly && figures && Object.values(figures).find(f => f && f.rgb_overview && f !== figures['LULC']);
   if (firstFig && firstFig.rgb_overview) {
     html += `<div class="result-section-label">Study Area</div>`;
     html += `<div class="result-img-wrap">
