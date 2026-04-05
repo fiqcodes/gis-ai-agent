@@ -662,8 +662,15 @@ def make_stats_charts(stats, var_name, label):
             classes = ['Cool\n(<30°C)', 'Moderate\n(30–35°C)', 'Warm\n(35–40°C)',
                        'Hot\n(40–45°C)', 'Extreme\n(>45°C)']
             pcts    = [cool_pct, moderate_pct, warm_pct, hot_pct, extreme_pct]
-            # Colors sampled from LST_PALETTE: cool blue → green → yellow → orange → red
-            colors  = ['#307ef3', '#3be285', '#fff705', '#ff8b13', '#de0101']
+            # Sample colors directly from LST_PALETTE (min=20, max=60, 29 stops)
+            # at each class midpoint: 25, 32.5, 37.5, 42.5, 52.5 °C
+            # position = (midpoint - 20) / 40, index = position * 28
+            # 25°C → idx 3.5 → #0502b8 (dark blue)
+            # 32.5°C → idx 8.75 → #269db1 (teal)
+            # 37.5°C → idx 12.25 → #3be285 (green)
+            # 42.5°C → idx 15.75 → #fff705 (yellow)
+            # 52.5°C → idx 22.75 → #ff500d (orange-red)
+            colors  = ['#0502b8', '#269db1', '#3be285', '#fff705', '#ff500d']
             pairs   = [(c, p, col) for c, p, col in zip(classes, pcts, colors) if p > 0.1]
             if pairs:
                 cls, pct_vals, col_vals = zip(*pairs)

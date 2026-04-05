@@ -534,7 +534,13 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             import numpy as np
                             import matplotlib.pyplot as plt
                             import matplotlib.patches as mpatches
-                            arr = get_thumb(lulc_clipped, {}, study_area_lulc, dim=512)
+                            # Use the styled image (with sld_style applied) for the thumbnail
+                            # so colours match the LULC classification, not a grayscale default
+                            if 'sld_style' in lulc_vis:
+                                styled_lulc = lulc_clipped.sldStyle(lulc_vis['sld_style'])
+                                arr = get_thumb(styled_lulc, {}, study_area_lulc, dim=512)
+                            else:
+                                arr = get_thumb(lulc_clipped, lulc_vis, study_area_lulc, dim=512)
                             classes_data = lulc_result['stats'].get('classes', {})
                             w, s_bb, e, n_bb = bbox
                             fig, ax = plt.subplots(figsize=(7, 6))
