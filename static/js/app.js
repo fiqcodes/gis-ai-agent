@@ -277,10 +277,21 @@ function toggleLayerVisibility(id) {
   const item = mapLayers.find(l => l.id === id);
   if (!item) return;
   if (item.visible) {
-    map.removeLayer(item.layer);
+    // Hide: set opacity to 0 to preserve layer stack order
+    if (item.layer.setOpacity) {
+      item.layer.setOpacity(0);
+    } else if (item.layer.setStyle) {
+      item.layer.setStyle({ opacity: 0, fillOpacity: 0 });
+    }
     item.visible = false;
   } else {
-    map.addLayer(item.layer);
+    // Show: restore opacity
+    if (item.layer.setOpacity) {
+      item.layer.setOpacity(0.85);
+    } else if (item.layer.setStyle) {
+      // Restore ROI vector style
+      item.layer.setStyle({ opacity: 1, fillOpacity: 0.05, color: '#00d4b8', weight: 1.5 });
+    }
     item.visible = true;
   }
   renderLayersList();
