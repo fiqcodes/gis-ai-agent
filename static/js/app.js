@@ -232,7 +232,7 @@ function addROIOverlayFromBbox(regionName, bbox) {
   window._currentBbox = bbox;
 }
 
-function addTileLayer(name, tileUrl, bbox) {
+function addTileLayer(name, tileUrl, bbox, shouldZoom = false) {
   // GEE tile layer — interactive, pans/zooms correctly
   const tileLayer = L.tileLayer(tileUrl, {
     opacity    : 0.85,
@@ -242,15 +242,12 @@ function addTileLayer(name, tileUrl, bbox) {
   });
   tileLayer.addTo(map);
 
-  // Zoom to this region's bbox — always zoom to first tile layer in each batch
-  const existingTiles = mapLayers.filter(l => l.type === 'tile').length;
-  if (bbox && existingTiles === 0) {
+  // Zoom to this region's bbox only when explicitly requested (first layer of a new batch)
+  if (shouldZoom && bbox) {
     const [w, s, e, n] = bbox;
-    // Wait for tile layer to actually render before zooming
     tileLayer.once('load', () => {
       map.fitBounds([[s, w], [n, e]], { padding: [40, 40] });
     });
-    // Fallback timeout in case 'load' doesn't fire
     setTimeout(() => {
       map.fitBounds([[s, w], [n, e]], { padding: [40, 40] });
     }, 2000);
@@ -610,19 +607,21 @@ function handleResult(result) {
   // Analysis result
   const { region, start_date, end_date, variables, stats, layers, geo, insight, figures, var_insights, conclusion } = result;
 
-  // 1. Clear previous layers and load new GEE tile layers onto map
-  // RGB goes last so it sits at the bottom of the layer stack
-  clearAllLayers();
+  // Add new GEE tile layers on top of existing ones — do NOT clear previous layers.
+  // Users can toggle or remove individual layers from the layers panel.
+  // RGB goes last so it sits at the bottom of the new layer stack.
   if (layers && layers.length > 0) {
     console.log('Loading', layers.length, 'tile layers onto map');
     const sorted = [
       ...layers.filter(l =>  l.name.toLowerCase().includes('rgb') ||  l.name.toLowerCase().includes('true color')),
       ...layers.filter(l => !l.name.toLowerCase().includes('rgb') && !l.name.toLowerCase().includes('true color')),
     ];
+    // Track existing tile count before adding so we only zoom on the first new layer
+    const existingTileCount = mapLayers.filter(l => l.type === 'tile').length;
     sorted.forEach((lyr, i) => {
       console.log('Layer', i, lyr.name, 'type:', lyr.type, 'has tile_url:', !!lyr.tile_url);
       if (lyr.tile_url && lyr.type === 'tile') {
-        addTileLayer(lyr.name, lyr.tile_url, lyr.bbox);
+        addTileLayer(lyr.name, lyr.tile_url, lyr.bbox, existingTileCount + i === existingTileCount);
       } else if ((lyr.url || lyr.image) && lyr.bbox) {
         addImageOverlay(lyr.name, lyr.url || lyr.image, lyr.bbox);
       } else {
