@@ -260,6 +260,7 @@ function addTileLayer(name, tileUrl, bbox, shouldZoom = false) {
     layer  : tileLayer,
     type   : 'tile',
     visible: true,
+    bbox   : bbox || null,
   });
 
   renderLayersList();
@@ -621,6 +622,26 @@ function handleResult(result) {
     sorted.forEach((lyr, i) => {
       console.log('Layer', i, lyr.name, 'type:', lyr.type, 'has tile_url:', !!lyr.tile_url);
       if (lyr.tile_url && lyr.type === 'tile') {
+        const isRGB = lyr.name.toLowerCase().includes('rgb') || lyr.name.toLowerCase().includes('true color');
+        // Skip duplicate RGB layers for the same region — only add if no existing RGB
+        // layer already covers the same bbox (same region, different analysis run)
+        if (isRGB && lyr.bbox) {
+          const [w, s, e, n] = lyr.bbox;
+          const alreadyHasRGB = mapLayers.some(existing => {
+            if (!existing.bbox) return false;
+            const [ew, es, ee, en] = existing.bbox;
+            // Consider it a duplicate if bboxes overlap within ~0.01 degrees
+            return (
+              existing.name.toLowerCase().includes('rgb') ||
+              existing.name.toLowerCase().includes('true color')
+            ) && Math.abs(ew - w) < 0.01 && Math.abs(es - s) < 0.01 &&
+               Math.abs(ee - e) < 0.01 && Math.abs(en - n) < 0.01;
+          });
+          if (alreadyHasRGB) {
+            console.log('Skipping duplicate RGB layer for same region:', lyr.name);
+            return;
+          }
+        }
         addTileLayer(lyr.name, lyr.tile_url, lyr.bbox, existingTileCount + i === existingTileCount);
       } else if ((lyr.url || lyr.image) && lyr.bbox) {
         addImageOverlay(lyr.name, lyr.url || lyr.image, lyr.bbox);
