@@ -548,7 +548,10 @@ def make_stats_charts(stats, var_name, label):
             ax.plot(x_idx, values, color='#2196F3', linewidth=2,
                     marker='o', markersize=5, markerfacecolor='white',
                     markeredgecolor='#2196F3', markeredgewidth=1.5)
-            ax.fill_between(x_idx, values, alpha=0.12, color='#2196F3')
+            # Fill between line and the plot's bottom edge (not zero),
+            # so shading is always below the line even for all-negative series
+            baseline = min(values) - abs(min(values)) * 0.05
+            ax.fill_between(x_idx, values, baseline, alpha=0.12, color='#2196F3')
             ax.set_xticks(x_idx)
             ax.set_xticklabels(short_months, fontsize=8, rotation=45)
             ax.set_ylabel(label, fontsize=9)
@@ -736,7 +739,7 @@ def make_stats_charts(stats, var_name, label):
             classes = ['Cool\n(<30°C)', 'Moderate\n(30–35°C)', 'Warm\n(35–40°C)',
                        'Hot\n(40–45°C)', 'Extreme\n(>45°C)']
             pcts    = [cool_pct, moderate_pct, warm_pct, hot_pct, extreme_pct]
-            colors  = ['#0502b8', '#269db1', '#3be285', '#fff705', '#ff500d']
+            colors  = ['#0502b8', '#269db1', '#3be285', '#f5a800', '#ff500d']
             pairs   = [(c, p, col) for c, p, col in zip(classes, pcts, colors) if p > 0.1]
             if pairs:
                 cls, pct_vals, col_vals = zip(*pairs)
