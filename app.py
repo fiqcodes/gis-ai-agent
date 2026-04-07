@@ -458,6 +458,19 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 study_area_atmo = study_area_main
                 bbox = geo.get('bbox')
 
+                # Generate one RGB overview for all atmo vars (reuse if surface already made one)
+                atmo_rgb_overview = rgb_overview_b64 if 'rgb_overview_b64' in dir() and rgb_overview_b64 else None
+                if atmo_rgb_overview is None and bbox and not surface_vars and not lulc_vars:
+                    try:
+                        from gis_functions import make_rgb_overview, load_landsat
+                        _, atmo_composite = load_landsat(study_area_atmo, start_date, end_date)
+                        atmo_rgb_overview = make_rgb_overview(
+                            atmo_composite, study_area_atmo, region_name, bbox)
+                        print('  ✓ Atmo RGB overview generated')
+                    except Exception as arge:
+                        print(f'  Atmo RGB overview failed: {arge}')
+                atmo_first_var = True   # attach rgb_overview only to first atmo figure
+
                 for v in atmo_vars:
                     try:
                         if v == 'ffpi':
@@ -473,8 +486,9 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 figures['FFPI'] = {
                                     'analysis_map': make_analysis_map(arr, VIS['ffpi'], 'FFPI Score', region_name, bbox),
                                     'charts'      : make_stats_charts(all_stats, 'ffpi', 'FFPI'),
-                                    'rgb_overview': None,
+                                    'rgb_overview': atmo_rgb_overview if atmo_first_var else None,
                                 }
+                                atmo_first_var = False
 
                         elif v in ATMO_INDEX_MAP:
                             label, func, vis_key, unit = ATMO_INDEX_MAP[v]
@@ -493,8 +507,9 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                     figures[label] = {
                                         'analysis_map': make_analysis_map(arr, VIS[vis_key], f'{label} ({unit})', region_name, bbox),
                                         'charts'      : make_stats_charts(all_stats, v, label),
-                                        'rgb_overview': None,
+                                        'rgb_overview': atmo_rgb_overview if atmo_first_var else None,
                                     }
+                                    atmo_first_var = False
                                 print(f'  ✓ {label} ready')
                     except Exception as ve:
                         print(f'  [{v}] atmo failed: {ve}')

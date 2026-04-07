@@ -539,17 +539,17 @@ def make_stats_charts(stats, var_name, label):
     monthly = s.get('monthly', {})
     if monthly and len(monthly) >= 2:
         try:
-            months = sorted(monthly.keys())
-            values = [monthly[m] for m in months]
-            short_months = [m[5:] for m in months]  # MM only
+            months       = sorted(monthly.keys())
+            values       = [monthly[m] for m in months]
+            short_months = [m[5:] for m in months]   # MM only
+            x_idx        = list(range(len(months)))   # numeric x — used for BOTH line and fill
 
             fig, ax = plt.subplots(figsize=(8, 3.5))
-            ax.plot(short_months, values, color='#2196F3', linewidth=2,
+            ax.plot(x_idx, values, color='#2196F3', linewidth=2,
                     marker='o', markersize=5, markerfacecolor='white',
                     markeredgecolor='#2196F3', markeredgewidth=1.5)
-            ax.fill_between(range(len(months)), values,
-                            alpha=0.12, color='#2196F3')
-            ax.set_xticks(range(len(months)))
+            ax.fill_between(x_idx, values, alpha=0.12, color='#2196F3')
+            ax.set_xticks(x_idx)
             ax.set_xticklabels(short_months, fontsize=8, rotation=45)
             ax.set_ylabel(label, fontsize=9)
             ax.set_title(f'{label} Monthly Mean', fontsize=10, fontweight='bold')
@@ -570,9 +570,7 @@ def make_stats_charts(stats, var_name, label):
 
     if mean_v is not None and min_v is not None and max_v is not None:
         try:
-            # Simulate approximate distribution from stats
             std_v   = s.get('std', 0.1) or 0.1
-            med_v   = s.get('median', mean_v) or mean_v
             n_pts   = 50000
             rng     = np.random.default_rng(42)
             samples = rng.normal(mean_v, std_v, n_pts)
@@ -582,7 +580,6 @@ def make_stats_charts(stats, var_name, label):
             ax.hist(samples, bins=40, color='#5B9BD5', edgecolor='white',
                     linewidth=0.4, alpha=0.85)
 
-            # P10/P90 lines
             if p10_v is not None:
                 ax.axvline(p10_v, color='#E07B39', linewidth=1.5, linestyle='--')
                 ax.text(p10_v, ax.get_ylim()[1] * 0.95, 'P10',
@@ -604,47 +601,124 @@ def make_stats_charts(stats, var_name, label):
         except Exception as e:
             print(f'  Histogram failed: {e}')
 
-    # ── NDVI class bar chart ──────────────────────────────────────────────────
-    if 'NDVI' in label.upper() and mean_v is not None:
+    # ── Generic index class bar (NDVI, NDBI, NDWI, EVI, SAVI, BSI, UI, NBI, NDSI, MNDWI) ──
+    INDEX_VARS = ('NDVI','NDBI','NDWI','EVI','SAVI','BSI','UI','NBI','NDSI','MNDWI')
+    label_up   = label.upper()
+
+    if mean_v is not None and any(iv in label_up for iv in INDEX_VARS):
         try:
             std_v   = s.get('std', 0.1) or 0.1
             rng     = np.random.default_rng(42)
             samples = rng.normal(mean_v, std_v, 50000)
-            samples = np.clip(samples, -1, 1)
 
-            bare_pct     = float(np.mean(samples < 0.1) * 100)
-            stressed_pct = float(np.mean((samples >= 0.1) & (samples < 0.3)) * 100)
-            moderate_pct = float(np.mean((samples >= 0.3) & (samples < 0.6)) * 100)
-            healthy_pct  = float(np.mean(samples >= 0.6) * 100)
+            # ── Per-index class definitions ───────────────────────────────────
+            if 'NDVI' in label_up:
+                samples = np.clip(samples, -1, 1)
+                class_defs = [
+                    ('Bare\n(<0.1)',      samples < 0.1,                              '#C1704A'),
+                    ('Stressed\n(0.1–0.3)', (samples >= 0.1) & (samples < 0.3),      '#F0A500'),
+                    ('Moderate\n(0.3–0.6)', (samples >= 0.3) & (samples < 0.6),      '#5BAD72'),
+                    ('Healthy\n(>0.6)',   samples >= 0.6,                             '#1A7A40'),
+                ]
+                xlabel = 'NDVI class'
 
-            classes = ['bare', 'stressed', 'moderate', 'healthy']
-            pcts    = [bare_pct, stressed_pct, moderate_pct, healthy_pct]
-            colors  = ['#C1704A', '#F0A500', '#5BAD72', '#1A7A40']
-            # only show non-zero classes
-            pairs   = [(c, p, col) for c, p, col in zip(classes, pcts, colors) if p > 0.5]
+            elif 'NDBI' in label_up:
+                samples = np.clip(samples, -1, 1)
+                class_defs = [
+                    ('Non-built\n(<–0.1)',   samples < -0.1,                          '#4575B4'),
+                    ('Low built\n(–0.1–0)', (samples >= -0.1) & (samples < 0),        '#91BFDB'),
+                    ('Moderate\n(0–0.1)',   (samples >= 0) & (samples < 0.1),          '#FEE090'),
+                    ('High built\n(>0.1)',   samples >= 0.1,                           '#D73027'),
+                ]
+                xlabel = 'Built-up class'
+
+            elif 'NDWI' in label_up or 'MNDWI' in label_up:
+                samples = np.clip(samples, -1, 1)
+                class_defs = [
+                    ('Dry\n(<–0.3)',       samples < -0.3,                            '#C1704A'),
+                    ('Transition\n(–0.3–0)', (samples >= -0.3) & (samples < 0),       '#91BFDB'),
+                    ('Moist\n(0–0.3)',     (samples >= 0) & (samples < 0.3),           '#4575B4'),
+                    ('Water\n(>0.3)',       samples >= 0.3,                            '#023858'),
+                ]
+                xlabel = 'Water class'
+
+            elif 'BSI' in label_up:
+                samples = np.clip(samples, -1, 1)
+                class_defs = [
+                    ('Vegetated\n(<–0.1)', samples < -0.1,                            '#1A7A40'),
+                    ('Mixed\n(–0.1–0.1)', (samples >= -0.1) & (samples < 0.1),        '#F0A500'),
+                    ('Bare soil\n(>0.1)', samples >= 0.1,                             '#C1704A'),
+                ]
+                xlabel = 'Bare soil class'
+
+            elif 'UI' in label_up:
+                samples = np.clip(samples, -1, 1)
+                class_defs = [
+                    ('Vegetation\n(<–0.1)', samples < -0.1,                           '#1A7A40'),
+                    ('Transition\n(–0.1–0.1)', (samples >= -0.1) & (samples < 0.1),  '#F0A500'),
+                    ('Urban\n(>0.1)',        samples >= 0.1,                           '#8B0000'),
+                ]
+                xlabel = 'Urban class'
+
+            elif 'EVI' in label_up or 'SAVI' in label_up:
+                samples = np.clip(samples, -1, 1)
+                class_defs = [
+                    ('Sparse\n(<0.1)',      samples < 0.1,                            '#C1704A'),
+                    ('Low\n(0.1–0.3)',     (samples >= 0.1) & (samples < 0.3),        '#F0A500'),
+                    ('Moderate\n(0.3–0.5)', (samples >= 0.3) & (samples < 0.5),       '#5BAD72'),
+                    ('Dense\n(>0.5)',       samples >= 0.5,                            '#1A7A40'),
+                ]
+                xlabel = 'Vegetation class'
+
+            elif 'NDSI' in label_up:
+                samples = np.clip(samples, -1, 1)
+                class_defs = [
+                    ('No snow\n(<0.0)',  samples < 0.0,                               '#C1704A'),
+                    ('Possible\n(0–0.4)', (samples >= 0.0) & (samples < 0.4),         '#91BFDB'),
+                    ('Snow\n(>0.4)',     samples >= 0.4,                               '#DEEFFF'),
+                ]
+                xlabel = 'Snow class'
+
+            elif 'NBI' in label_up:
+                samples = np.clip(samples, 0, 0.5)
+                class_defs = [
+                    ('Low\n(<0.1)',      samples < 0.1,                               '#91BFDB'),
+                    ('Moderate\n(0.1–0.25)', (samples >= 0.1) & (samples < 0.25),    '#FEE090'),
+                    ('High\n(>0.25)',    samples >= 0.25,                              '#D73027'),
+                ]
+                xlabel = 'Built-up class'
+
+            else:
+                class_defs = []
+                xlabel     = label
+
+            pairs = [(name, float(np.mean(mask) * 100), col)
+                     for name, mask, col in class_defs
+                     if float(np.mean(mask) * 100) > 0.5]
+
             if pairs:
                 cls, pct_vals, col_vals = zip(*pairs)
-                fig, ax = plt.subplots(figsize=(5, 3.5))
+                fig, ax = plt.subplots(figsize=(max(5, len(pairs) * 1.2), 3.5))
                 bars = ax.bar(cls, pct_vals, color=col_vals, edgecolor='white',
                               linewidth=0.5, width=0.5)
                 for bar, pct in zip(bars, pct_vals):
                     ax.text(bar.get_x() + bar.get_width() / 2,
-                            bar.get_height() + 1,
+                            bar.get_height() + 0.8,
                             f'{pct:.1f}%', ha='center', fontsize=9,
                             fontweight='bold', color='#333')
-                ax.set_xlabel('NDVI class', fontsize=9)
+                ax.set_xlabel(xlabel, fontsize=9)
                 ax.set_ylabel('Area share (%)', fontsize=9)
-                ax.set_title(f'NDVI class composition', fontsize=10, fontweight='bold')
-                ax.set_ylim(0, max(pct_vals) * 1.2)
+                ax.set_title(f'{label} class composition', fontsize=10, fontweight='bold')
+                ax.set_ylim(0, max(pct_vals) * 1.25)
                 ax.spines['top'].set_visible(False)
                 ax.spines['right'].set_visible(False)
                 plt.tight_layout()
                 charts.append(('class_bar', fig_to_base64(fig)))
         except Exception as e:
-            print(f'  NDVI class chart failed: {e}')
+            print(f'  Index class chart failed: {e}')
 
     # ── LST heat class bar chart ──────────────────────────────────────────────
-    if mean_v is not None and 'LST' in label.upper():
+    if mean_v is not None and 'LST' in label_up:
         try:
             std_v    = s.get('std', 3.0) or 3.0
             min_lst  = s.get('min') if s.get('min') is not None else 20.0
@@ -662,14 +736,6 @@ def make_stats_charts(stats, var_name, label):
             classes = ['Cool\n(<30°C)', 'Moderate\n(30–35°C)', 'Warm\n(35–40°C)',
                        'Hot\n(40–45°C)', 'Extreme\n(>45°C)']
             pcts    = [cool_pct, moderate_pct, warm_pct, hot_pct, extreme_pct]
-            # Sample colors directly from LST_PALETTE (min=20, max=60, 29 stops)
-            # at each class midpoint: 25, 32.5, 37.5, 42.5, 52.5 °C
-            # position = (midpoint - 20) / 40, index = position * 28
-            # 25°C → idx 3.5 → #0502b8 (dark blue)
-            # 32.5°C → idx 8.75 → #269db1 (teal)
-            # 37.5°C → idx 12.25 → #3be285 (green)
-            # 42.5°C → idx 15.75 → #fff705 (yellow)
-            # 52.5°C → idx 22.75 → #ff500d (orange-red)
             colors  = ['#0502b8', '#269db1', '#3be285', '#fff705', '#ff500d']
             pairs   = [(c, p, col) for c, p, col in zip(classes, pcts, colors) if p > 0.1]
             if pairs:
@@ -693,6 +759,110 @@ def make_stats_charts(stats, var_name, label):
                 print(f'  ✓ LST heat class chart: {len(pairs)} classes')
         except Exception as e:
             print(f'  LST class chart failed: {e}')
+
+    # ── Atmospheric pollution class bar (NO2, CO, SO2, CH4, O3, Aerosol, GPP, FFPI) ──
+    ATMO_VARS = ('NO2','CO','SO2','CH4','O3','AEROSOL','GPP','BURNED','FFPI')
+    if mean_v is not None and any(av in label_up for av in ATMO_VARS):
+        try:
+            std_v   = s.get('std', abs(mean_v) * 0.2 + 1e-10) or abs(mean_v) * 0.2 + 1e-10
+            rng     = np.random.default_rng(42)
+            samples = rng.normal(mean_v, std_v, 50000)
+            samples = np.clip(samples, min_v if min_v is not None else 0,
+                                       max_v if max_v is not None else mean_v * 3)
+
+            if 'NO2' in label_up:
+                # Thresholds in mol/m² — WHO/EEA guidance adapted
+                lo, med, hi = mean_v * 0.6, mean_v, mean_v * 1.4
+                class_defs = [
+                    ('Low\n(<60% mean)',    samples < lo,                             '#4575B4'),
+                    ('Moderate\n(60–140%)', (samples >= lo) & (samples < hi),         '#FEE090'),
+                    ('High\n(>140% mean)',  samples >= hi,                            '#D73027'),
+                ]
+                xlabel = 'NO₂ concentration class'
+
+            elif 'CO' in label_up:
+                lo, hi = mean_v * 0.7, mean_v * 1.3
+                class_defs = [
+                    ('Low',      samples < lo,                    '#4575B4'),
+                    ('Moderate', (samples >= lo) & (samples < hi), '#FEE090'),
+                    ('High',     samples >= hi,                    '#D73027'),
+                ]
+                xlabel = 'CO concentration class'
+
+            elif 'SO2' in label_up:
+                lo, hi = mean_v * 0.5, mean_v * 1.5
+                class_defs = [
+                    ('Low',      samples < lo,                    '#4575B4'),
+                    ('Moderate', (samples >= lo) & (samples < hi), '#FEE090'),
+                    ('High',     samples >= hi,                    '#D73027'),
+                ]
+                xlabel = 'SO₂ concentration class'
+
+            elif 'CH4' in label_up:
+                lo, hi = mean_v * 0.99, mean_v * 1.01
+                class_defs = [
+                    ('Background',   samples < lo,                    '#4575B4'),
+                    ('Elevated',    (samples >= lo) & (samples < hi), '#FEE090'),
+                    ('High\nemitter', samples >= hi,                   '#D73027'),
+                ]
+                xlabel = 'CH₄ class'
+
+            elif 'O3' in label_up:
+                lo, hi = mean_v * 0.9, mean_v * 1.1
+                class_defs = [
+                    ('Low',      samples < lo,                    '#4575B4'),
+                    ('Moderate', (samples >= lo) & (samples < hi), '#91BFDB'),
+                    ('High',     samples >= hi,                    '#D73027'),
+                ]
+                xlabel = 'O₃ class'
+
+            elif 'AEROSOL' in label_up:
+                class_defs = [
+                    ('Clean\n(<0)',   samples < 0,                     '#4575B4'),
+                    ('Low\n(0–1)',   (samples >= 0) & (samples < 1),   '#91BFDB'),
+                    ('Moderate\n(1–2)', (samples >= 1) & (samples < 2), '#FEE090'),
+                    ('High\n(>2)',    samples >= 2,                     '#D73027'),
+                ]
+                xlabel = 'Aerosol index class'
+
+            elif 'FFPI' in label_up:
+                class_defs = [
+                    ('Clean\n(0–0.3)',       samples < 0.3,                          '#4575B4'),
+                    ('Moderate\n(0.3–0.6)', (samples >= 0.3) & (samples < 0.6),      '#FEE090'),
+                    ('Polluted\n(0.6–0.8)', (samples >= 0.6) & (samples < 0.8),      '#FC8D59'),
+                    ('Severe\n(>0.8)',       samples >= 0.8,                          '#D73027'),
+                ]
+                xlabel = 'Pollution class'
+
+            else:
+                class_defs = []
+                xlabel = label
+
+            pairs = [(name, float(np.mean(mask) * 100), col)
+                     for name, mask, col in class_defs
+                     if float(np.mean(mask) * 100) > 0.5]
+
+            if pairs:
+                cls, pct_vals, col_vals = zip(*pairs)
+                fig, ax = plt.subplots(figsize=(max(5, len(pairs) * 1.4), 3.5))
+                bars = ax.bar(cls, pct_vals, color=col_vals, edgecolor='white',
+                              linewidth=0.5, width=0.5)
+                for bar, pct in zip(bars, pct_vals):
+                    ax.text(bar.get_x() + bar.get_width() / 2,
+                            bar.get_height() + 0.5,
+                            f'{pct:.1f}%', ha='center', fontsize=9,
+                            fontweight='bold', color='#333')
+                ax.set_xlabel(xlabel, fontsize=9)
+                ax.set_ylabel('Area share (%)', fontsize=9)
+                ax.set_title(f'{label} pollution class composition', fontsize=10, fontweight='bold')
+                ax.set_ylim(0, max(pct_vals) * 1.25)
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                plt.tight_layout()
+                charts.append(('class_bar', fig_to_base64(fig)))
+                print(f'  ✓ {label} pollution class chart: {len(pairs)} classes')
+        except Exception as e:
+            print(f'  Atmo class chart failed: {e}')
 
     return charts
 

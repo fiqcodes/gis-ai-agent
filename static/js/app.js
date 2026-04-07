@@ -1089,6 +1089,89 @@ function buildDistClassExplanation(varLabel, s) {
     else              text += 'Dense, healthy vegetation is the dominant land signal.';
   }
 
+  // ── Other index class notes ──────────────────────────────────────────────
+  if (varLabel.toUpperCase().includes('NDBI') && s.mean != null) {
+    const m = s.mean;
+    if (m < -0.1)      text += 'The area is predominantly non-built, with vegetation or natural surfaces dominating.';
+    else if (m < 0.0)  text += 'Low to moderate built-up density — typical of mixed urban-suburban zones.';
+    else if (m < 0.1)  text += 'Moderate built-up intensity indicates significant impervious surface coverage.';
+    else               text += 'High built-up index signals a densely urbanized landscape with limited permeable surfaces.';
+  }
+
+  if ((varLabel.toUpperCase().includes('NDWI') || varLabel.toUpperCase().includes('MNDWI')) && s.mean != null) {
+    const m = s.mean;
+    if (m < -0.3)     text += 'Dry land conditions dominate — water bodies are sparse or absent.';
+    else if (m < 0.0) text += 'Transition zone between dry and moist surfaces — some water bodies or soil moisture present.';
+    else if (m < 0.3) text += 'Moist conditions or shallow water bodies are present across a notable portion of the area.';
+    else              text += 'Open water or high moisture content dominates the landscape.';
+  }
+
+  if (varLabel.toUpperCase().includes('BSI') && s.mean != null) {
+    const m = s.mean;
+    if (m < -0.1)    text += 'The area is largely vegetated with minimal bare soil exposure.';
+    else if (m < 0.1) text += 'Mixed conditions — bare soil coexists with vegetated and built surfaces.';
+    else              text += 'Bare soil dominates, indicating degraded land, agricultural fields, or active construction.';
+  }
+
+  if (varLabel.toUpperCase() === 'UI' && s.mean != null) {
+    const m = s.mean;
+    if (m < -0.1)    text += 'Vegetation dominates — the urban footprint is relatively low.';
+    else if (m < 0.1) text += 'Transitional landscape mixing urban surfaces and green cover.';
+    else              text += 'Urban surfaces dominate, consistent with a densely developed area.';
+  }
+
+  if ((varLabel.toUpperCase().includes('EVI') || varLabel.toUpperCase().includes('SAVI')) && s.mean != null) {
+    const m = s.mean;
+    if (m < 0.1)      text += 'Sparse vegetation signal — bare or heavily degraded land surface.';
+    else if (m < 0.3) text += 'Low to moderate vegetation density, with stressed or patchy canopy cover.';
+    else if (m < 0.5) text += 'Moderate vegetation productivity — mixed urban-green or agricultural landscapes.';
+    else              text += 'Dense and productive vegetation cover, indicating healthy forest or cropland.';
+  }
+
+  // ── Atmospheric class notes ──────────────────────────────────────────────
+  if (varLabel.toUpperCase().includes('NO2') && s.mean != null) {
+    const m = s.mean;
+    const p90 = s.p90 || m;
+    text += `With a mean of <strong>${m.toExponential(2)} mol/m²</strong>, `;
+    if (m < 0.00008)       text += 'NO₂ levels are relatively low, suggesting limited local combustion sources.';
+    else if (m < 0.00015)  text += 'moderate NO₂ concentrations indicate active traffic and industrial emissions in the region.';
+    else                   text += 'elevated NO₂ points to significant combustion activity — likely dense traffic corridors and industrial zones.';
+    if (p90 > m * 1.3) text += ` The P90 value of ${p90.toExponential(2)} mol/m² highlights localized hotspots where emissions are substantially higher than the regional average.`;
+  }
+
+  if (varLabel.toUpperCase().includes('CO') && s.mean != null) {
+    const m = s.mean;
+    text += `The mean CO column density of <strong>${m.toExponential(2)} mol/m²</strong> `;
+    if (m < 0.03)      text += 'is within background levels, suggesting limited local combustion activity.';
+    else if (m < 0.06) text += 'indicates moderate CO loading, consistent with urban traffic and biomass burning.';
+    else               text += 'is elevated, pointing to significant combustion sources — vehicles, industry, or fire activity.';
+  }
+
+  if (varLabel.toUpperCase().includes('SO2') && s.mean != null) {
+    const m = s.mean;
+    text += `SO₂ mean of <strong>${m.toExponential(2)} mol/m²</strong> `;
+    if (m < 0.0002)    text += 'is near background — industrial and volcanic sources appear limited.';
+    else if (m < 0.001) text += 'suggests moderate sulfur emissions, potentially from industrial facilities or coal combustion.';
+    else               text += 'is high, indicative of significant industrial activity, power plants, or volcanic degassing.';
+  }
+
+  if (varLabel.toUpperCase().includes('CH4') && s.mean != null) {
+    const m = s.mean;
+    text += `Methane mixing ratios average <strong>${m.toFixed(0)} ppb</strong>. `;
+    if (m < 1850)      text += 'Values are near the global background, suggesting limited local CH₄ sources.';
+    else if (m < 1900) text += 'Slightly elevated CH₄ may indicate agricultural activity, wetlands, or landfill emissions.';
+    else               text += 'Elevated CH₄ signals significant biogenic or anthropogenic sources such as rice paddies, livestock, or waste sites.';
+  }
+
+  if (varLabel.toUpperCase().includes('AEROSOL') && s.mean != null) {
+    const m = s.mean;
+    text += `The absorbing aerosol index (AAI) mean of <strong>${fmt(s.mean)}</strong> `;
+    if (m < 0)         text += 'is negative, typical of marine aerosols or clean background air.';
+    else if (m < 1)    text += 'is low, indicating minor aerosol loading with limited impact on air quality.';
+    else if (m < 2)    text += 'indicates moderate aerosol loading — possible smoke, dust, or urban haze.';
+    else               text += 'is high, pointing to significant absorbing aerosols from biomass burning, dust storms, or industrial smoke.';
+  }
+
   // ── LST heat class note ──────────────────────────────────────────────────
   if (isLST && s.mean != null) {
     const mean = s.mean;
