@@ -774,57 +774,64 @@ def make_stats_charts(stats, var_name, label):
                                        max_v if max_v is not None else mean_v * 3)
 
             if 'NO2' in label_up:
-                # Thresholds in mol/m² — WHO/EEA guidance adapted
-                lo, med, hi = mean_v * 0.6, mean_v, mean_v * 1.4
+                # Absolute thresholds in mol/m² from Sentinel-5P / EEA literature:
+                # <0.00008 = clean background, 0.00008–0.00015 = moderate urban,
+                # 0.00015–0.00025 = high traffic/industry, >0.00025 = severe
                 class_defs = [
-                    ('Low\n(<60% mean)',    samples < lo,                             '#4575B4'),
-                    ('Moderate\n(60–140%)', (samples >= lo) & (samples < hi),         '#FEE090'),
-                    ('High\n(>140% mean)',  samples >= hi,                            '#D73027'),
+                    ('Clean\n(<8×10⁻⁵)',       samples < 8e-5,                              '#4575B4'),
+                    ('Moderate\n(8–15×10⁻⁵)',  (samples >= 8e-5)  & (samples < 1.5e-4),     '#91BFDB'),
+                    ('High\n(15–25×10⁻⁵)',     (samples >= 1.5e-4) & (samples < 2.5e-4),    '#FEE090'),
+                    ('Severe\n(>25×10⁻⁵)',      samples >= 2.5e-4,                           '#D73027'),
                 ]
                 xlabel = 'NO₂ concentration class'
 
             elif 'CO' in label_up:
-                lo, hi = mean_v * 0.7, mean_v * 1.3
+                # mol/m²: <0.02 clean, 0.02–0.05 moderate, 0.05–0.08 high, >0.08 severe
                 class_defs = [
-                    ('Low',      samples < lo,                    '#4575B4'),
-                    ('Moderate', (samples >= lo) & (samples < hi), '#FEE090'),
-                    ('High',     samples >= hi,                    '#D73027'),
+                    ('Clean\n(<0.02)',      samples < 0.02,                             '#4575B4'),
+                    ('Moderate\n(0.02–0.05)', (samples >= 0.02) & (samples < 0.05),    '#91BFDB'),
+                    ('High\n(0.05–0.08)',   (samples >= 0.05) & (samples < 0.08),      '#FEE090'),
+                    ('Severe\n(>0.08)',      samples >= 0.08,                           '#D73027'),
                 ]
-                xlabel = 'CO concentration class'
+                xlabel = 'CO column density class'
 
             elif 'SO2' in label_up:
-                lo, hi = mean_v * 0.5, mean_v * 1.5
+                # mol/m²: <0.0001 clean, 0.0001–0.0005 moderate, 0.0005–0.001 high, >0.001 severe
                 class_defs = [
-                    ('Low',      samples < lo,                    '#4575B4'),
-                    ('Moderate', (samples >= lo) & (samples < hi), '#FEE090'),
-                    ('High',     samples >= hi,                    '#D73027'),
+                    ('Clean\n(<1×10⁻⁴)',       samples < 1e-4,                              '#4575B4'),
+                    ('Moderate\n(1–5×10⁻⁴)',  (samples >= 1e-4)  & (samples < 5e-4),        '#91BFDB'),
+                    ('High\n(5×10⁻⁴–10⁻³)',   (samples >= 5e-4)  & (samples < 1e-3),        '#FEE090'),
+                    ('Severe\n(>10⁻³)',         samples >= 1e-3,                             '#D73027'),
                 ]
-                xlabel = 'SO₂ concentration class'
+                xlabel = 'SO₂ column density class'
 
             elif 'CH4' in label_up:
-                lo, hi = mean_v * 0.99, mean_v * 1.01
+                # ppb: <1850 background, 1850–1900 slightly elevated, 1900–1950 elevated, >1950 high
                 class_defs = [
-                    ('Background',   samples < lo,                    '#4575B4'),
-                    ('Elevated',    (samples >= lo) & (samples < hi), '#FEE090'),
-                    ('High\nemitter', samples >= hi,                   '#D73027'),
+                    ('Background\n(<1850 ppb)',   samples < 1850,                             '#4575B4'),
+                    ('Elevated\n(1850–1900)',     (samples >= 1850) & (samples < 1900),       '#91BFDB'),
+                    ('High\n(1900–1950)',         (samples >= 1900) & (samples < 1950),       '#FEE090'),
+                    ('Very high\n(>1950 ppb)',     samples >= 1950,                           '#D73027'),
                 ]
-                xlabel = 'CH₄ class'
+                xlabel = 'CH₄ mixing ratio class'
 
             elif 'O3' in label_up:
-                lo, hi = mean_v * 0.9, mean_v * 1.1
+                # Dobson Units: <220 ozone hole, 220–280 low, 280–340 normal, >340 high
                 class_defs = [
-                    ('Low',      samples < lo,                    '#4575B4'),
-                    ('Moderate', (samples >= lo) & (samples < hi), '#91BFDB'),
-                    ('High',     samples >= hi,                    '#D73027'),
+                    ('Very low\n(<220 DU)',   samples < 220,                            '#4575B4'),
+                    ('Low\n(220–280 DU)',    (samples >= 220) & (samples < 280),        '#91BFDB'),
+                    ('Normal\n(280–340 DU)', (samples >= 280) & (samples < 340),        '#FEE090'),
+                    ('High\n(>340 DU)',       samples >= 340,                           '#D73027'),
                 ]
-                xlabel = 'O₃ class'
+                xlabel = 'O₃ column class'
 
             elif 'AEROSOL' in label_up:
+                # AAI: <0 marine/clean, 0–1 low, 1–2 moderate, >2 high absorbing aerosols
                 class_defs = [
-                    ('Clean\n(<0)',   samples < 0,                     '#4575B4'),
-                    ('Low\n(0–1)',   (samples >= 0) & (samples < 1),   '#91BFDB'),
-                    ('Moderate\n(1–2)', (samples >= 1) & (samples < 2), '#FEE090'),
-                    ('High\n(>2)',    samples >= 2,                     '#D73027'),
+                    ('Clean\n(<0)',       samples < 0,                       '#4575B4'),
+                    ('Low\n(0–1)',       (samples >= 0) & (samples < 1),     '#91BFDB'),
+                    ('Moderate\n(1–2)', (samples >= 1) & (samples < 2),      '#FEE090'),
+                    ('High\n(>2)',        samples >= 2,                      '#D73027'),
                 ]
                 xlabel = 'Aerosol index class'
 
