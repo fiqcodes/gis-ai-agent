@@ -1,29 +1,29 @@
 /* ============================================================
-   GIS Agent WebApp — Light Theme
+   GIS Agent WebApp — Dark Theme (Obsidian Black)
    ============================================================ */
 
 :root {
-  --bg:        #f5f6f8;
-  --bg2:       #ffffff;
-  --bg3:       #f0f2f5;
-  --bg4:       #e8eaed;
-  --border:    rgba(0,0,0,0.07);
-  --border2:   rgba(0,0,0,0.12);
-  --text:      #1a1d23;
-  --text2:     #4a5568;
-  --text3:     #9aa5b4;
+  --bg:        #0a0a0b;
+  --bg2:       #111113;
+  --bg3:       #18181c;
+  --bg4:       #222228;
+  --border:    rgba(255,255,255,0.06);
+  --border2:   rgba(255,255,255,0.10);
+  --text:      #e8e9ec;
+  --text2:     #9a9daa;
+  --text3:     #4e515e;
   --accent:    #00c4aa;
-  --accent2:   #00a896;
-  --accent-dim:rgba(0,196,170,0.10);
-  --red:       #e53e3e;
-  --yellow:    #d69e2e;
-  --green:     #38a169;
+  --accent2:   #00e5c8;
+  --accent-dim:rgba(0,196,170,0.12);
+  --red:       #ff5252;
+  --yellow:    #f5a623;
+  --green:     #4ade80;
   --font-body: 'DM Sans', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
   --radius:    12px;
   --radius-sm: 8px;
-  --shadow:    0 2px 16px rgba(0,0,0,0.08);
-  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  --shadow:    0 2px 16px rgba(0,0,0,0.5);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.7);
   --nav-w:     52px;
 }
 
@@ -42,6 +42,7 @@ html, body {
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
 /* ════════════════════════════════════════════════════════
    SIDEBAR NAV
@@ -640,17 +641,17 @@ html, body {
 .send-btn {
   width: 34px; height: 34px;
   border-radius: 50%;
-  background: var(--text);
+  background: var(--accent);
   border: none;
-  color: #fff;
+  color: #0a0a0b;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: all 0.15s;
   flex-shrink: 0;
 }
-.send-btn:hover { background: var(--accent); transform: scale(1.05); }
+.send-btn:hover { background: var(--accent2); transform: scale(1.05); }
 .send-btn:disabled { background: var(--bg4); color: var(--text3); cursor: not-allowed; transform: none; }
-.send-btn.stop { background: var(--red); }
+.send-btn.stop { background: var(--red); color: #fff; }
 
 /* Quick actions dropdown */
 .quick-actions {
@@ -695,7 +696,7 @@ html, body {
   align-items: center;
   justify-content: space-between;
   padding: 0 14px;
-  background: rgba(255,255,255,0.92);
+  background: rgba(10,10,11,0.92);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
 }
@@ -724,8 +725,9 @@ html, body {
   left: 50%;
   transform: translateX(-50%);
   z-index: 410;
-  background: var(--text);
-  color: #fff;
+  background: var(--bg4);
+  color: var(--text);
+  border: 1px solid var(--border2);
   font-size: 12px;
   font-weight: 600;
   padding: 6px 14px;
@@ -745,7 +747,7 @@ html, body {
   position: absolute;
   top: 60px; left: 8px;
   width: 240px;
-  background: rgba(255,255,255,0.97);
+  background: rgba(17,17,19,0.97);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border2);
   border-radius: var(--radius);
@@ -844,7 +846,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(255,255,255,0.96);
+  background: rgba(17,17,19,0.96);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border2);
   border-radius: 30px;
@@ -938,9 +940,9 @@ html, body {
 }
 .roi-modal-btns button:hover { background: var(--bg3); }
 .roi-modal-btns button.primary {
-  background: var(--text);
-  border-color: var(--text);
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0a0a0b;
   font-weight: 600;
 }
 .roi-modal-btns button.primary:hover { background: var(--accent); border-color: var(--accent); }
@@ -950,7 +952,7 @@ html, body {
 ════════════════════════════════════════════════════════ */
 .leaflet-draw-toolbar a,
 .leaflet-draw-actions a {
-  background-color: var(--bg2) !important;
+  background-color: var(--bg3) !important;
   color: var(--text) !important;
   border-color: var(--border2) !important;
 }
@@ -1132,7 +1134,7 @@ html, body {
 
 /* Per-map AI insight block — plain box matching stats table, no icon */
 .var-insight-block {
-  background: var(--bg1, #fff);
+  background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 11px 13px;
@@ -1141,7 +1143,7 @@ html, body {
 .var-insight-text {
   font-size: 13px;
   line-height: 1.65;
-  color: var(--text1);
+  color: var(--text2);
 }
 
 /* Monthly highlights strip */
@@ -1170,7 +1172,7 @@ html, body {
 }
 .mh-value {
   font-size: 12.5px;
-  color: var(--text1);
+  color: var(--text);
   font-family: 'IBM Plex Mono', monospace;
 }
 .mh-peak .mh-value { color: #22c55e; }
@@ -1210,7 +1212,7 @@ html, body {
   padding: 13px 15px;
   font-size: 13.5px;
   line-height: 1.75;
-  color: var(--text1);
+  color: var(--text2);
 }
 
 /* Default 60:40 chat:map split — resizer still works, just starts wider */
@@ -1228,21 +1230,21 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: var(--bg2, #fff);
-  border: 1px solid var(--border);
+  background: var(--bg3);
+  border: 1px solid var(--border2);
   border-radius: 8px;
   padding: 7px 11px;
   cursor: pointer;
-  color: var(--text1);
+  color: var(--text);
   font-size: 12px;
   font-family: 'DM Sans', sans-serif;
   font-weight: 500;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
   transition: background 0.15s, box-shadow 0.15s;
 }
 .layers-float-btn:hover {
-  background: var(--bg3, #f0f0f0);
-  box-shadow: 0 3px 12px rgba(0,0,0,0.16);
+  background: var(--bg4);
+  box-shadow: 0 3px 12px rgba(0,0,0,0.6);
 }
 .layers-float-count {
   background: var(--accent);
