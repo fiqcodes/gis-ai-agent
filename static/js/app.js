@@ -539,10 +539,7 @@ function appendUserMessage(text) {
   const msgs = document.getElementById('messages');
   const div  = document.createElement('div');
   div.className = 'msg-row user';
-  div.innerHTML = `
-    <div class="msg-avatar">YOU</div>
-    <div class="msg-bubble user">${escapeHtml(text)}</div>
-  `;
+  div.innerHTML = `<div class="msg-bubble user">${escapeHtml(text)}</div>`;
   msgs.appendChild(div);
   scrollToBottom();
 }
@@ -551,10 +548,7 @@ function appendAIMessage(html) {
   const msgs = document.getElementById('messages');
   const div  = document.createElement('div');
   div.className = 'msg-row ai';
-  div.innerHTML = `
-    <div class="msg-avatar">AI</div>
-    <div class="msg-bubble ai">${html}</div>
-  `;
+  div.innerHTML = `<div class="msg-bubble ai">${html}</div>`;
   msgs.appendChild(div);
   scrollToBottom();
   return div.querySelector('.msg-bubble');
@@ -566,7 +560,6 @@ function appendTypingIndicator() {
   div.className = 'msg-row ai';
   div.id = 'typingIndicator';
   div.innerHTML = `
-    <div class="msg-avatar">AI</div>
     <div class="msg-bubble ai">
       <div class="typing-indicator">
         <div class="typing-dot"></div>
