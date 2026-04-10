@@ -256,6 +256,34 @@
     </button>
     <button class="mt-btn zoom-btn" onclick="map.zoomIn()">+</button>
     <button class="mt-btn zoom-btn" onclick="map.zoomOut()">−</button>
+    <!-- Basemap switcher -->
+    <div class="basemap-switcher" id="basemapSwitcher">
+      <button class="mt-btn basemap-btn" title="Switch basemap" onclick="toggleBasemapMenu()" id="basemapBtn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+      </button>
+      <div class="basemap-menu" id="basemapMenu" style="display:none">
+        <div class="basemap-menu-title">Basemap</div>
+        <div class="basemap-option active" data-basemap="esri" onclick="switchBasemap('esri')">
+          <span class="basemap-dot" style="background:#4a90d9"></span>ESRI World Imagery
+        </div>
+        <div class="basemap-option" data-basemap="google" onclick="switchBasemap('google')">
+          <span class="basemap-dot" style="background:#34a853"></span>Google Satellite
+        </div>
+        <div class="basemap-option" data-basemap="googlehybrid" onclick="switchBasemap('googlehybrid')">
+          <span class="basemap-dot" style="background:#fbbc04"></span>Google Hybrid
+        </div>
+        <div class="basemap-option" data-basemap="esriclarity" onclick="switchBasemap('esriclarity')">
+          <span class="basemap-dot" style="background:#a259ff"></span>ESRI Clarity
+        </div>
+        <div class="basemap-option" data-basemap="opentopomap" onclick="switchBasemap('opentopomap')">
+          <span class="basemap-dot" style="background:#7eb87e"></span>OpenTopoMap
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ROI name modal -->

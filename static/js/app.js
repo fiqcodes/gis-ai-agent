@@ -25,6 +25,38 @@ document.addEventListener('DOMContentLoaded', () => {
 // ════════════════════════════════════════════════════════
 // MAP SETUP
 // ════════════════════════════════════════════════════════
+// ── Basemap definitions ───────────────────────────────────────────────────────
+const BASEMAPS = {
+  esri: {
+    url  : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attr : 'Tiles © Esri',
+    maxZoom: 19,
+  },
+  google: {
+    url  : 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    attr : 'Imagery © Google',
+    maxZoom: 20,
+  },
+  googlehybrid: {
+    url  : 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    attr : 'Imagery © Google',
+    maxZoom: 20,
+  },
+  esriclarity: {
+    url  : 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attr : 'Tiles © Esri',
+    maxZoom: 19,
+  },
+  opentopomap: {
+    url  : 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attr : '© OpenTopoMap contributors',
+    maxZoom: 17,
+  },
+};
+
+let activeBasemapLayer = null;
+let activeBasemapKey   = 'esri';
+
 function initMap() {
   map = L.map('map', {
     center: [20, 0],
@@ -33,11 +65,10 @@ function initMap() {
     attributionControl: true,
   });
 
-  // Satellite basemap (ESRI World Imagery)
-  L.tileLayer(
-    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    { attribution: 'Tiles © Esri', maxZoom: 19 }
-  ).addTo(map);
+  // Default basemap
+  const bm = BASEMAPS[activeBasemapKey];
+  activeBasemapLayer = L.tileLayer(bm.url, { attribution: bm.attr, maxZoom: bm.maxZoom });
+  activeBasemapLayer.addTo(map);
 
   // Drawn items layer group
   drawnItems = new L.FeatureGroup();
@@ -397,6 +428,54 @@ function toggleMapPanel() {
   const btn = document.getElementById('collapseMapBtn');
   mp.classList.toggle('collapsed');
   btn.style.transform = mp.classList.contains('collapsed') ? 'rotate(180deg)' : '';
+}
+
+// ════════════════════════════════════════════════════════
+// BASEMAP SWITCHER
+// ════════════════════════════════════════════════════════
+function toggleBasemapMenu() {
+  const menu = document.getElementById('basemapMenu');
+  const isVisible = menu.style.display !== 'none';
+  menu.style.display = isVisible ? 'none' : 'block';
+  // Close on outside click
+  if (!isVisible) {
+    setTimeout(() => {
+      document.addEventListener('click', closeBasemapMenuOnOutside, { once: true });
+    }, 10);
+  }
+}
+
+function closeBasemapMenuOnOutside(e) {
+  const switcher = document.getElementById('basemapSwitcher');
+  if (switcher && !switcher.contains(e.target)) {
+    document.getElementById('basemapMenu').style.display = 'none';
+  }
+}
+
+function switchBasemap(key) {
+  if (key === activeBasemapKey) {
+    document.getElementById('basemapMenu').style.display = 'none';
+    return;
+  }
+  const bm = BASEMAPS[key];
+  if (!bm) return;
+
+  // Remove old basemap
+  if (activeBasemapLayer) map.removeLayer(activeBasemapLayer);
+
+  // Add new basemap at the bottom of the layer stack
+  activeBasemapLayer = L.tileLayer(bm.url, { attribution: bm.attr, maxZoom: bm.maxZoom });
+  activeBasemapLayer.addTo(map);
+  activeBasemapLayer.bringToBack();
+
+  // Update active state in menu
+  document.querySelectorAll('.basemap-option').forEach(el => {
+    el.classList.toggle('active', el.dataset.basemap === key);
+  });
+
+  activeBasemapKey = key;
+  document.getElementById('basemapMenu').style.display = 'none';
+  console.log('Basemap switched to:', key);
 }
 
 // ════════════════════════════════════════════════════════
