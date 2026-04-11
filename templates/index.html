@@ -36,9 +36,9 @@
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
     </svg>
   </button>
-  <button class="nav-btn" title="Library" onclick="setNavActive(this)">
+  <button class="nav-btn" title="Knowledge" id="knowledgeNavBtn" onclick="toggleKnowledgePanel()">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
     </svg>
   </button>
   <button class="nav-btn" title="Layers" onclick="setNavActive(this)">
@@ -73,6 +73,58 @@
   </div>
   <div class="history-list" id="historyList">
     <div class="history-empty">No previous chats yet.</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     KNOWLEDGE PANEL
+════════════════════════════════════════════════════════ -->
+<div class="knowledge-panel" id="knowledgePanel" style="display:none">
+  <div class="kp-header">
+    <div class="kp-header-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+      </svg>
+      <span class="kp-title">Knowledge Base</span>
+    </div>
+    <button class="icon-btn" onclick="toggleKnowledgePanel()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Search + filter -->
+  <div class="kp-search-row">
+    <div class="kp-search-wrap">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input type="text" id="kpSearch" placeholder="Search analyses…" oninput="filterKnowledge(this.value)"/>
+    </div>
+  </div>
+  <div class="kp-tabs" id="kpTabs">
+    <button class="kp-tab active" onclick="filterKnowledgeByCategory('all', this)">All</button>
+    <button class="kp-tab" onclick="filterKnowledgeByCategory('vegetation', this)">Vegetation</button>
+    <button class="kp-tab" onclick="filterKnowledgeByCategory('urban', this)">Urban</button>
+    <button class="kp-tab" onclick="filterKnowledgeByCategory('water', this)">Water</button>
+    <button class="kp-tab" onclick="filterKnowledgeByCategory('thermal', this)">Thermal</button>
+    <button class="kp-tab" onclick="filterKnowledgeByCategory('atmospheric', this)">Atmospheric</button>
+    <button class="kp-tab" onclick="filterKnowledgeByCategory('landcover', this)">Land Cover</button>
+  </div>
+
+  <!-- Cards list -->
+  <div class="kp-body" id="kpBody"></div>
+
+  <!-- Detail view (hidden by default) -->
+  <div class="kp-detail" id="kpDetail" style="display:none">
+    <button class="kp-back-btn" onclick="closeKnowledgeDetail()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+      Back
+    </button>
+    <div id="kpDetailContent"></div>
   </div>
 </div>
 

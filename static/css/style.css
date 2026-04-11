@@ -1421,3 +1421,271 @@ html, body {
   background: rgba(255,0,0,0.15);
   color: var(--red);
 }
+
+/* ════════════════════════════════════════════════════════
+   KNOWLEDGE PANEL
+════════════════════════════════════════════════════════ */
+.knowledge-panel {
+  position: fixed;
+  left: var(--nav-w);
+  top: 0; bottom: 0;
+  width: calc(60% - var(--nav-w));
+  background: #000;
+  border-right: 1px solid var(--border2);
+  z-index: 190;
+  display: flex;
+  flex-direction: column;
+  animation: fadeSlideIn 0.2s ease;
+}
+
+.kp-header {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.kp-header-left { display: flex; align-items: center; gap: 9px; color: var(--accent); }
+.kp-title { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: 0.01em; }
+
+.kp-search-row {
+  padding: 10px 12px 6px;
+  flex-shrink: 0;
+}
+.kp-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 7px 11px;
+  color: var(--text3);
+}
+.kp-search-wrap input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+.kp-search-wrap input::placeholder { color: var(--text3); }
+
+.kp-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 12px 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.kp-tab {
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text3);
+  font-size: 11.5px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.kp-tab:hover { background: var(--bg3); color: var(--text); }
+.kp-tab.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 600; }
+
+.kp-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-content: start;
+}
+
+.kp-empty {
+  grid-column: 1/-1;
+  text-align: center;
+  padding: 40px;
+  color: var(--text3);
+  font-size: 13px;
+}
+
+.kp-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.kp-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+
+.kp-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+.kp-card-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.kp-card-full { font-size: 10.5px; color: var(--text3); margin-top: 2px; }
+
+.kp-tag {
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.kp-tag-vegetation  { background: rgba(34,139,34,0.18); color: #4ade80; }
+.kp-tag-urban       { background: rgba(255,0,0,0.15);   color: #ff6666; }
+.kp-tag-water       { background: rgba(0,100,255,0.15); color: #60a5fa; }
+.kp-tag-thermal     { background: rgba(245,168,0,0.15); color: #f5a800; }
+.kp-tag-atmospheric { background: rgba(160,80,255,0.15);color: #c084fc; }
+.kp-tag-landcover   { background: rgba(0,196,170,0.12); color: var(--accent); }
+
+.kp-palette-bar {
+  height: 5px;
+  border-radius: 3px;
+  display: flex;
+  overflow: hidden;
+  gap: 1px;
+}
+
+.kp-card-def {
+  font-size: 11.5px;
+  color: var(--text3);
+  line-height: 1.55;
+}
+
+.kp-card-cmd code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: var(--accent);
+}
+
+/* ── Detail view ─────────────────────────────────────── */
+.kp-detail {
+  flex: 1;
+  overflow-y: auto;
+  flex-direction: column;
+  padding: 0 0 24px;
+}
+
+.kp-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text3);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+.kp-back-btn:hover { color: var(--text); }
+
+.kpd-hero {
+  padding: 12px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kpd-name { font-size: 28px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
+.kpd-full { font-size: 13px; color: var(--text2); margin-bottom: 6px; }
+
+.kpd-palette {
+  height: 8px;
+  display: flex;
+  position: relative;
+  margin: 0 0 2px;
+}
+.kpd-palette-label {
+  position: absolute;
+  bottom: -18px;
+  left: 0;
+  font-size: 10px;
+  color: var(--text3);
+}
+
+.kpd-section {
+  padding: 14px 16px 0;
+}
+.kpd-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  margin-bottom: 6px;
+}
+.kpd-text {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text2);
+}
+.kpd-formula {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  margin-bottom: 6px;
+}
+.kpd-formula-bands {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text3);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+}
+
+.kp-interp-list { display: flex; flex-direction: column; gap: 6px; }
+.kp-interp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--bg3);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.kp-interp-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.kp-interp-range {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text3);
+  min-width: 80px;
+  flex-shrink: 0;
+}
+.kp-interp-label { font-size: 12.5px; color: var(--text2); }
+
+.kpd-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  padding: 2px 7px;
+  color: var(--accent);
+}
