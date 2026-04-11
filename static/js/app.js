@@ -708,11 +708,11 @@ function renderHistoryList() {
 
 function toggleHistoryPanel() {
   const panel  = document.getElementById('historyPanel');
-  const btn    = document.getElementById('historyNavBtn');
+  const btn    = document.getElementById('chatNavBtn');
   const isOpen = panel.style.display !== 'none';
   if (isOpen) {
     panel.style.display = 'none';
-    btn.classList.remove('active');
+    btn.classList.add('active');
   } else {
     renderHistoryList();
     panel.style.display = 'flex';
