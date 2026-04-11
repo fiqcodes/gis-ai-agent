@@ -2212,6 +2212,7 @@ const KNOWLEDGE = [
 ];
 
 let _knowledgeVisible = false;
+let _activeKnowledgeId = null;
 
 function toggleKnowledgePanel() {
   const panel = document.getElementById('knowledgePanel');
@@ -2219,110 +2220,150 @@ function toggleKnowledgePanel() {
   _knowledgeVisible = !_knowledgeVisible;
   panel.style.display = _knowledgeVisible ? 'flex' : 'none';
   btn.classList.toggle('active', _knowledgeVisible);
-  if (_knowledgeVisible) renderKnowledgeCards(KNOWLEDGE);
+  if (_knowledgeVisible) {
+    renderKnowledgeNav(KNOWLEDGE);
+    // Open first item by default if none selected
+    if (!_activeKnowledgeId) openKnowledgeDetail(KNOWLEDGE[0].id);
+  }
 }
 
-function renderKnowledgeCards(items) {
-  const body = document.getElementById('kpBody');
-  if (!body) return;
-  if (items.length === 0) {
-    body.innerHTML = '<div class="kp-empty">No results found.</div>';
-    return;
-  }
-  body.innerHTML = items.map(k => `
-    <div class="kp-card" onclick="openKnowledgeDetail('${k.id}')">
-      <div class="kp-card-top">
+function renderKnowledgeNav(items) {
+  const list = document.getElementById('kpNavList');
+  if (!list) return;
+
+  // Group by category
+  const cats = ['vegetation','water','urban','thermal','atmospheric','landcover'];
+  const catLabels = { vegetation:'Vegetation', water:'Water', urban:'Urban', thermal:'Thermal', atmospheric:'Atmospheric', landcover:'Land Cover' };
+
+  let html = '';
+  cats.forEach(cat => {
+    const catItems = items.filter(k => k.category === cat);
+    if (!catItems.length) return;
+    html += `<div class="kp-nav-group-label">${catLabels[cat]}</div>`;
+    catItems.forEach(k => {
+      const isActive = k.id === _activeKnowledgeId;
+      html += `<div class="kp-nav-item ${isActive ? 'active' : ''}" onclick="openKnowledgeDetail('${k.id}')">
+        <div class="kp-nav-dot" style="background:${k.palette[k.palette.length-1]}"></div>
         <div>
-          <div class="kp-card-name">${k.name}</div>
-          <div class="kp-card-full">${k.full}</div>
+          <div class="kp-nav-name">${k.name}</div>
+          <div class="kp-nav-full">${k.full}</div>
         </div>
-        <span class="kp-tag kp-tag-${k.category}">${k.tag}</span>
-      </div>
-      <div class="kp-palette-bar">
-        ${k.palette.map(c => `<div style="background:${c};flex:1;height:100%"></div>`).join('')}
-      </div>
-      <div class="kp-card-def">${k.definition.slice(0, 100)}…</div>
-      <div class="kp-card-cmd"><code>${k.command}</code></div>
-    </div>
-  `).join('');
+      </div>`;
+    });
+  });
+  list.innerHTML = html || '<div style="padding:16px;color:var(--text3);font-size:12px">No results</div>';
 }
 
 function openKnowledgeDetail(id) {
   const k = KNOWLEDGE.find(x => x.id === id);
   if (!k) return;
-  document.getElementById('kpBody').style.display   = 'none';
-  document.getElementById('kpDetail').style.display = 'flex';
-  document.querySelector('.kp-search-row').style.display = 'none';
-  document.getElementById('kpTabs').style.display   = 'none';
+  _activeKnowledgeId = id;
+  renderKnowledgeNav(KNOWLEDGE);
 
-  const interp = k.interpretation.map(i => `
-    <div class="kp-interp-row">
-      <span class="kp-interp-dot" style="background:${i.color}"></span>
-      <span class="kp-interp-range">${i.range}</span>
-      <span class="kp-interp-label">${i.label}</span>
+  document.getElementById('kpLanding').style.display    = 'none';
+  document.getElementById('kpDetailFull').style.display = 'block';
+
+  // Benchmark values for index variables
+  const benchmarks = k.interpretation.map(i => `
+    <div class="kpd-bench-item">
+      <div class="kpd-bench-color" style="background:${i.color}"></div>
+      <div class="kpd-bench-range">${i.range}</div>
+      <div class="kpd-bench-label">${i.label}</div>
     </div>`).join('');
 
+  // Palette gradient
+  const paletteStops = k.palette.map((c,i) => `${c} ${Math.round(i/(k.palette.length-1)*100)}%`).join(', ');
+
   document.getElementById('kpDetailContent').innerHTML = `
-    <div class="kpd-hero">
-      <div class="kpd-name">${k.name}</div>
-      <div class="kpd-full">${k.full}</div>
-      <span class="kp-tag kp-tag-${k.category}">${k.tag}</span>
-    </div>
-    <div class="kpd-palette">
-      ${k.palette.map(c => `<div style="background:${c};flex:1;height:100%"></div>`).join('')}
-      <div class="kpd-palette-label">${k.palette_label}</div>
-    </div>
-    <div class="kpd-section">
-      <div class="kpd-section-title">Definition</div>
-      <div class="kpd-text">${k.definition}</div>
-    </div>
-    <div class="kpd-section">
-      <div class="kpd-section-title">Formula</div>
-      <div class="kpd-formula">${k.formula}</div>
-      <div class="kpd-formula-bands">${k.formula_bands}</div>
-    </div>
-    <div class="kpd-section">
-      <div class="kpd-section-title">Value Range</div>
-      <div class="kpd-text">${k.range}</div>
-    </div>
-    <div class="kpd-section">
-      <div class="kpd-section-title">Interpretation</div>
-      <div class="kp-interp-list">${interp}</div>
-    </div>
-    <div class="kpd-section">
-      <div class="kpd-section-title">Data Source</div>
-      <div class="kpd-text">${k.datasource}</div>
-      <div class="kpd-text" style="margin-top:4px;color:var(--text3)">${k.scale}</div>
-    </div>
-    <div class="kpd-section">
-      <div class="kpd-section-title">Use Cases</div>
-      <div class="kpd-text">${k.use_cases}</div>
-    </div>
-    <div class="kpd-section">
-      <div class="kpd-section-title">Quick Command</div>
-      <div class="kpd-text">Type <code class="kpd-code">${k.command}</code> in the chat to run this analysis.</div>
+    <div class="kpd-page">
+
+      <!-- Hero -->
+      <div class="kpd-hero-full">
+        <div class="kpd-hero-left">
+          <div class="kpd-big-name">${k.name}</div>
+          <div class="kpd-big-full">${k.full}</div>
+          <div class="kpd-big-def">${k.definition}</div>
+        </div>
+        <div class="kpd-hero-right">
+          <span class="kp-tag kp-tag-${k.category} kp-tag-lg">${k.tag}</span>
+          <div class="kpd-command-box">
+            <div class="kpd-command-label">Quick Command</div>
+            <code class="kpd-command-code">${k.command}</code>
+          </div>
+          <div class="kpd-source-box">
+            <div class="kpd-command-label">Data Source</div>
+            <div class="kpd-source-text">${k.datasource}</div>
+            <div class="kpd-source-res">${k.scale}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Color scale -->
+      <div class="kpd-scale-section">
+        <div class="kpd-section-title">Color Scale</div>
+        <div class="kpd-gradient" style="background:linear-gradient(to right, ${paletteStops})"></div>
+        <div class="kpd-gradient-labels">
+          <span>${k.range.split(' to ')[0] || 'Low'}</span>
+          <span style="color:var(--text3);font-size:11px">${k.palette_label}</span>
+          <span>${k.range.split(' to ')[1] || 'High'}</span>
+        </div>
+      </div>
+
+      <!-- Formula block -->
+      <div class="kpd-two-col">
+        <div class="kpd-block">
+          <div class="kpd-section-title">Formula</div>
+          <div class="kpd-formula-big">${k.formula}</div>
+          <div class="kpd-formula-note">Band implementation:</div>
+          <div class="kpd-formula-bands-big">${k.formula_bands}</div>
+        </div>
+        <div class="kpd-block">
+          <div class="kpd-section-title">Value Range</div>
+          <div class="kpd-range-display">
+            <div class="kpd-range-val">${k.range.split(' to ')[0] || '—'}</div>
+            <div class="kpd-range-arrow">→</div>
+            <div class="kpd-range-val kpd-range-high">${k.range.split(' to ')[1] || '—'}</div>
+          </div>
+          <div class="kpd-section-title" style="margin-top:16px">Satellite Platform</div>
+          <div class="kpd-platform-badge">${k.datasource.split('(')[0].trim()}</div>
+        </div>
+      </div>
+
+      <!-- Interpretation benchmarks -->
+      <div class="kpd-full-block">
+        <div class="kpd-section-title">Class Interpretation</div>
+        <div class="kpd-bench-grid">
+          ${benchmarks}
+        </div>
+      </div>
+
+      <!-- Use cases -->
+      <div class="kpd-full-block">
+        <div class="kpd-section-title">Use Cases &amp; Applications</div>
+        <div class="kpd-usecases-grid">
+          ${k.use_cases.split(', ').map(u => `<div class="kpd-usecase-item">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            ${u.trim()}
+          </div>`).join('')}
+        </div>
+      </div>
+
     </div>
   `;
-}
-
-function closeKnowledgeDetail() {
-  document.getElementById('kpBody').style.display   = '';
-  document.getElementById('kpDetail').style.display = 'none';
-  document.querySelector('.kp-search-row').style.display = '';
-  document.getElementById('kpTabs').style.display   = '';
+  // Scroll detail to top
+  document.getElementById('kpDetailFull').scrollTop = 0;
 }
 
 function filterKnowledge(query) {
   const q = query.toLowerCase().trim();
   const filtered = q
-    ? KNOWLEDGE.filter(k => k.name.toLowerCase().includes(q) || k.full.toLowerCase().includes(q) || k.definition.toLowerCase().includes(q))
+    ? KNOWLEDGE.filter(k => k.name.toLowerCase().includes(q) || k.full.toLowerCase().includes(q) || k.definition.toLowerCase().includes(q) || k.category.includes(q))
     : KNOWLEDGE;
-  renderKnowledgeCards(filtered);
+  renderKnowledgeNav(filtered);
 }
 
-function filterKnowledgeByCategory(cat, btn) {
-  document.querySelectorAll('.kp-tab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+function filterKnowledgeByCategory(cat) {
   const filtered = cat === 'all' ? KNOWLEDGE : KNOWLEDGE.filter(k => k.category === cat);
-  renderKnowledgeCards(filtered);
+  renderKnowledgeNav(filtered);
+  if (filtered.length > 0) openKnowledgeDetail(filtered[0].id);
 }
