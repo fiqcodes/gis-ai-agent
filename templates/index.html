@@ -36,7 +36,7 @@
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
     </svg>
   </button>
-  <button class="nav-btn" title="Library" onclick="setNavActive(this)">
+  <button class="nav-btn" title="Library" id="historyNavBtn" onclick="toggleHistoryPanel()">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
     </svg>
@@ -58,6 +58,23 @@
     </svg>
   </button>
 </nav>
+
+<!-- ════════════════════════════════════════════════════════
+     CHAT HISTORY PANEL
+════════════════════════════════════════════════════════ -->
+<div class="history-panel" id="historyPanel" style="display:none">
+  <div class="history-header">
+    <span class="history-title">Chat History</span>
+    <button class="icon-btn" onclick="toggleHistoryPanel()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  </div>
+  <div class="history-list" id="historyList">
+    <div class="history-empty">No previous chats yet.</div>
+  </div>
+</div>
 
 <!-- ════════════════════════════════════════════════════════
      LEFT PANEL — CHAT

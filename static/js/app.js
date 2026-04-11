@@ -591,7 +591,141 @@ function scrollToBottom() {
   setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 50);
 }
 
+// ════════════════════════════════════════════════════════
+// CHAT HISTORY SYSTEM
+// ════════════════════════════════════════════════════════
+let chatHistory    = [];   // array of { id, title, timestamp, html, layers }
+let activeChatId   = null;
+
+function generateChatId() {
+  return 'chat_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+}
+
+function getCurrentChatTitle() {
+  // Use first user message as title, fall back to timestamp
+  const firstUser = document.querySelector('#messages .msg-bubble.user');
+  if (firstUser) {
+    const text = firstUser.textContent.trim();
+    return text.length > 45 ? text.slice(0, 45) + '…' : text;
+  }
+  return 'Chat ' + new Date().toLocaleString('en-GB', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+function saveCurrentChat() {
+  const msgs = document.getElementById('messages');
+  if (!msgs.innerHTML.trim() || !document.querySelector('#messages .msg-bubble.user')) return;
+
+  const title = getCurrentChatTitle();
+  const entry = {
+    id       : activeChatId || generateChatId(),
+    title    : title,
+    timestamp: Date.now(),
+    html     : msgs.innerHTML,
+    layers   : mapLayers.map(l => ({
+      id     : l.id,
+      name   : l.name,
+      type   : l.type,
+      visible: l.visible,
+      bbox   : l.bbox || null,
+      tileUrl: l.layer._url || null,   // for tile layers
+    })),
+  };
+
+  // Update existing or prepend new
+  const idx = chatHistory.findIndex(c => c.id === entry.id);
+  if (idx >= 0) chatHistory[idx] = entry;
+  else          chatHistory.unshift(entry);
+
+  activeChatId = entry.id;
+  renderHistoryList();
+}
+
+function loadChat(id) {
+  const entry = chatHistory.find(c => c.id === id);
+  if (!entry) return;
+
+  // Save current before switching
+  saveCurrentChat();
+
+  // Restore messages
+  document.getElementById('messages').innerHTML = entry.html;
+  scrollToBottom();
+
+  // Clear map and restore tile layers
+  clearAllLayers();
+  entry.layers.forEach(l => {
+    if (l.type === 'tile' && l.tileUrl) {
+      addTileLayer(l.name, l.tileUrl, l.bbox, false);
+      // Restore visibility
+      const item = mapLayers.find(m => m.name === l.name);
+      if (item && !l.visible) toggleLayerVisibility(item.id);
+    }
+  });
+
+  activeChatId = id;
+  hidePlanWidget();
+  stopPolling();
+  renderHistoryList();
+  toggleHistoryPanel(); // close panel after loading
+}
+
+function deleteChat(id, e) {
+  e.stopPropagation();
+  chatHistory = chatHistory.filter(c => c.id !== id);
+  if (activeChatId === id) {
+    // If deleting current chat, start fresh
+    activeChatId = null;
+    document.getElementById('messages').innerHTML = '';
+    clearAllLayers();
+  }
+  renderHistoryList();
+}
+
+function renderHistoryList() {
+  const list = document.getElementById('historyList');
+  if (!list) return;
+  if (chatHistory.length === 0) {
+    list.innerHTML = '<div class="history-empty">No previous chats yet.</div>';
+    return;
+  }
+
+  list.innerHTML = chatHistory.map(entry => {
+    const date = new Date(entry.timestamp);
+    const dateStr = date.toLocaleString('en-GB', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    const isActive = entry.id === activeChatId;
+    return `
+      <div class="history-item ${isActive ? 'active' : ''}" onclick="loadChat('${entry.id}')">
+        <div class="history-item-title">${escapeHtml(entry.title)}</div>
+        <div class="history-item-meta">${dateStr}</div>
+        <button class="history-delete-btn" onclick="deleteChat('${entry.id}', event)" title="Delete">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>`;
+  }).join('');
+}
+
+function toggleHistoryPanel() {
+  const panel  = document.getElementById('historyPanel');
+  const btn    = document.getElementById('historyNavBtn');
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) {
+    panel.style.display = 'none';
+    btn.classList.remove('active');
+  } else {
+    renderHistoryList();
+    panel.style.display = 'flex';
+    btn.classList.add('active');
+  }
+}
+
 function clearChat() {
+  // Save current chat before clearing
+  saveCurrentChat();
+
+  // Start a fresh chat
+  activeChatId = generateChatId();
   document.getElementById('messages').innerHTML = '';
   clearAllLayers();
   hidePlanWidget();
@@ -743,6 +877,9 @@ function handleResult(result) {
   // 2. Build chat message
   let html = buildResultHTML(region, start_date, end_date, variables, stats, layers, figures, var_insights || {}, conclusion || insight || '');
   appendAIMessage(html);
+
+  // Auto-save this chat to history after result is rendered
+  setTimeout(() => saveCurrentChat(), 100);
 }
 
 // ── Shared variable description map ──────────────────────────────────────────
