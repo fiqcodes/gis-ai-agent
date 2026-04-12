@@ -1217,14 +1217,39 @@ function buildSingleStatHTML(varLabel, s) {
 
   // UHI special
   if (s.lst_mean !== undefined) {
+    const lstMean = s.lst_mean.toFixed(2);
+    const lstStd  = s.lst_std.toFixed(2);
+    const hotThreshold = (s.lst_mean + s.lst_std).toFixed(2);
+    const coolThreshold = (s.lst_mean - s.lst_std).toFixed(2);
+
+    // Classify heat stress level
+    let heatLevel, heatColor;
+    if (s.lst_mean >= 42)      { heatLevel = 'Extreme heat stress';  heatColor = '#ff2d00'; }
+    else if (s.lst_mean >= 38) { heatLevel = 'High heat stress';     heatColor = '#ff7700'; }
+    else if (s.lst_mean >= 33) { heatLevel = 'Moderate heat stress'; heatColor = '#ffcc00'; }
+    else if (s.lst_mean >= 28) { heatLevel = 'Mild conditions';      heatColor = '#7ec850'; }
+    else                        { heatLevel = 'Cool conditions';      heatColor = '#4ab3f4'; }
+
     html += `<div class="stats-table-wrap">
       <table class="stats-table">
+        <thead><tr><th colspan="2">UHI Statistics — LST-based</th></tr></thead>
         <tbody>
-          <tr><td>LST Mean</td><td>${s.lst_mean.toFixed(2)}°C</td></tr>
-          <tr><td>LST Std Dev</td><td>${s.lst_std.toFixed(2)}°C</td></tr>
-          <tr><td>UHI</td><td>z-score normalised</td></tr>
+          <tr><td>Mean Surface Temperature</td><td><strong>${lstMean}°C</strong></td></tr>
+          <tr><td>Spatial Std Dev (σ)</td><td>${lstStd}°C</td></tr>
+          <tr><td>UHI Hotspot threshold (> +1σ)</td><td>> ${hotThreshold}°C</td></tr>
+          <tr><td>Cool Island threshold (< −1σ)</td><td>< ${coolThreshold}°C</td></tr>
+          <tr><td>UHI index</td><td>z-score normalised (mean = 0)</td></tr>
+          <tr>
+            <td>Heat stress level</td>
+            <td><span style="color:${heatColor};font-weight:600">${heatLevel}</span></td>
+          </tr>
         </tbody>
       </table>
+      <div class="stats-note" style="margin-top:8px;font-size:11.5px;color:var(--text3);line-height:1.5">
+        UHI z-score: pixels with z > 0 are warmer than the area mean (heat island zones);
+        pixels with z &lt; 0 are cooler (green spaces, water bodies).
+        Hotspots are defined as pixels exceeding <strong>${hotThreshold}°C</strong>.
+      </div>
     </div>`;
     return html;
   }
@@ -1301,7 +1326,22 @@ function buildMonthlyHighlights(varLabel, monthly) {
 
 // ── Distribution + class explanation (auto-computed, no LLM) ─────────────────
 function buildDistClassExplanation(varLabel, s) {
-  if (!s || s.mean == null) return '';
+  if (!s) return '';
+
+  // UHI: s.mean is always 0 (z-score), use lst_mean/lst_std instead
+  if (varLabel.toUpperCase() === 'UHI' && s.lst_mean !== undefined) {
+    const lstMean = s.lst_mean;
+    const lstStd  = s.lst_std;
+    let text = `The UHI z-score map is centred at <strong>0</strong> by definition.
+      Pixels above <strong>+1σ (${(lstMean + lstStd).toFixed(2)}°C)</strong> are classified as heat island zones;
+      pixels below <strong>−1σ (${(lstMean - lstStd).toFixed(2)}°C)</strong> represent cool islands such as parks, water bodies, or forested areas. `;
+    if (lstMean >= 38) text += 'The high mean LST indicates severe urban overheating — extensive impervious surfaces are the primary driver.';
+    else if (lstMean >= 33) text += 'Moderate thermal loading is consistent with a densely built urban fabric with limited green cover.';
+    else text += 'Thermal conditions are relatively mild, suggesting meaningful green space or coastal influence moderating surface temperatures.';
+    return `<div class="dist-explanation"><p>${text}</p></div>`;
+  }
+
+  if (s.mean == null) return '';
 
   const fmt    = v => v != null ? v.toFixed(4) : '—';
   const fmtLST = v => v != null ? v.toFixed(2) : '—';

@@ -387,9 +387,28 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             all_stats['UHI'] = {'mean': 0.0, 'lst_mean': lst_mean, 'lst_std': lst_std}
                             map_id   = uhi_img.clip(study_area_surf).getMapId(VIS['uhi'])
                             tile_url = map_id['tile_fetcher'].url_format
-                            layers.append({'name': f'UHI (mean={lst_mean:.1f}°C)', 'tile_url': tile_url,
+                            layers.append({'name': f'UHI (mean={lst_mean:.1f}\u00b0C)', 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
-                            print('  ✓ UHI ready')
+                            # Generate UHI figures (analysis map + charts)
+                            if bbox:
+                                try:
+                                    arr          = get_thumb(uhi_img.clip(study_area_surf), VIS['uhi'], study_area_surf, dim=512)
+                                    analysis_b64 = make_analysis_map(arr, VIS['uhi'], f'UHI (mean={lst_mean:.1f}\u00b0C)', region_name, bbox)
+                                    charts       = make_stats_charts(all_stats, 'uhi', 'UHI')
+                                    figures['UHI'] = {
+                                        'analysis_map': analysis_b64,
+                                        'charts'      : charts,
+                                        'rgb_overview': rgb_overview_b64,
+                                    }
+                                    print(f'  \u2713 UHI figures generated')
+                                except Exception as uhi_fig_err:
+                                    print(f'  UHI figures failed: {uhi_fig_err}')
+                                    figures['UHI'] = {
+                                        'analysis_map': None,
+                                        'charts'      : [],
+                                        'rgb_overview': rgb_overview_b64,
+                                    }
+                            print('  \u2713 UHI ready')
 
                         elif v in SURFACE_INDEX_MAP:
                             label, func, vis_key, scale = SURFACE_INDEX_MAP[v]
