@@ -2212,6 +2212,228 @@ const KNOWLEDGE = [
 ];
 
 let _knowledgeVisible = false;
+
+// ── Formula enrichment: LaTeX + variable definitions + visualization type ─────
+const KNOWLEDGE_EXTRA = {
+  ndvi: {
+    latex: `\\[ \\text{NDVI} = \\frac{\\rho_{NIR} - \\rho_{Red}}{\\rho_{NIR} + \\rho_{Red}} \\]`,
+    variables: [
+      { sym: 'ρ_NIR', desc: 'Near-infrared reflectance (Landsat Band 5, ~0.85 μm)' },
+      { sym: 'ρ_Red', desc: 'Red reflectance (Landsat Band 4, ~0.65 μm)' },
+    ],
+    viz_type: 'vegetation_scale',
+    viz_steps: [
+      { range: '−1.0 to −0.1', label: 'Water / Snow / Artificial', color: '#1a3a6b', icon: '💧' },
+      { range: '−0.1 to 0.0',  label: 'Bare soil, sand (no vegetation)', color: '#c1704a', icon: '🏜️' },
+      { range: '0.0 to 0.1',   label: 'Barren / Sparse stressed crops', color: '#e09a3a', icon: '🌱' },
+      { range: '0.1 to 0.3',   label: 'Some vegetation / stressed', color: '#c8d422', icon: '🌿' },
+      { range: '0.3 to 0.5',   label: 'Moderate vegetation / early growth', color: '#7bbf2a', icon: '🌳' },
+      { range: '0.5 to 0.7',   label: 'Healthy vegetation / good crop', color: '#3a9a1a', icon: '🌲' },
+      { range: '0.7 to 1.0',   label: 'Dense forest / peak crop health', color: '#1a6010', icon: '🌴' },
+    ],
+  },
+  evi: {
+    latex: `\\[ \\text{EVI} = 2.5 \\times \\frac{\\rho_{NIR} - \\rho_{Red}}{\\rho_{NIR} + 6\\rho_{Red} - 7.5\\rho_{Blue} + 1} \\]`,
+    variables: [
+      { sym: 'ρ_NIR',  desc: 'Near-infrared reflectance (Band 5)' },
+      { sym: 'ρ_Red',  desc: 'Red reflectance (Band 4)' },
+      { sym: 'ρ_Blue', desc: 'Blue reflectance (Band 2) — reduces atmospheric aerosol influence' },
+      { sym: '6, 7.5', desc: 'Empirically derived canopy background coefficients' },
+      { sym: '2.5',    desc: 'Gain factor to scale output range' },
+    ],
+    viz_type: 'gradient_scale',
+  },
+  savi: {
+    latex: `\\[ \\text{SAVI} = \\frac{(\\rho_{NIR} - \\rho_{Red})}{(\\rho_{NIR} + \\rho_{Red} + L)} \\times (1 + L) \\]`,
+    variables: [
+      { sym: 'ρ_NIR', desc: 'Near-infrared reflectance (Band 5)' },
+      { sym: 'ρ_Red', desc: 'Red reflectance (Band 4)' },
+      { sym: 'L',     desc: 'Soil brightness correction factor (L = 0.5 for intermediate cover; 0 = dense, 1 = sparse)' },
+    ],
+    viz_type: 'gradient_scale',
+  },
+  ndwi: {
+    latex: `\\[ \\text{NDWI} = \\frac{\\rho_{Green} - \\rho_{NIR}}{\\rho_{Green} + \\rho_{NIR}} \\]`,
+    variables: [
+      { sym: 'ρ_Green', desc: 'Green reflectance (Band 3, ~0.56 μm) — water has high green reflectance' },
+      { sym: 'ρ_NIR',   desc: 'Near-infrared reflectance (Band 5) — water strongly absorbs NIR' },
+    ],
+    viz_type: 'water_scale',
+    viz_steps: [
+      { range: '< −0.3',   label: 'Dry land / Bare soil', color: '#c1704a', icon: '🏜️' },
+      { range: '−0.3–0',   label: 'Transition / Moist soil', color: '#91bfdb', icon: '🌾' },
+      { range: '0–0.3',    label: 'Shallow water / Wetland', color: '#4575b4', icon: '🌊' },
+      { range: '> 0.3',    label: 'Open water body', color: '#023858', icon: '🏞️' },
+    ],
+  },
+  mndwi: {
+    latex: `\\[ \\text{MNDWI} = \\frac{\\rho_{Green} - \\rho_{SWIR}}{\\rho_{Green} + \\rho_{SWIR}} \\]`,
+    variables: [
+      { sym: 'ρ_Green', desc: 'Green reflectance (Band 3)' },
+      { sym: 'ρ_SWIR',  desc: 'Short-wave infrared reflectance (Band 6, ~1.6 μm) — better separates built-up from water than NIR' },
+    ],
+    viz_type: 'gradient_scale',
+  },
+  ndbi: {
+    latex: `\\[ \\text{NDBI} = \\frac{\\rho_{SWIR} - \\rho_{NIR}}{\\rho_{SWIR} + \\rho_{NIR}} \\]`,
+    variables: [
+      { sym: 'ρ_SWIR', desc: 'Short-wave infrared reflectance (Band 6) — built-up surfaces have elevated SWIR' },
+      { sym: 'ρ_NIR',  desc: 'Near-infrared reflectance (Band 5) — vegetation has high NIR, suppressing built-up signal' },
+    ],
+    viz_type: 'urban_scale',
+    viz_steps: [
+      { range: '< −0.1',   label: 'Vegetation / Non-built', color: '#4575b4', icon: '🌳' },
+      { range: '−0.1–0',   label: 'Low built-up density', color: '#91bfdb', icon: '🏘️' },
+      { range: '0–0.1',    label: 'Moderate urban surface', color: '#fee090', icon: '🏙️' },
+      { range: '> 0.1',    label: 'High built-up / Industrial', color: '#d73027', icon: '🏗️' },
+    ],
+  },
+  ui: {
+    latex: `\\[ \\text{UI} = \\frac{\\rho_{SWIR2} - \\rho_{NIR}}{\\rho_{SWIR2} + \\rho_{NIR}} \\]`,
+    variables: [
+      { sym: 'ρ_SWIR2', desc: 'Short-wave infrared 2 (Band 7, ~2.2 μm) — urban surfaces have high SWIR2' },
+      { sym: 'ρ_NIR',   desc: 'Near-infrared (Band 5) — vegetation suppresses urban signal' },
+    ],
+    viz_type: 'gradient_scale',
+  },
+  bsi: {
+    latex: `\\[ \\text{BSI} = \\frac{(\\rho_{SWIR} + \\rho_{Red}) - (\\rho_{NIR} + \\rho_{Blue})}{(\\rho_{SWIR} + \\rho_{Red}) + (\\rho_{NIR} + \\rho_{Blue})} \\]`,
+    variables: [
+      { sym: 'ρ_SWIR', desc: 'Short-wave infrared (Band 6) — sensitive to soil mineralogy' },
+      { sym: 'ρ_Red',  desc: 'Red (Band 4) — bare soil has elevated red reflectance' },
+      { sym: 'ρ_NIR',  desc: 'Near-infrared (Band 5) — vegetation has high NIR' },
+      { sym: 'ρ_Blue', desc: 'Blue (Band 2) — suppresses atmospheric effects' },
+    ],
+    viz_type: 'gradient_scale',
+  },
+  nbi: {
+    latex: `\\[ \\text{NBI} = \\frac{\\rho_{Red} \\times \\rho_{SWIR}}{\\rho_{NIR}} \\]`,
+    variables: [
+      { sym: 'ρ_Red',  desc: 'Red reflectance (Band 4)' },
+      { sym: 'ρ_SWIR', desc: 'Short-wave infrared (Band 6)' },
+      { sym: 'ρ_NIR',  desc: 'Near-infrared (Band 5) — in denominator to suppress vegetation' },
+    ],
+    viz_type: 'gradient_scale',
+  },
+  ndsi: {
+    latex: `\\[ \\text{NDSI} = \\frac{\\rho_{Green} - \\rho_{SWIR}}{\\rho_{Green} + \\rho_{SWIR}} \\]`,
+    variables: [
+      { sym: 'ρ_Green', desc: 'Green reflectance (Band 3) — snow has very high green reflectance' },
+      { sym: 'ρ_SWIR',  desc: 'Short-wave infrared (Band 6) — snow absorbs strongly in SWIR; clouds do not' },
+    ],
+    viz_type: 'gradient_scale',
+  },
+  lst: {
+    latex: `\\[ \\text{LST} = \\frac{BT}{1 + \\left(\\dfrac{\\lambda \\cdot BT}{\\rho}\\right) \\cdot \\ln(\\varepsilon)} - 273.15 \\]`,
+    variables: [
+      { sym: 'BT',  desc: 'Brightness temperature from Band 10 (Kelvin) — converted from raw DN using: BT = DN × 0.00341802 + 149.0' },
+      { sym: 'λ',   desc: 'Wavelength of emitted radiance = 11.5 μm (Landsat Band 10 center wavelength)' },
+      { sym: 'ρ',   desc: 'Planck\'s constant × speed of light / Boltzmann constant = 14380 μm·K' },
+      { sym: 'ε',   desc: 'Land surface emissivity — derived from NDVI-based fractional vegetation cover (FVC)' },
+      { sym: '−273.15', desc: 'Conversion from Kelvin to Celsius' },
+    ],
+    viz_type: 'thermal_scale',
+    viz_steps: [
+      { range: '< 30°C',   label: 'Cool (vegetation, water bodies)', color: '#307ef3', icon: '🌊' },
+      { range: '30–35°C',  label: 'Moderate temperature', color: '#269db1', icon: '🌿' },
+      { range: '35–40°C',  label: 'Warm (mixed surfaces)', color: '#3be285', icon: '🌾' },
+      { range: '40–45°C',  label: 'Hot (bare soil, roads)', color: '#f5a800', icon: '🏙️' },
+      { range: '> 45°C',   label: 'Extreme heat (industrial, asphalt)', color: '#ff500d', icon: '🔥' },
+    ],
+  },
+  uhi: {
+    latex: `\\[ \\text{UHI} = \\frac{LST - \\mu_{LST}}{\\sigma_{LST}} \\]`,
+    variables: [
+      { sym: 'LST',       desc: 'Land surface temperature at each pixel (°C)' },
+      { sym: 'μ_LST',     desc: 'Spatial mean LST of the entire study area (°C)' },
+      { sym: 'σ_LST',     desc: 'Spatial standard deviation of LST across the study area' },
+      { sym: 'UHI > 0',   desc: 'Pixel is warmer than average → urban heat island zone' },
+      { sym: 'UHI < 0',   desc: 'Pixel is cooler than average → urban cool island / green space' },
+    ],
+    viz_type: 'gradient_scale',
+  },
+  no2: {
+    latex: `\\[ \\Omega_{NO_2} = \\int_0^{TOA} n_{NO_2}(z)\\, dz \\quad [\\text{mol/m}^2] \\]`,
+    variables: [
+      { sym: 'Ω_NO₂',    desc: 'Tropospheric NO₂ vertical column density (mol/m²)' },
+      { sym: 'n_NO₂(z)', desc: 'NO₂ number density at altitude z, retrieved by DOAS algorithm' },
+      { sym: 'TOA',      desc: 'Top of atmosphere — integration limit' },
+      { sym: 'DOAS',     desc: 'Differential Optical Absorption Spectroscopy — fitting measured spectra to reference cross-sections' },
+    ],
+    viz_type: 'atmo_scale',
+    viz_steps: [
+      { range: '< 8×10⁻⁵',    label: 'Clean background air', color: '#000033', icon: '✅' },
+      { range: '8–15×10⁻⁵',   label: 'Moderate urban traffic', color: '#00ffff', icon: '🚗' },
+      { range: '15–25×10⁻⁵',  label: 'Heavy traffic / industry', color: '#ffff00', icon: '🏭' },
+      { range: '> 25×10⁻⁵',   label: 'Severe pollution hotspot', color: '#ff0000', icon: '⚠️' },
+    ],
+  },
+  co: {
+    latex: `\\[ \\Omega_{CO} = \\int_0^{TOA} n_{CO}(z)\\, dz \\quad [\\text{mol/m}^2] \\]`,
+    variables: [
+      { sym: 'Ω_CO',    desc: 'Total CO vertical column density (mol/m²)' },
+      { sym: 'n_CO(z)', desc: 'CO number density at altitude z, retrieved via SWIR spectroscopy at 2.3 μm' },
+    ],
+    viz_type: 'gradient_scale',
+  },
+  so2: {
+    latex: `\\[ \\Omega_{SO_2} = \\int_0^{TOA} n_{SO_2}(z)\\, dz \\quad [\\text{mol/m}^2] \\]`,
+    variables: [
+      { sym: 'Ω_SO₂',    desc: 'SO₂ total column density (mol/m²)' },
+      { sym: 'n_SO₂(z)', desc: 'SO₂ number density at altitude z, retrieved by UV-DOAS in 312–326 nm range' },
+    ],
+    viz_type: 'gradient_scale',
+  },
+  ch4: {
+    latex: `\\[ X_{CH_4} = \\frac{\\Omega_{CH_4}}{\\Omega_{dry-air}} \\times 10^9 \\quad [\\text{ppb}] \\]`,
+    variables: [
+      { sym: 'X_CH₄',        desc: 'Column-averaged dry-air mixing ratio (ppb)' },
+      { sym: 'Ω_CH₄',        desc: 'CH₄ total column (mol/m²), retrieved via SWIR at 2.3 μm' },
+      { sym: 'Ω_dry-air',    desc: 'Dry-air column (mol/m²), derived from surface pressure' },
+      { sym: '× 10⁹',        desc: 'Conversion to parts per billion (ppb)' },
+    ],
+    viz_type: 'gradient_scale',
+  },
+  aerosol: {
+    latex: `\\[ \\text{AAI} = -100 \\times \\log_{10}\\left(\\frac{I_{meas}}{I_{calc}}\\right) \\]`,
+    variables: [
+      { sym: 'I_meas', desc: 'Measured backscattered UV radiance at ~340 nm and 380 nm' },
+      { sym: 'I_calc', desc: 'Modeled radiance for a pure Rayleigh atmosphere (no aerosols)' },
+      { sym: 'AAI > 0', desc: 'Absorbing aerosols present (smoke, dust, volcanic ash)' },
+      { sym: 'AAI < 0', desc: 'Non-absorbing aerosols or clean atmosphere (marine aerosols)' },
+    ],
+    viz_type: 'gradient_scale',
+  },
+  ffpi: {
+    latex: `\\[ \\text{FFPI} = \\frac{1}{3}\\left(\\hat{NO_2} + \\hat{CO} + \\hat{SO_2}\\right) \\]`,
+    variables: [
+      { sym: 'FFPI',   desc: 'Fossil Fuel Pollution Index — composite score 0 (clean) to 1 (severe)' },
+      { sym: 'N̂O₂',   desc: 'Min-max normalized NO₂ column within the study area' },
+      { sym: 'ĈO',    desc: 'Min-max normalized CO column within the study area' },
+      { sym: 'ŜO₂',   desc: 'Min-max normalized SO₂ column within the study area' },
+    ],
+    viz_type: 'gradient_scale',
+  },
+  lulc: {
+    latex: `\\[ \\hat{y} = \\arg\\max_k P(y = k \\mid \\mathbf{x}, \\theta) \\]`,
+    variables: [
+      { sym: 'ŷ',     desc: 'Predicted land cover class label (e.g., Built Area, Trees, Water)' },
+      { sym: 'x',     desc: 'Feature vector: spectral bands (B2–B7) + NDVI + NDWI + NDBI at each pixel' },
+      { sym: 'θ',     desc: 'Random Forest model parameters — trained on ESA WorldCover 2021 reference labels' },
+      { sym: 'P(y=k|x,θ)', desc: 'Posterior class probability — class with highest probability wins (majority vote of trees)' },
+    ],
+    viz_type: 'lulc_classes',
+    viz_steps: [
+      { range: 'Built Area',  label: 'Impervious surfaces, roads, buildings', color: '#ff0000', icon: '🏙️' },
+      { range: 'Trees',       label: 'Forest, tree canopy > 5 m height',       color: '#228b22', icon: '🌲' },
+      { range: 'Rangeland',   label: 'Shrubs, grassland, savanna',              color: '#d2b48c', icon: '🌾' },
+      { range: 'Cropland',    label: 'Agricultural fields',                     color: '#ffff00', icon: '🌽' },
+      { range: 'Water',       label: 'Rivers, lakes, reservoirs',               color: '#0000ff', icon: '💧' },
+      { range: 'Bare Ground', label: 'Desert, exposed rock, sand',              color: '#a0522d', icon: '🏜️' },
+    ],
+  },
+};
+
 let _activeKnowledgeId = null;
 
 function toggleKnowledgePanel() {
@@ -2256,6 +2478,7 @@ function renderKnowledgeNav(items) {
 
 function openKnowledgeDetail(id) {
   const k = KNOWLEDGE.find(x => x.id === id);
+  const ex = KNOWLEDGE_EXTRA[id] || {};
   if (!k) return;
   _activeKnowledgeId = id;
   renderKnowledgeNav(KNOWLEDGE);
@@ -2263,13 +2486,19 @@ function openKnowledgeDetail(id) {
   document.getElementById('kpLanding').style.display    = 'none';
   document.getElementById('kpDetailFull').style.display = 'block';
 
-  // Benchmark values for index variables
-  const benchmarks = k.interpretation.map(i => `
-    <div class="kpd-bench-item">
-      <div class="kpd-bench-color" style="background:${i.color}"></div>
-      <div class="kpd-bench-range">${i.range}</div>
-      <div class="kpd-bench-label">${i.label}</div>
-    </div>`).join('');
+  // Build visualization block
+  const vizHtml = buildKnowledgeViz(ex);
+
+  // Variable definitions
+  const varsHtml = ex.variables ? `
+    <div class="kpd-vars-table">
+      ${ex.variables.map(v => `
+        <div class="kpd-var-row">
+          <div class="kpd-var-sym">\\(${v.sym.replace(/_/g,'_{').replace(/([^_{}]+)$/,'$1}').replace(/\{([^{}])\}/g,'$1')}\\)</div>
+          <div class="kpd-var-eq">=</div>
+          <div class="kpd-var-desc">${v.desc}</div>
+        </div>`).join('')}
+    </div>` : '';
 
   // Palette gradient
   const paletteStops = k.palette.map((c,i) => `${c} ${Math.round(i/(k.palette.length-1)*100)}%`).join(', ');
@@ -2298,9 +2527,31 @@ function openKnowledgeDetail(id) {
         </div>
       </div>
 
+      <!-- Formula (paper style) -->
+      <div class="kpd-formula-paper-section">
+        <div class="kpd-section-title">Formula</div>
+        <div class="kpd-formula-paper">
+          <div class="kpd-formula-paper-inner">
+            <div class="kpd-formula-render">${ex.latex || k.formula}</div>
+            ${ex.variables ? `
+            <div class="kpd-where-title">Where:</div>
+            <div class="kpd-vars-list">
+              ${ex.variables.map(v => `
+                <div class="kpd-var-row">
+                  <span class="kpd-var-sym-plain">${v.sym}</span>
+                  <span class="kpd-var-eq">=</span>
+                  <span class="kpd-var-desc">${v.desc}</span>
+                </div>`).join('')}
+            </div>` : ''}
+          </div>
+          <div class="kpd-formula-bands-label">Band Implementation (Landsat 8):</div>
+          <div class="kpd-formula-bands-box">${k.formula_bands}</div>
+        </div>
+      </div>
+
       <!-- Color scale -->
       <div class="kpd-scale-section">
-        <div class="kpd-section-title">Color Scale</div>
+        <div class="kpd-section-title">Color Scale (${k.range})</div>
         <div class="kpd-gradient" style="background:linear-gradient(to right, ${paletteStops})"></div>
         <div class="kpd-gradient-labels">
           <span>${k.range.split(' to ')[0] || 'Low'}</span>
@@ -2309,33 +2560,8 @@ function openKnowledgeDetail(id) {
         </div>
       </div>
 
-      <!-- Formula block -->
-      <div class="kpd-two-col">
-        <div class="kpd-block">
-          <div class="kpd-section-title">Formula</div>
-          <div class="kpd-formula-big">${k.formula}</div>
-          <div class="kpd-formula-note">Band implementation:</div>
-          <div class="kpd-formula-bands-big">${k.formula_bands}</div>
-        </div>
-        <div class="kpd-block">
-          <div class="kpd-section-title">Value Range</div>
-          <div class="kpd-range-display">
-            <div class="kpd-range-val">${k.range.split(' to ')[0] || '—'}</div>
-            <div class="kpd-range-arrow">→</div>
-            <div class="kpd-range-val kpd-range-high">${k.range.split(' to ')[1] || '—'}</div>
-          </div>
-          <div class="kpd-section-title" style="margin-top:16px">Satellite Platform</div>
-          <div class="kpd-platform-badge">${k.datasource.split('(')[0].trim()}</div>
-        </div>
-      </div>
-
-      <!-- Interpretation benchmarks -->
-      <div class="kpd-full-block">
-        <div class="kpd-section-title">Class Interpretation</div>
-        <div class="kpd-bench-grid">
-          ${benchmarks}
-        </div>
-      </div>
+      <!-- Visualization / Interpretation -->
+      ${vizHtml}
 
       <!-- Use cases -->
       <div class="kpd-full-block">
@@ -2348,10 +2574,68 @@ function openKnowledgeDetail(id) {
         </div>
       </div>
 
+      <!-- Data source -->
+      <div class="kpd-two-col">
+        <div class="kpd-block">
+          <div class="kpd-section-title">Satellite Platform</div>
+          <div class="kpd-platform-badge">${k.datasource.split('(')[0].trim()}</div>
+          <div class="kpd-source-res" style="margin-top:8px">${k.scale}</div>
+        </div>
+        <div class="kpd-block">
+          <div class="kpd-section-title">Value Range</div>
+          <div class="kpd-range-display">
+            <div class="kpd-range-val">${k.range.split(' to ')[0] || '—'}</div>
+            <div class="kpd-range-arrow">→</div>
+            <div class="kpd-range-val kpd-range-high">${k.range.split(' to ')[1] || '—'}</div>
+          </div>
+        </div>
+      </div>
+
     </div>
   `;
-  // Scroll detail to top
+
+  // Trigger MathJax to typeset the new content
+  if (window.MathJax && window.MathJax.typesetPromise) {
+    window.MathJax.typesetPromise([document.getElementById('kpDetailContent')]);
+  }
+
   document.getElementById('kpDetailFull').scrollTop = 0;
+}
+
+function buildKnowledgeViz(ex) {
+  if (!ex.viz_steps || !ex.viz_steps.length) {
+    // Fallback: just show benchmark grid from main KNOWLEDGE entry
+    return '';
+  }
+
+  const isVertical = ex.viz_type === 'vegetation_scale' || ex.viz_type === 'thermal_scale';
+
+  if (ex.viz_type === 'vegetation_scale' || ex.viz_type === 'water_scale' ||
+      ex.viz_type === 'urban_scale' || ex.viz_type === 'thermal_scale' ||
+      ex.viz_type === 'atmo_scale' || ex.viz_type === 'lulc_classes') {
+
+    const steps = ex.viz_steps;
+    const items = steps.map((s, i) => `
+      <div class="kpd-viz-step">
+        <div class="kpd-viz-icon">${s.icon}</div>
+        <div class="kpd-viz-bar-wrap">
+          <div class="kpd-viz-bar" style="background:${s.color}"></div>
+        </div>
+        <div class="kpd-viz-info">
+          <div class="kpd-viz-range">${s.range}</div>
+          <div class="kpd-viz-label">${s.label}</div>
+        </div>
+      </div>`).join('');
+
+    return `
+      <div class="kpd-full-block">
+        <div class="kpd-section-title">Class Interpretation & Visual Guide</div>
+        <div class="kpd-viz-scale">
+          ${items}
+        </div>
+      </div>`;
+  }
+  return '';
 }
 
 function filterKnowledge(query) {
