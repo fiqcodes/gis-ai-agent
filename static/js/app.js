@@ -1171,14 +1171,36 @@ function buildSingleStatHTML(varLabel, s) {
 
   // UHI special
   if (s.lst_mean !== undefined) {
+    const lstMean = s.lst_mean.toFixed(2);
+    const lstStd  = s.lst_std.toFixed(2);
+    const hot1σ   = (s.lst_mean + s.lst_std).toFixed(2);
+    const cool1σ  = (s.lst_mean - s.lst_std).toFixed(2);
+    let heatLevel, heatColor;
+    if      (s.lst_mean >= 42) { heatLevel = 'Extreme heat stress';  heatColor = '#ff2d00'; }
+    else if (s.lst_mean >= 38) { heatLevel = 'High heat stress';     heatColor = '#ff7700'; }
+    else if (s.lst_mean >= 33) { heatLevel = 'Moderate heat stress'; heatColor = '#ffcc00'; }
+    else if (s.lst_mean >= 28) { heatLevel = 'Mild conditions';      heatColor = '#7ec850'; }
+    else                        { heatLevel = 'Cool conditions';      heatColor = '#4ab3f4'; }
+
+    const fmt = v => v != null ? v.toFixed(2) + '°C' : '—';
     html += `<div class="stats-table-wrap">
       <table class="stats-table">
+        <thead><tr><th colspan="2">UHI Statistics — LST-based</th></tr></thead>
         <tbody>
-          <tr><td>LST Mean</td><td>${s.lst_mean.toFixed(2)}°C</td></tr>
-          <tr><td>LST Std Dev</td><td>${s.lst_std.toFixed(2)}°C</td></tr>
-          <tr><td>UHI</td><td>z-score normalised</td></tr>
+          <tr><td>Mean Surface Temp (LST)</td><td><strong>${lstMean}°C</strong></td></tr>
+          <tr><td>Std Dev (σ)</td><td>${lstStd}°C</td></tr>
+          <tr><td>Min / Max</td><td>${fmt(s.min)} / ${fmt(s.max)}</td></tr>
+          <tr><td>P10 / P90</td><td>${fmt(s.p10)} / ${fmt(s.p90)}</td></tr>
+          <tr><td>UHI Hotspot (> +1σ)</td><td>&gt; ${hot1σ}°C</td></tr>
+          <tr><td>Cool Island (< −1σ)</td><td>&lt; ${cool1σ}°C</td></tr>
+          <tr><td>UHI index</td><td>z-score normalised (mean = 0)</td></tr>
+          <tr><td>Heat stress level</td>
+              <td><span style="color:${heatColor};font-weight:600">${heatLevel}</span></td></tr>
         </tbody>
       </table>
+      <div class="stats-note" style="margin-top:8px;font-size:11.5px;color:var(--text3);line-height:1.5">
+        z &gt; 0 = warmer than area mean (heat island zone) · z &lt; 0 = cooler (park/water cool island)
+      </div>
     </div>`;
     return html;
   }
@@ -1221,17 +1243,19 @@ function buildMonthlyHighlights(varLabel, monthly) {
     const [yr, mo] = key.split('-');
     return `${MONTH_NAMES[mo] || mo} ${yr}`;
   };
-  // LST and UHI monthly values are in °C — format with 2 decimal places + unit
-  const isLSTvar = varLabel.toUpperCase().includes('LST') || varLabel.toUpperCase().includes('UHI');
-  const fmt4 = v => isLSTvar ? `${v.toFixed(2)}°C` : v.toFixed(4);
-  const unitLabel = isLSTvar ? '°C' : '';
-
-  // Trend direction — use larger threshold for °C values
-  const half      = Math.floor(values.length / 2);
-  const avgFirst  = values.slice(0, half).reduce((s,v) => s+v, 0) / half;
-  const avgLast   = values.slice(half).reduce((s,v) => s+v, 0) / (values.length - half);
+  const isLSTvar  = varLabel.toUpperCase().includes('LST') || varLabel.toUpperCase().includes('UHI');
+  const fmt4      = v => isLSTvar ? `${v.toFixed(2)}°C` : v.toFixed(4);
   const threshold = isLSTvar ? 0.5 : 0.002;
-  const trend     = avgLast > avgFirst + threshold ? '↑ increasing' : avgLast < avgFirst - threshold ? '↓ decreasing' : '→ stable';
+
+  // Trend direction
+  const half     = Math.floor(values.length / 2);
+  const avgFirst = values.slice(0, half).reduce((s,v) => s+v, 0) / half;
+  const avgLast  = values.slice(half).reduce((s,v) => s+v, 0) / (values.length - half);
+  const trend    = avgLast > avgFirst + threshold ? '↑ increasing'
+                 : avgLast < avgFirst - threshold ? '↓ decreasing' : '→ stable';
+  const rangeStr = isLSTvar
+    ? `${(maxEntry[1] - minEntry[1]).toFixed(2)}°C`
+    : (maxEntry[1] - minEntry[1]).toFixed(4);
 
   return `<div class="monthly-highlights">
     <div class="mh-item mh-peak">
@@ -1248,7 +1272,7 @@ function buildMonthlyHighlights(varLabel, monthly) {
     </div>
     <div class="mh-item">
       <span class="mh-label">Range</span>
-      <span class="mh-value">${isLSTvar ? (maxEntry[1]-minEntry[1]).toFixed(2)+'°C' : (maxEntry[1]-minEntry[1]).toFixed(4)}</span>
+      <span class="mh-value">${rangeStr}</span>
     </div>
     <div class="mh-item">
       <span class="mh-label">Trend</span>
@@ -1261,7 +1285,7 @@ function buildMonthlyHighlights(varLabel, monthly) {
 function buildDistClassExplanation(varLabel, s) {
   if (!s || s.mean == null) return '';
 
-  const isUHI  = varLabel.toUpperCase() === 'UHI';
+  const isUHI = varLabel.toUpperCase() === 'UHI';
   const fmt    = v => v != null ? v.toFixed(4) : '—';
   const fmtLST = v => v != null ? v.toFixed(2) : '—';
   const spread = s.p90 != null && s.p10 != null ? (s.p90 - s.p10).toFixed(4) : null;
@@ -1414,11 +1438,11 @@ function buildDistClassExplanation(varLabel, s) {
       text += `Cooler zones near <strong>${fmtLST(p10)}°C</strong> (P10) likely correspond to vegetated parks, water bodies, or shaded areas that act as thermal refuges within the urban fabric.`;
     }
 
-    // UHI z-score framing note
-    if (isUHI && s.lst_mean !== undefined) {
-      const hot1σ  = (s.lst_mean + s.lst_std).toFixed(2);
-      const cool1σ = (s.lst_mean - s.lst_std).toFixed(2);
-      text += ` On the UHI z-score map, pixels above <strong>+1σ (${hot1σ}°C)</strong> mark heat island zones; pixels below <strong>−1σ (${cool1σ}°C)</strong> identify cool islands such as parks and water bodies.`;
+    // UHI: append z-score framing note
+    if (isUHI && s.lst_std != null) {
+      const hot1σ  = (s.mean + s.lst_std).toFixed(2);
+      const cool1σ = (s.mean - s.lst_std).toFixed(2);
+      text += ` On the UHI z-score map, pixels above <strong>+1σ (${hot1σ}°C)</strong> are heat island zones; pixels below <strong>−1σ (${cool1σ}°C)</strong> are cool islands (parks, water bodies).`;
     }
   }
 
