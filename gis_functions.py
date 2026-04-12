@@ -571,7 +571,38 @@ def make_stats_charts(stats, var_name, label):
     min_v  = s.get('min', -1)
     max_v  = s.get('max',  1)
 
-    if mean_v is not None and min_v is not None and max_v is not None:
+    label_up = label.upper()
+
+    # UHI: generate a proper z-score distribution chart instead of the generic histogram
+    is_uhi = 'UHI' in label_up
+    if is_uhi:
+        try:
+            lst_mean = s.get('lst_mean', mean_v or 35.0)
+            lst_std  = s.get('lst_std', s.get('std', 3.0)) or 3.0
+            rng      = np.random.default_rng(42)
+            # Generate z-score samples that mirror the LST distribution
+            lst_samples = rng.normal(lst_mean, lst_std, 50000)
+            z_samples   = (lst_samples - lst_mean) / lst_std
+            z_samples   = np.clip(z_samples, -3.5, 3.5)
+
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.hist(z_samples, bins=40, color='#5B9BD5', edgecolor='white',
+                    linewidth=0.4, alpha=0.85)
+            ax.axvline(0,  color='#C0392B', linewidth=1.8, linestyle='-',  label='Mean (0)')
+            ax.axvline(1,  color='#E07B39', linewidth=1.4, linestyle='--', label=f'+1σ ({lst_mean+lst_std:.1f}°C)')
+            ax.axvline(-1, color='#4ab3f4', linewidth=1.4, linestyle='--', label=f'−1σ ({lst_mean-lst_std:.1f}°C)')
+            ax.legend(fontsize=8, framealpha=0.7)
+            ax.set_xlabel('UHI z-score', fontsize=9)
+            ax.set_ylabel('Pixel count', fontsize=9)
+            ax.set_title('UHI z-score distribution', fontsize=10, fontweight='bold')
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            plt.tight_layout()
+            charts.append(('histogram', fig_to_base64(fig)))
+            print('  ✓ UHI z-score distribution chart')
+        except Exception as e:
+            print(f'  UHI histogram failed: {e}')
+    elif mean_v is not None and min_v is not None and max_v is not None:
         try:
             std_v   = s.get('std', 0.1) or 0.1
             n_pts   = 50000
@@ -603,10 +634,6 @@ def make_stats_charts(stats, var_name, label):
             charts.append(('histogram', fig_to_base64(fig)))
         except Exception as e:
             print(f'  Histogram failed: {e}')
-
-    # ── Generic index class bar (NDVI, NDBI, NDWI, EVI, SAVI, BSI, UI, NBI, NDSI, MNDWI) ──
-    INDEX_VARS = ('NDVI','NDBI','NDWI','EVI','SAVI','BSI','UI','NBI','NDSI','MNDWI')
-    label_up   = label.upper()
 
     if mean_v is not None and any(iv in label_up for iv in INDEX_VARS):
         try:
@@ -722,14 +749,17 @@ def make_stats_charts(stats, var_name, label):
         except Exception as e:
             print(f'  Index class chart failed: {e}')
 
-    # ── LST heat class bar chart ──────────────────────────────────────────────
-    if mean_v is not None and 'LST' in label_up:
+    # ── LST / UHI heat class bar chart ───────────────────────────────────────
+    if mean_v is not None and ('LST' in label_up or 'UHI' in label_up):
         try:
-            std_v    = s.get('std', 3.0) or 3.0
+            # For UHI use lst_mean (real temperature) not the z-score mean
+            heat_mean = s.get('lst_mean', mean_v) if 'UHI' in label_up else mean_v
+            std_v    = s.get('lst_std', s.get('std', 3.0)) if 'UHI' in label_up else (s.get('std', 3.0) or 3.0)
+            std_v    = std_v or 3.0
             min_lst  = s.get('min') if s.get('min') is not None else 20.0
             max_lst  = s.get('max') if s.get('max') is not None else 60.0
             rng      = np.random.default_rng(42)
-            samples  = rng.normal(mean_v, std_v, 50000)
+            samples  = rng.normal(heat_mean, std_v, 50000)
             samples  = np.clip(samples, min_lst, max_lst)
 
             cool_pct     = float(np.mean(samples < 30) * 100)
@@ -755,13 +785,14 @@ def make_stats_charts(stats, var_name, label):
                             fontweight='bold', color='#333')
                 ax.set_xlabel('Temperature class', fontsize=9)
                 ax.set_ylabel('Area share (%)', fontsize=9)
-                ax.set_title('LST heat class composition', fontsize=10, fontweight='bold')
+                chart_title = 'UHI — LST heat class composition' if 'UHI' in label_up else 'LST heat class composition'
+                ax.set_title(chart_title, fontsize=10, fontweight='bold')
                 ax.set_ylim(0, max(pct_vals) * 1.2)
                 ax.spines['top'].set_visible(False)
                 ax.spines['right'].set_visible(False)
                 plt.tight_layout()
                 charts.append(('class_bar', fig_to_base64(fig)))
-                print(f'  ✓ LST heat class chart: {len(pairs)} classes')
+                print(f'  \u2713 LST/UHI heat class chart: {len(pairs)} classes')
         except Exception as e:
             print(f'  LST class chart failed: {e}')
 

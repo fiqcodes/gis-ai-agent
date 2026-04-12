@@ -481,65 +481,9 @@ function switchBasemap(key) {
 // ════════════════════════════════════════════════════════
 // CHAT
 // ════════════════════════════════════════════════════════
-// ════════════════════════════════════════════════════════
-// UNIFIED NAVIGATION SYSTEM
-// ════════════════════════════════════════════════════════
-// currentPage tracks which panel is active:
-//   'chat'      → chat panel (default, always visible underneath)
-//   'history'   → history slide-out panel
-//   'knowledge' → full-screen knowledge panel
-//   'layers'    → layers panel (on map side)
-let currentPage = 'chat';
-
-function navigateTo(page) {
-  // ── Close all panels first ───────────────────────────
-  document.getElementById('historyPanel').style.display   = 'none';
-  document.getElementById('knowledgePanel').style.display = 'none';
-  _knowledgeVisible = false;
-
-  // Clear all nav-btn active states
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-
-  // ── If clicking the same page, toggle back to chat ──
-  if (currentPage === page && page !== 'chat') {
-    currentPage = 'chat';
-    document.getElementById('chatNavBtn').classList.add('active');
-    return;
-  }
-
-  // ── Open the requested page ──────────────────────────
-  currentPage = page;
-
-  if (page === 'chat') {
-    document.getElementById('chatNavBtn').classList.add('active');
-
-  } else if (page === 'history') {
-    document.getElementById('chatNavBtn').classList.add('active');
-    renderHistoryList();
-    document.getElementById('historyPanel').style.display = 'flex';
-
-  } else if (page === 'knowledge') {
-    document.getElementById('knowledgeNavBtn').classList.add('active');
-    _knowledgeVisible = true;
-    document.getElementById('knowledgePanel').style.display = 'flex';
-    renderKnowledgeNav(KNOWLEDGE);
-    if (!_activeKnowledgeId) openKnowledgeDetail(KNOWLEDGE[0].id);
-
-  } else if (page === 'layers') {
-    // Layers btn — just highlight, layers panel is on the map side
-    document.querySelectorAll('.nav-btn')[3].classList.add('active');
-    toggleLayersPanel();
-
-  } else {
-    // Settings, Help, etc. — just mark active, no panel yet
-    currentPage = 'chat';
-    document.getElementById('chatNavBtn').classList.add('active');
-  }
-}
-
-// Legacy shim — keep old callers working
 function setNavActive(btn) {
-  // No-op: navigateTo handles everything now
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
 }
 
 function handleKey(e) {
@@ -763,7 +707,17 @@ function renderHistoryList() {
 }
 
 function toggleHistoryPanel() {
-  navigateTo(currentPage === 'history' ? 'chat' : 'history');
+  const panel  = document.getElementById('historyPanel');
+  const btn    = document.getElementById('chatNavBtn');
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) {
+    panel.style.display = 'none';
+    btn.classList.add('active');
+  } else {
+    renderHistoryList();
+    panel.style.display = 'flex';
+    btn.classList.add('active');
+  }
 }
 
 function clearChat() {
@@ -1217,39 +1171,14 @@ function buildSingleStatHTML(varLabel, s) {
 
   // UHI special
   if (s.lst_mean !== undefined) {
-    const lstMean = s.lst_mean.toFixed(2);
-    const lstStd  = s.lst_std.toFixed(2);
-    const hotThreshold = (s.lst_mean + s.lst_std).toFixed(2);
-    const coolThreshold = (s.lst_mean - s.lst_std).toFixed(2);
-
-    // Classify heat stress level
-    let heatLevel, heatColor;
-    if (s.lst_mean >= 42)      { heatLevel = 'Extreme heat stress';  heatColor = '#ff2d00'; }
-    else if (s.lst_mean >= 38) { heatLevel = 'High heat stress';     heatColor = '#ff7700'; }
-    else if (s.lst_mean >= 33) { heatLevel = 'Moderate heat stress'; heatColor = '#ffcc00'; }
-    else if (s.lst_mean >= 28) { heatLevel = 'Mild conditions';      heatColor = '#7ec850'; }
-    else                        { heatLevel = 'Cool conditions';      heatColor = '#4ab3f4'; }
-
     html += `<div class="stats-table-wrap">
       <table class="stats-table">
-        <thead><tr><th colspan="2">UHI Statistics — LST-based</th></tr></thead>
         <tbody>
-          <tr><td>Mean Surface Temperature</td><td><strong>${lstMean}°C</strong></td></tr>
-          <tr><td>Spatial Std Dev (σ)</td><td>${lstStd}°C</td></tr>
-          <tr><td>UHI Hotspot threshold (> +1σ)</td><td>> ${hotThreshold}°C</td></tr>
-          <tr><td>Cool Island threshold (< −1σ)</td><td>< ${coolThreshold}°C</td></tr>
-          <tr><td>UHI index</td><td>z-score normalised (mean = 0)</td></tr>
-          <tr>
-            <td>Heat stress level</td>
-            <td><span style="color:${heatColor};font-weight:600">${heatLevel}</span></td>
-          </tr>
+          <tr><td>LST Mean</td><td>${s.lst_mean.toFixed(2)}°C</td></tr>
+          <tr><td>LST Std Dev</td><td>${s.lst_std.toFixed(2)}°C</td></tr>
+          <tr><td>UHI</td><td>z-score normalised</td></tr>
         </tbody>
       </table>
-      <div class="stats-note" style="margin-top:8px;font-size:11.5px;color:var(--text3);line-height:1.5">
-        UHI z-score: pixels with z > 0 are warmer than the area mean (heat island zones);
-        pixels with z &lt; 0 are cooler (green spaces, water bodies).
-        Hotspots are defined as pixels exceeding <strong>${hotThreshold}°C</strong>.
-      </div>
     </div>`;
     return html;
   }
@@ -1292,13 +1221,17 @@ function buildMonthlyHighlights(varLabel, monthly) {
     const [yr, mo] = key.split('-');
     return `${MONTH_NAMES[mo] || mo} ${yr}`;
   };
-  const fmt4 = v => v.toFixed(4);
+  // LST and UHI monthly values are in °C — format with 2 decimal places + unit
+  const isLSTvar = varLabel.toUpperCase().includes('LST') || varLabel.toUpperCase().includes('UHI');
+  const fmt4 = v => isLSTvar ? `${v.toFixed(2)}°C` : v.toFixed(4);
+  const unitLabel = isLSTvar ? '°C' : '';
 
-  // Trend direction (compare first half vs second half)
-  const half   = Math.floor(values.length / 2);
-  const avgFirst = values.slice(0, half).reduce((s,v) => s+v, 0) / half;
-  const avgLast  = values.slice(half).reduce((s,v) => s+v, 0) / (values.length - half);
-  const trend    = avgLast > avgFirst + 0.002 ? '↑ increasing' : avgLast < avgFirst - 0.002 ? '↓ decreasing' : '→ stable';
+  // Trend direction — use larger threshold for °C values
+  const half      = Math.floor(values.length / 2);
+  const avgFirst  = values.slice(0, half).reduce((s,v) => s+v, 0) / half;
+  const avgLast   = values.slice(half).reduce((s,v) => s+v, 0) / (values.length - half);
+  const threshold = isLSTvar ? 0.5 : 0.002;
+  const trend     = avgLast > avgFirst + threshold ? '↑ increasing' : avgLast < avgFirst - threshold ? '↓ decreasing' : '→ stable';
 
   return `<div class="monthly-highlights">
     <div class="mh-item mh-peak">
@@ -1315,7 +1248,7 @@ function buildMonthlyHighlights(varLabel, monthly) {
     </div>
     <div class="mh-item">
       <span class="mh-label">Range</span>
-      <span class="mh-value">${fmt4(range)}</span>
+      <span class="mh-value">${isLSTvar ? (maxEntry[1]-minEntry[1]).toFixed(2)+'°C' : (maxEntry[1]-minEntry[1]).toFixed(4)}</span>
     </div>
     <div class="mh-item">
       <span class="mh-label">Trend</span>
@@ -1326,27 +1259,13 @@ function buildMonthlyHighlights(varLabel, monthly) {
 
 // ── Distribution + class explanation (auto-computed, no LLM) ─────────────────
 function buildDistClassExplanation(varLabel, s) {
-  if (!s) return '';
+  if (!s || s.mean == null) return '';
 
-  // UHI: s.mean is always 0 (z-score), use lst_mean/lst_std instead
-  if (varLabel.toUpperCase() === 'UHI' && s.lst_mean !== undefined) {
-    const lstMean = s.lst_mean;
-    const lstStd  = s.lst_std;
-    let text = `The UHI z-score map is centred at <strong>0</strong> by definition.
-      Pixels above <strong>+1σ (${(lstMean + lstStd).toFixed(2)}°C)</strong> are classified as heat island zones;
-      pixels below <strong>−1σ (${(lstMean - lstStd).toFixed(2)}°C)</strong> represent cool islands such as parks, water bodies, or forested areas. `;
-    if (lstMean >= 38) text += 'The high mean LST indicates severe urban overheating — extensive impervious surfaces are the primary driver.';
-    else if (lstMean >= 33) text += 'Moderate thermal loading is consistent with a densely built urban fabric with limited green cover.';
-    else text += 'Thermal conditions are relatively mild, suggesting meaningful green space or coastal influence moderating surface temperatures.';
-    return `<div class="dist-explanation"><p>${text}</p></div>`;
-  }
-
-  if (s.mean == null) return '';
-
+  const isUHI  = varLabel.toUpperCase() === 'UHI';
   const fmt    = v => v != null ? v.toFixed(4) : '—';
   const fmtLST = v => v != null ? v.toFixed(2) : '—';
   const spread = s.p90 != null && s.p10 != null ? (s.p90 - s.p10).toFixed(4) : null;
-  const isLST  = varLabel.toUpperCase().includes('LST');
+  const isLST  = varLabel.toUpperCase().includes('LST') || isUHI;
 
   // ── Distribution sentence ────────────────────────────────────────────────
   let text = isLST
@@ -1493,6 +1412,13 @@ function buildDistClassExplanation(varLabel, s) {
     // Cool refuges note if P10 is meaningfully cooler
     if (p90 - p10 > 6) {
       text += `Cooler zones near <strong>${fmtLST(p10)}°C</strong> (P10) likely correspond to vegetated parks, water bodies, or shaded areas that act as thermal refuges within the urban fabric.`;
+    }
+
+    // UHI z-score framing note
+    if (isUHI && s.lst_mean !== undefined) {
+      const hot1σ  = (s.lst_mean + s.lst_std).toFixed(2);
+      const cool1σ = (s.lst_mean - s.lst_std).toFixed(2);
+      text += ` On the UHI z-score map, pixels above <strong>+1σ (${hot1σ}°C)</strong> mark heat island zones; pixels below <strong>−1σ (${cool1σ}°C)</strong> identify cool islands such as parks and water bodies.`;
     }
   }
 
@@ -2523,7 +2449,16 @@ const KNOWLEDGE_EXTRA = {
 let _activeKnowledgeId = null;
 
 function toggleKnowledgePanel() {
-  navigateTo(currentPage === 'knowledge' ? 'chat' : 'knowledge');
+  const panel = document.getElementById('knowledgePanel');
+  const btn   = document.getElementById('knowledgeNavBtn');
+  _knowledgeVisible = !_knowledgeVisible;
+  panel.style.display = _knowledgeVisible ? 'flex' : 'none';
+  btn.classList.toggle('active', _knowledgeVisible);
+  if (_knowledgeVisible) {
+    renderKnowledgeNav(KNOWLEDGE);
+    // Open first item by default if none selected
+    if (!_activeKnowledgeId) openKnowledgeDetail(KNOWLEDGE[0].id);
+  }
 }
 
 function renderKnowledgeNav(items) {

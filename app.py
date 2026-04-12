@@ -384,12 +384,69 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             if lst_img is None:
                                 lst_img, _ = compute_lst(composite, study_area_surf)
                             uhi_img, lst_mean, lst_std = compute_uhi(lst_img, study_area_surf)
-                            all_stats['UHI'] = {'mean': 0.0, 'lst_mean': lst_mean, 'lst_std': lst_std}
+
+                            # Reuse LST stats if already computed, otherwise compute from lst_img
+                            lst_stats_for_uhi = all_stats.get('LST') or {}
+                            if not lst_stats_for_uhi:
+                                try:
+                                    lst_stats_for_uhi = get_stats(lst_img, 'LST', study_area_surf, scale=90)
+                                except Exception:
+                                    lst_stats_for_uhi = {}
+
+                            # Build monthly LST trend — reuse from LST if already computed
+                            uhi_monthly = lst_stats_for_uhi.get('monthly', {})
+                            if not uhi_monthly:
+                                try:
+                                    import datetime as _dt
+                                    uhi_monthly = {}
+                                    start_dt = _dt.datetime.strptime(start_date, '%Y-%m-%d').replace(day=1)
+                                    end_dt   = _dt.datetime.strptime(end_date,   '%Y-%m-%d')
+                                    cur = start_dt
+                                    while cur <= end_dt:
+                                        m_s = cur.strftime('%Y-%m-%d')
+                                        m_e = (cur.replace(year=cur.year+1, month=1, day=1)
+                                               if cur.month == 12
+                                               else cur.replace(month=cur.month+1, day=1)).strftime('%Y-%m-%d')
+                                        try:
+                                            m_scenes = landsat_col.filterDate(m_s, m_e)
+                                            if m_scenes.size().getInfo() > 0:
+                                                thermal = (m_scenes.select('ST_B10').median()
+                                                           .subtract(273.15))
+                                                ms = thermal.reduceRegion(
+                                                    reducer=ee.Reducer.mean(),
+                                                    geometry=study_area_surf, scale=90, maxPixels=1e9
+                                                ).getInfo()
+                                                val = list(ms.values())[0] if ms else None
+                                                if val is not None:
+                                                    uhi_monthly[cur.strftime('%Y-%m')] = round(val, 4)
+                                        except: pass
+                                        cur = (cur.replace(year=cur.year+1, month=1, day=1)
+                                               if cur.month == 12
+                                               else cur.replace(month=cur.month+1, day=1))
+                                    print(f'  UHI monthly LST: {len(uhi_monthly)} months')
+                                except Exception as uhi_me:
+                                    print(f'  UHI monthly failed: {uhi_me}')
+
+                            # Store enriched UHI stats — include LST numeric values so
+                            # make_stats_charts can generate heat-class bar + monthly trend
+                            all_stats['UHI'] = {
+                                'mean'     : lst_mean,          # actual LST mean for class chart
+                                'std'      : lst_std,
+                                'min'      : lst_stats_for_uhi.get('min'),
+                                'max'      : lst_stats_for_uhi.get('max'),
+                                'median'   : lst_stats_for_uhi.get('median'),
+                                'p10'      : lst_stats_for_uhi.get('p10'),
+                                'p90'      : lst_stats_for_uhi.get('p90'),
+                                'monthly'  : uhi_monthly,
+                                'lst_mean' : lst_mean,          # kept for stats table display
+                                'lst_std'  : lst_std,
+                            }
+
                             map_id   = uhi_img.clip(study_area_surf).getMapId(VIS['uhi'])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': f'UHI (mean={lst_mean:.1f}\u00b0C)', 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
-                            # Generate UHI figures (analysis map + charts)
+                            # Generate UHI figures (analysis map + charts using enriched stats)
                             if bbox:
                                 try:
                                     arr          = get_thumb(uhi_img.clip(study_area_surf), VIS['uhi'], study_area_surf, dim=512)
@@ -400,14 +457,10 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                         'charts'      : charts,
                                         'rgb_overview': rgb_overview_b64,
                                     }
-                                    print(f'  \u2713 UHI figures generated')
+                                    print(f'  \u2713 UHI figures generated ({len(charts)} charts)')
                                 except Exception as uhi_fig_err:
                                     print(f'  UHI figures failed: {uhi_fig_err}')
-                                    figures['UHI'] = {
-                                        'analysis_map': None,
-                                        'charts'      : [],
-                                        'rgb_overview': rgb_overview_b64,
-                                    }
+                                    figures['UHI'] = {'analysis_map': None, 'charts': [], 'rgb_overview': rgb_overview_b64}
                             print('  \u2713 UHI ready')
 
                         elif v in SURFACE_INDEX_MAP:
