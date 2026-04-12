@@ -481,9 +481,65 @@ function switchBasemap(key) {
 // ════════════════════════════════════════════════════════
 // CHAT
 // ════════════════════════════════════════════════════════
-function setNavActive(btn) {
+// ════════════════════════════════════════════════════════
+// UNIFIED NAVIGATION SYSTEM
+// ════════════════════════════════════════════════════════
+// currentPage tracks which panel is active:
+//   'chat'      → chat panel (default, always visible underneath)
+//   'history'   → history slide-out panel
+//   'knowledge' → full-screen knowledge panel
+//   'layers'    → layers panel (on map side)
+let currentPage = 'chat';
+
+function navigateTo(page) {
+  // ── Close all panels first ───────────────────────────
+  document.getElementById('historyPanel').style.display   = 'none';
+  document.getElementById('knowledgePanel').style.display = 'none';
+  _knowledgeVisible = false;
+
+  // Clear all nav-btn active states
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+
+  // ── If clicking the same page, toggle back to chat ──
+  if (currentPage === page && page !== 'chat') {
+    currentPage = 'chat';
+    document.getElementById('chatNavBtn').classList.add('active');
+    return;
+  }
+
+  // ── Open the requested page ──────────────────────────
+  currentPage = page;
+
+  if (page === 'chat') {
+    document.getElementById('chatNavBtn').classList.add('active');
+
+  } else if (page === 'history') {
+    document.getElementById('chatNavBtn').classList.add('active');
+    renderHistoryList();
+    document.getElementById('historyPanel').style.display = 'flex';
+
+  } else if (page === 'knowledge') {
+    document.getElementById('knowledgeNavBtn').classList.add('active');
+    _knowledgeVisible = true;
+    document.getElementById('knowledgePanel').style.display = 'flex';
+    renderKnowledgeNav(KNOWLEDGE);
+    if (!_activeKnowledgeId) openKnowledgeDetail(KNOWLEDGE[0].id);
+
+  } else if (page === 'layers') {
+    // Layers btn — just highlight, layers panel is on the map side
+    document.querySelectorAll('.nav-btn')[3].classList.add('active');
+    toggleLayersPanel();
+
+  } else {
+    // Settings, Help, etc. — just mark active, no panel yet
+    currentPage = 'chat';
+    document.getElementById('chatNavBtn').classList.add('active');
+  }
+}
+
+// Legacy shim — keep old callers working
+function setNavActive(btn) {
+  // No-op: navigateTo handles everything now
 }
 
 function handleKey(e) {
@@ -707,17 +763,7 @@ function renderHistoryList() {
 }
 
 function toggleHistoryPanel() {
-  const panel  = document.getElementById('historyPanel');
-  const btn    = document.getElementById('chatNavBtn');
-  const isOpen = panel.style.display !== 'none';
-  if (isOpen) {
-    panel.style.display = 'none';
-    btn.classList.add('active');
-  } else {
-    renderHistoryList();
-    panel.style.display = 'flex';
-    btn.classList.add('active');
-  }
+  navigateTo(currentPage === 'history' ? 'chat' : 'history');
 }
 
 function clearChat() {
@@ -2437,16 +2483,7 @@ const KNOWLEDGE_EXTRA = {
 let _activeKnowledgeId = null;
 
 function toggleKnowledgePanel() {
-  const panel = document.getElementById('knowledgePanel');
-  const btn   = document.getElementById('knowledgeNavBtn');
-  _knowledgeVisible = !_knowledgeVisible;
-  panel.style.display = _knowledgeVisible ? 'flex' : 'none';
-  btn.classList.toggle('active', _knowledgeVisible);
-  if (_knowledgeVisible) {
-    renderKnowledgeNav(KNOWLEDGE);
-    // Open first item by default if none selected
-    if (!_activeKnowledgeId) openKnowledgeDetail(KNOWLEDGE[0].id);
-  }
+  navigateTo(currentPage === 'knowledge' ? 'chat' : 'knowledge');
 }
 
 function renderKnowledgeNav(items) {
