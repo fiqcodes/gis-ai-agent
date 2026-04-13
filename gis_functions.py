@@ -722,19 +722,26 @@ def make_stats_charts(stats, var_name, label):
         except Exception as e:
             print(f'  Index class chart failed: {e}')
 
-    # ── LST / UHI heat class bar chart ──────────────────────────────────────
-    _is_uhi_hc = 'UHI' in label_up
-    if ('LST' in label_up or _is_uhi_hc):
+    # ── LST heat class bar chart (temperature zones) ────────────────────────
+    if 'LST' in label_up and 'UHI' not in label_up:
         try:
-            _heat_mean = s.get('lst_mean') if _is_uhi_hc else mean_v
-            if _heat_mean is None: _heat_mean = 35.0
-            std_v    = (s.get('lst_std') or s.get('std', 3.0)) if _is_uhi_hc else (s.get('std', 3.0) or 3.0)
-            std_v    = std_v or 3.0
-            min_lst  = s.get('min') if s.get('min') is not None else 20.0
-            max_lst  = s.get('max') if s.get('max') is not None else 60.0
-            rng      = np.random.default_rng(42)
-            samples  = rng.normal(_heat_mean, std_v, 50000)
-            samples  = np.clip(samples, min_lst, max_lst)
+            def _safe_float(v, default):
+                if v is None: return default
+                try:
+                    f = float(v)
+                    return default if (np.isnan(f) or np.isinf(f)) else f
+                except: return default
+
+            _heat_mean = _safe_float(mean_v, 35.0)
+            _std_v     = _safe_float(s.get('std'), 3.0)
+            if _std_v <= 0: _std_v = 3.0
+            min_lst    = _safe_float(s.get('min'), 20.0)
+            max_lst    = _safe_float(s.get('max'), 60.0)
+            if max_lst <= min_lst: max_lst = min_lst + 40.0
+
+            rng     = np.random.default_rng(42)
+            samples = rng.normal(_heat_mean, _std_v, 50000)
+            samples = np.clip(samples, min_lst, max_lst)
 
             cool_pct     = float(np.mean(samples < 30) * 100)
             moderate_pct = float(np.mean((samples >= 30) & (samples < 35)) * 100)
@@ -760,14 +767,75 @@ def make_stats_charts(stats, var_name, label):
                             fontweight='bold', color='#333')
                 ax.set_xlabel('Temperature class', fontsize=9)
                 ax.set_ylabel('Area share (%)', fontsize=9)
-                ax.set_title('UHI — LST heat class composition' if _is_uhi_hc else 'LST heat class composition', fontsize=10, fontweight='bold')
+                ax.set_title('LST heat class composition', fontsize=10, fontweight='bold')
                 ax.spines['top'].set_visible(False)
                 ax.spines['right'].set_visible(False)
                 fig.tight_layout()
                 charts.append(('class_bar', fig_to_base64(fig)))
-                print(f'  ✓ LST/UHI heat class chart: {len(pairs)} classes')
+                print(f'  ✓ LST heat class chart: {len(pairs)} classes')
         except Exception as e:
-            print(f'  LST/UHI class chart failed: {e}')
+            print(f'  LST class chart failed: {e}')
+
+    # ── UHI zone class bar (z-score intensity zones) ─────────────────────────
+    if 'UHI' in label_up:
+        try:
+            def _safe_z(v, default):
+                if v is None: return default
+                try:
+                    f = float(v)
+                    return default if (np.isnan(f) or np.isinf(f)) else f
+                except: return default
+
+            # Use actual UHI z-score image stats if stored (z_mean/z_std),
+            # otherwise fall back to N(0,1) — correct by construction for z-scores
+            z_mean = _safe_z(s.get('z_mean'), 0.0)
+            z_std  = _safe_z(s.get('z_std'),  1.0)
+            z_min  = _safe_z(s.get('z_min'), -4.0)
+            z_max  = _safe_z(s.get('z_max'),  4.0)
+            if z_std <= 0:    z_std = 1.0
+            if z_max <= z_min: z_max = z_min + 8.0
+
+            rng     = np.random.default_rng(42)
+            z_samps = rng.normal(z_mean, z_std, 50000)
+            z_samps = np.clip(z_samps, z_min, z_max)
+
+            # UHI intensity zones based on z-score thresholds
+            bounds_z = [-10, -1.5, -0.5, 0.5, 1.5, 10]
+            labels_z = [
+                'Strong\nCool Island\n(z < −1.5)',
+                'Cool Island\n(−1.5 to −0.5)',
+                'Neutral\n(−0.5 to 0.5)',
+                'Warm UHI\n(0.5 to 1.5)',
+                'Strong UHI\n(z > 1.5)',
+            ]
+            colors_z = ['#313695', '#74add1', '#ffffbf', '#f46d43', '#a50026']
+            pcts_z   = [
+                float(np.mean((z_samps >= bounds_z[i]) & (z_samps < bounds_z[i + 1])) * 100)
+                for i in range(len(bounds_z) - 1)
+            ]
+            pairs_z  = [(l, p, c) for l, p, c in zip(labels_z, pcts_z, colors_z) if p > 0.1]
+            if pairs_z:
+                cls_z, pv_z, cv_z = zip(*pairs_z)
+                fig, ax = plt.subplots(figsize=(max(6, len(pairs_z) * 1.6), 3.8))
+                bars = ax.bar(cls_z, pv_z, color=cv_z, edgecolor='white',
+                              linewidth=0.5, width=0.55)
+                ax.set_ylim(0, max(pv_z) * 1.3)
+                for bar, pct in zip(bars, pv_z):
+                    ax.text(bar.get_x() + bar.get_width() / 2,
+                            bar.get_height() + max(pv_z) * 0.02,
+                            f'{pct:.1f}%', ha='center', va='bottom', fontsize=8,
+                            fontweight='bold', color='#333')
+                ax.set_xlabel('UHI Zone', fontsize=9)
+                ax.set_ylabel('Area share (%)', fontsize=9)
+                ax.set_title('UHI Zone Composition (z-score classes)', fontsize=10, fontweight='bold')
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                fig.tight_layout()
+                charts.append(('class_bar', fig_to_base64(fig)))
+                print(f'  ✓ UHI zone class chart: {len(pairs_z)} zones')
+        except Exception as e:
+            print(f'  UHI zone chart failed: {e}')
+            import traceback as _tb_uhi; _tb_uhi.print_exc()
 
     # ── Atmospheric pollution class bar (NO2, CO, SO2, CH4, O3, Aerosol, GPP, FFPI) ──
     ATMO_VARS = ('NO2','CO','SO2','CH4','O3','AEROSOL','GPP','BURNED','FFPI')

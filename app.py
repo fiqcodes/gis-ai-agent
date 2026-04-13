@@ -420,7 +420,15 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 except Exception as uhi_me:
                                     print(f'  UHI monthly failed: {uhi_me}')
 
-                            # Store enriched stats — lst_mean is the real temp, used by heat class chart
+                            # Compute actual UHI z-score image stats (mean≈0, std≈1 by construction)
+                            uhi_zstats = {}
+                            try:
+                                uhi_zstats = get_stats(uhi_img.clip(study_area_surf), 'UHI', study_area_surf, scale=90)
+                                print(f'  UHI z-score stats: mean={uhi_zstats.get("mean"):.3f}, std={uhi_zstats.get("std"):.3f}')
+                            except Exception as _ze:
+                                print(f'  UHI z-score stats failed: {_ze}')
+
+                            # Store enriched stats — lst_mean is the real temp; z_* are UHI image stats
                             all_stats['UHI'] = {
                                 'mean'    : lst_mean,
                                 'std'     : lst_std,
@@ -432,6 +440,13 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 'monthly' : uhi_monthly,
                                 'lst_mean': lst_mean,
                                 'lst_std' : lst_std,
+                                # Actual UHI z-score image statistics (used for zone class chart)
+                                'z_mean'  : uhi_zstats.get('mean',   0.0),
+                                'z_std'   : uhi_zstats.get('std',    1.0),
+                                'z_min'   : uhi_zstats.get('min',   -4.0),
+                                'z_max'   : uhi_zstats.get('max',    4.0),
+                                'z_p10'   : uhi_zstats.get('p10',   -1.3),
+                                'z_p90'   : uhi_zstats.get('p90',    1.3),
                             }
                             map_id   = uhi_img.clip(study_area_surf).getMapId(VIS['uhi'])
                             tile_url = map_id['tile_fetcher'].url_format
