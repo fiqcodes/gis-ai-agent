@@ -778,14 +778,15 @@ def make_stats_charts(stats, var_name, label):
 
     # ── UHI zone class bar (z-score intensity zones) ─────────────────────────
     if 'UHI' in label_up:
-        try:
-            def _safe_z(v, default):
-                if v is None: return default
-                try:
-                    f = float(v)
-                    return default if (np.isnan(f) or np.isinf(f)) else f
-                except: return default
+        def _safe_z(v, default):
+            """Return float v, or default if v is None / NaN / Inf."""
+            if v is None: return default
+            try:
+                f = float(v)
+                return default if (f != f or abs(f) == float('inf')) else f
+            except: return default
 
+        try:
             # Use actual UHI z-score image stats if stored (z_mean/z_std),
             # otherwise fall back to N(0,1) — correct by construction for z-scores
             z_mean = _safe_z(s.get('z_mean'), 0.0)

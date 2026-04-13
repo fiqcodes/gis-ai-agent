@@ -2685,3 +2685,57 @@ function filterKnowledgeByCategory(cat) {
   renderKnowledgeNav(filtered);
   if (filtered.length > 0) openKnowledgeDetail(filtered[0].id);
 }
+
+// ════════════════════════════════════════════════════════
+// NAV ROUTING — called by sidebar buttons via onclick="navigateTo('...')"
+// ════════════════════════════════════════════════════════
+function navigateTo(target) {
+  // Close all overlay panels first
+  const knowledgePanel = document.getElementById('knowledgePanel');
+  const historyPanel   = document.getElementById('historyPanel');
+
+  // Reset all nav buttons
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+
+  switch (target) {
+    case 'chat':
+      // Hide knowledge panel if open, show chat, activate chat btn
+      if (knowledgePanel) knowledgePanel.style.display = 'none';
+      _knowledgeVisible = false;
+      if (historyPanel && historyPanel.style.display !== 'none') {
+        historyPanel.style.display = 'none';
+      }
+      document.getElementById('chatNavBtn')?.classList.add('active');
+      break;
+
+    case 'knowledge':
+      // Toggle knowledge panel
+      _knowledgeVisible = !_knowledgeVisible;
+      if (knowledgePanel) {
+        knowledgePanel.style.display = _knowledgeVisible ? 'flex' : 'none';
+      }
+      if (_knowledgeVisible) {
+        renderKnowledgeNav(KNOWLEDGE);
+        if (!_activeKnowledgeId && KNOWLEDGE.length > 0) {
+          openKnowledgeDetail(KNOWLEDGE[0].id);
+        }
+        document.getElementById('knowledgeNavBtn')?.classList.add('active');
+      } else {
+        document.getElementById('chatNavBtn')?.classList.add('active');
+      }
+      break;
+
+    case 'layers':
+      // Toggle the layers panel on the map
+      toggleLayersPanel();
+      document.getElementById('chatNavBtn')?.classList.add('active');
+      break;
+
+    case 'settings':
+    case 'help':
+    default:
+      // Panels not yet implemented — just keep chat active
+      document.getElementById('chatNavBtn')?.classList.add('active');
+      break;
+  }
+}
