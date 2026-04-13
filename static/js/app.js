@@ -1,3 +1,4 @@
+/* v20260413012814 */
 /* ============================================================
    GIS Agent WebApp — app.js
    Handles: Leaflet map, chat, polling, Plotly charts, ROI drawing
@@ -589,6 +590,9 @@ function appendSystemMessage(html) {
 function scrollToBottom() {
   const msgs = document.getElementById('messages');
   setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 50);
+  // Re-scroll after images finish loading (base64 charts expand the height)
+  setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 800);
+  setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 2000);
 }
 
 // ════════════════════════════════════════════════════════
@@ -1049,6 +1053,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           const monthly  = charts.find(c => c[0] === 'monthly_trend');
           const hist     = charts.find(c => c[0] === 'histogram');
           const classBar = charts.find(c => c[0] === 'class_bar');
+          console.log('[charts] varLabel:', varLabel, '| total:', charts.length, '| types:', charts.map(c=>c[0]), '| classBar:', !!classBar);
 
           // Monthly trend chart
           if (monthly) {
