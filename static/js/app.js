@@ -1061,30 +1061,23 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
             }
           }
 
-          // Distribution + Class bar side by side
-          const sideBySide = [hist, classBar].filter(Boolean);
-          if (sideBySide.length > 0) {
+          // Distribution + Class bar — always stack vertically (side-by-side clips in narrow panel)
+          if (hist) {
             html += `<div class="result-section-label" style="margin-top:16px">Distribution &amp; Class Composition</div>`;
-            if (sideBySide.length === 2) {
-              html += `<div class="result-charts-row">`;
-              for (const chart of sideBySide) {
-                html += `<div class="result-chart-cell">
-                  <img src="${chart[1]}" class="result-img" loading="lazy"/>
-                </div>`;
-              }
-              html += `</div>`;
-              if (varStats) {
-                html += buildDistClassExplanation(varLabel, varStats);
-              }
-            } else {
-              const chart = sideBySide[0];
-              html += `<div class="result-img-wrap">
-                <img src="${chart[1]}" class="result-img" loading="lazy"/>
-              </div>`;
-              if (varStats) {
-                html += buildDistClassExplanation(varLabel, varStats);
-              }
+            html += `<div class="result-img-wrap">
+              <img src="${hist[1]}" class="result-img" loading="lazy"/>
+            </div>`;
+          }
+          if (classBar) {
+            if (!hist) {
+              html += `<div class="result-section-label" style="margin-top:16px">Distribution &amp; Class Composition</div>`;
             }
+            html += `<div class="result-img-wrap" style="margin-top:12px">
+              <img src="${classBar[1]}" class="result-img" loading="lazy"/>
+            </div>`;
+          }
+          if ((hist || classBar) && varStats) {
+            html += buildDistClassExplanation(varLabel, varStats);
           }
 
           // Any other chart types
