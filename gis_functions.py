@@ -717,7 +717,7 @@ def make_stats_charts(stats, var_name, label):
                     ax.set_ylim(0, max(pct_vals) * 1.25)
                     ax.spines['top'].set_visible(False)
                     ax.spines['right'].set_visible(False)
-                    plt.tight_layout()
+                    fig.tight_layout()
                     charts.append(('class_bar', fig_to_base64(fig)))
         except Exception as e:
             print(f'  Index class chart failed: {e}')
@@ -752,22 +752,22 @@ def make_stats_charts(stats, var_name, label):
                 fig, ax = plt.subplots(figsize=(6, 3.5))
                 bars = ax.bar(cls, pct_vals, color=col_vals, edgecolor='white',
                               linewidth=0.5, width=0.6)
+                ax.set_ylim(0, max(pct_vals) * 1.3)
                 for bar, pct in zip(bars, pct_vals):
                     ax.text(bar.get_x() + bar.get_width() / 2,
-                            bar.get_height() + 0.5,
-                            f'{pct:.1f}%', ha='center', fontsize=8,
+                            bar.get_height() + max(pct_vals) * 0.02,
+                            f'{pct:.1f}%', ha='center', va='bottom', fontsize=8,
                             fontweight='bold', color='#333')
                 ax.set_xlabel('Temperature class', fontsize=9)
                 ax.set_ylabel('Area share (%)', fontsize=9)
                 ax.set_title('UHI — LST heat class composition' if _is_uhi_hc else 'LST heat class composition', fontsize=10, fontweight='bold')
-                ax.set_ylim(0, max(pct_vals) * 1.2)
                 ax.spines['top'].set_visible(False)
                 ax.spines['right'].set_visible(False)
-                plt.tight_layout()
+                fig.tight_layout()
                 charts.append(('class_bar', fig_to_base64(fig)))
-                print(f'  ✓ LST heat class chart: {len(pairs)} classes')
+                print(f'  ✓ LST/UHI heat class chart: {len(pairs)} classes')
         except Exception as e:
-            print(f'  LST class chart failed: {e}')
+            print(f'  LST/UHI class chart failed: {e}')
 
     # ── Atmospheric pollution class bar (NO2, CO, SO2, CH4, O3, Aerosol, GPP, FFPI) ──
     ATMO_VARS = ('NO2','CO','SO2','CH4','O3','AEROSOL','GPP','BURNED','FFPI')
@@ -878,7 +878,7 @@ def make_stats_charts(stats, var_name, label):
                     ax.set_ylim(0, max(pct_vals) * 1.25)
                     ax.spines['top'].set_visible(False)
                     ax.spines['right'].set_visible(False)
-                    plt.tight_layout()
+                    fig.tight_layout()
                     charts.append(('class_bar', fig_to_base64(fig)))
                     print(f'  ✓ {label} class chart: {len(pairs)} classes')
         except Exception as e:
