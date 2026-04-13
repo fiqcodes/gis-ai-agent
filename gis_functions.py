@@ -722,21 +722,18 @@ def make_stats_charts(stats, var_name, label):
         except Exception as e:
             print(f'  Index class chart failed: {e}')
 
-    # ── LST / UHI heat class bar chart ───────────────────────────────────────
-    _is_uhi  = 'UHI' in label_up
-    _is_lst  = 'LST' in label_up
-    if _is_lst or _is_uhi:
+    # ── LST / UHI heat class bar chart ──────────────────────────────────────
+    _is_uhi_hc = 'UHI' in label_up
+    if ('LST' in label_up or _is_uhi_hc):
         try:
-            # For UHI use lst_mean (real °C temp), not mean_v which is 0.0 (z-score)
-            heat_mean = s.get('lst_mean', 35.0) if _is_uhi else mean_v
-            if heat_mean is None:
-                heat_mean = 35.0
-            std_v    = s.get('lst_std', s.get('std', 3.0)) if _is_uhi else (s.get('std', 3.0) or 3.0)
+            _heat_mean = s.get('lst_mean') if _is_uhi_hc else mean_v
+            if _heat_mean is None: _heat_mean = 35.0
+            std_v    = (s.get('lst_std') or s.get('std', 3.0)) if _is_uhi_hc else (s.get('std', 3.0) or 3.0)
             std_v    = std_v or 3.0
             min_lst  = s.get('min') if s.get('min') is not None else 20.0
             max_lst  = s.get('max') if s.get('max') is not None else 60.0
             rng      = np.random.default_rng(42)
-            samples  = rng.normal(heat_mean, std_v, 50000)
+            samples  = rng.normal(_heat_mean, std_v, 50000)
             samples  = np.clip(samples, min_lst, max_lst)
 
             cool_pct     = float(np.mean(samples < 30) * 100)
@@ -762,7 +759,7 @@ def make_stats_charts(stats, var_name, label):
                             fontweight='bold', color='#333')
                 ax.set_xlabel('Temperature class', fontsize=9)
                 ax.set_ylabel('Area share (%)', fontsize=9)
-                ax.set_title('UHI — LST heat class composition' if _is_uhi else 'LST heat class composition', fontsize=10, fontweight='bold')
+                ax.set_title('UHI — LST heat class composition' if _is_uhi_hc else 'LST heat class composition', fontsize=10, fontweight='bold')
                 ax.set_ylim(0, max(pct_vals) * 1.2)
                 ax.spines['top'].set_visible(False)
                 ax.spines['right'].set_visible(False)
