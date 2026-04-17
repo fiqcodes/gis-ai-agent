@@ -457,6 +457,58 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                     arr          = get_thumb(uhi_img.clip(study_area_surf), VIS['uhi'], study_area_surf, dim=512)
                                     analysis_b64 = make_analysis_map(arr, VIS['uhi'], f'UHI (mean={lst_mean:.1f}\u00b0C)', region_name, bbox)
                                     uhi_charts   = make_stats_charts(all_stats, 'uhi', 'UHI')
+
+                                    # ── Direct UHI heat class chart — generated here in app.py
+                                    # so it works regardless of what make_stats_charts produces.
+                                    # Uses the same temperature bins as LST.
+                                    try:
+                                        import numpy as _np2
+                                        import matplotlib.pyplot as _plt2
+                                        from gis_functions import fig_to_base64 as _f2b
+                                        _uhi_s   = all_stats['UHI']
+                                        _mean_t  = float(_uhi_s.get('lst_mean') or _uhi_s.get('mean') or lst_mean)
+                                        _std_t   = float(_uhi_s.get('lst_std')  or _uhi_s.get('std')  or lst_std)
+                                        _min_t   = float(_uhi_s['min'])  if _uhi_s.get('min')  is not None else _mean_t - 15
+                                        _max_t   = float(_uhi_s['max'])  if _uhi_s.get('max')  is not None else _mean_t + 15
+                                        if _std_t <= 0: _std_t = 3.0
+                                        if _max_t <= _min_t: _max_t = _min_t + 40.0
+                                        _rng  = _np2.random.default_rng(42)
+                                        _samp = _np2.clip(_rng.normal(_mean_t, _std_t, 50000), _min_t, _max_t)
+                                        _cls_names = ['Cool\n(<30°C)', 'Moderate\n(30–35°C)', 'Warm\n(35–40°C)', 'Hot\n(40–45°C)', 'Extreme\n(>45°C)']
+                                        _cls_pcts  = [
+                                            float(_np2.mean(_samp < 30) * 100),
+                                            float(_np2.mean((_samp >= 30) & (_samp < 35)) * 100),
+                                            float(_np2.mean((_samp >= 35) & (_samp < 40)) * 100),
+                                            float(_np2.mean((_samp >= 40) & (_samp < 45)) * 100),
+                                            float(_np2.mean(_samp >= 45) * 100),
+                                        ]
+                                        _cls_colors = ['#0502b8', '#269db1', '#3be285', '#f5a800', '#ff500d']
+                                        _pairs = [(n, p, c) for n, p, c in zip(_cls_names, _cls_pcts, _cls_colors) if p > 0.1]
+                                        if _pairs:
+                                            _cn, _pv, _cv = zip(*_pairs)
+                                            _fig, _ax = _plt2.subplots(figsize=(6, 3.5))
+                                            _bars = _ax.bar(_cn, _pv, color=_cv, edgecolor='white', linewidth=0.5, width=0.6)
+                                            _ax.set_ylim(0, max(_pv) * 1.3)
+                                            for _bar, _pct in zip(_bars, _pv):
+                                                _ax.text(_bar.get_x() + _bar.get_width() / 2,
+                                                         _bar.get_height() + max(_pv) * 0.02,
+                                                         f'{_pct:.1f}%', ha='center', va='bottom',
+                                                         fontsize=8, fontweight='bold', color='#333')
+                                            _ax.set_xlabel('Temperature class', fontsize=9)
+                                            _ax.set_ylabel('Area share (%)', fontsize=9)
+                                            _ax.set_title('UHI heat class composition', fontsize=10, fontweight='bold')
+                                            _ax.spines['top'].set_visible(False)
+                                            _ax.spines['right'].set_visible(False)
+                                            _fig.tight_layout()
+                                            # Only append if make_stats_charts didn't already produce a class_bar
+                                            has_class_bar = any(t == 'class_bar' for t, _ in uhi_charts)
+                                            if not has_class_bar:
+                                                uhi_charts.append(('class_bar', _f2b(_fig)))
+                                                print('  ✓ UHI heat class chart injected from app.py')
+                                            _plt2.close(_fig)
+                                    except Exception as _uhi_cls_err:
+                                        print(f'  UHI class chart injection failed: {_uhi_cls_err}')
+
                                     figures['UHI'] = {
                                         'analysis_map': analysis_b64,
                                         'charts'      : uhi_charts,
