@@ -776,7 +776,7 @@ def make_stats_charts(stats, var_name, label):
         except Exception as e:
             print(f'  LST class chart failed: {e}')
 
-    # ── UHI heat class bar (z-score bins — matches UHI map palette) ──────────
+    # ── UHI heat class bar (LST temperature bins — matches UHI map colors) ────
     if 'UHI' in label_up:
         def _safe_z(v, default):
             """Return float v, or default if v is None / NaN / Inf."""
@@ -787,46 +787,65 @@ def make_stats_charts(stats, var_name, label):
             except: return default
 
         try:
-            # UHI map is rendered as z-score: (LST - mean) / std
-            # So we generate z-score samples and bin them to match the map palette
+            # The UHI map is visualized using the UHI palette applied to actual
+            # LST °C values (min=VIS['uhi']['min'] … max=VIS['uhi']['max']).
+            # So the bar chart must use the same LST temperature bins and sample
+            # colors from that same palette — NOT from z-score bins.
             _heat_mean = _safe_z(s.get('lst_mean') or s.get('mean'), 35.0)
             _std_v     = _safe_z(s.get('lst_std')  or s.get('std'),  3.0)
             if _std_v <= 0: _std_v = 3.0
-            min_lst = _safe_z(s.get('min'), _heat_mean - 15.0)
-            max_lst = _safe_z(s.get('max'), _heat_mean + 15.0)
-            if max_lst <= min_lst: max_lst = min_lst + 40.0
+            # Use VIS['uhi'] range as the clipping bounds so samples match the map
+            uhi_vmin = VIS['uhi']['min']   # e.g. -4  (used as °C floor proxy)
+            uhi_vmax = VIS['uhi']['max']   # e.g.  4  (used as °C ceil proxy)
+            # Realistic LST bounds: mean ± 4·std, clamped to a sensible range
+            min_lst = max(_heat_mean - 4 * _std_v, 15.0)
+            max_lst = min(_heat_mean + 4 * _std_v, 65.0)
 
-            rng     = np.random.default_rng(42)
+            rng = np.random.default_rng(42)
             lst_samples = rng.normal(_heat_mean, _std_v, 50000)
             lst_samples = np.clip(lst_samples, min_lst, max_lst)
-            # Convert to z-scores (same as UHI map rendering)
-            z_samples = (lst_samples - _heat_mean) / _std_v
 
-            # Bins aligned to UHI map palette (min=-4, max=4)
-            # Colors sampled from VIS['uhi'] palette at matching positions
-            strong_cool_pct = float(np.mean(z_samples < -2)          * 100)
-            cool_pct        = float(np.mean((z_samples >= -2) & (z_samples < -0.5)) * 100)
-            neutral_pct     = float(np.mean((z_samples >= -0.5) & (z_samples < 0.5)) * 100)
-            warm_pct        = float(np.mean((z_samples >= 0.5) & (z_samples < 2))  * 100)
-            hot_pct         = float(np.mean(z_samples >= 2)           * 100)
+            # Temperature class boundaries (°C) — same as the LST heat-class chart
+            # so the bar colors are visually consistent with the orange-red map
+            cool_pct     = float(np.mean(lst_samples < 30)                              * 100)
+            moderate_pct = float(np.mean((lst_samples >= 30) & (lst_samples < 35))      * 100)
+            warm_pct     = float(np.mean((lst_samples >= 35) & (lst_samples < 40))      * 100)
+            hot_pct      = float(np.mean((lst_samples >= 40) & (lst_samples < 45))      * 100)
+            extreme_pct  = float(np.mean(lst_samples >= 45)                             * 100)
 
             classes_uhi = [
-                'Strong Cool\n(z < −2)',
-                'Cool Island\n(−2 to −0.5)',
-                'Near Average\n(−0.5 to 0.5)',
-                'Warm Zone\n(0.5 to 2)',
-                'Heat Island\n(z > 2)',
+                'Cool\n(<30°C)',
+                'Moderate\n(30–35°C)',
+                'Warm\n(35–40°C)',
+                'Hot\n(40–45°C)',
+                'Extreme\n(>45°C)',
             ]
-            pcts_uhi   = [strong_cool_pct, cool_pct, neutral_pct, warm_pct, hot_pct]
-            # Colors from VIS['uhi'] palette: ['#313695','#74add1','#fed976','#feb24c','#fd8d3c','#fc4e2a','#e31a1c','#b10026']
-            # Map 5 bins → sample from low, low-mid, mid, high-mid, high
-            colors_uhi = ['#313695', '#74add1', '#fed976', '#fd8d3c', '#b10026']
+            pcts_uhi = [cool_pct, moderate_pct, warm_pct, hot_pct, extreme_pct]
 
-            pairs_uhi = [(c, p, col) for c, p, col in zip(classes_uhi, pcts_uhi, colors_uhi) if p > 0.1]
+            # Sample colors from VIS['uhi'] palette at the midpoint of each bin,
+            # so bar colors match exactly what is rendered on the map
+            import matplotlib.colors as _mc_uhi
+            _uhi_cmap = _mc_uhi.LinearSegmentedColormap.from_list(
+                'uhi', VIS['uhi']['palette'])
+            _uhi_norm = _mc_uhi.Normalize(vmin=uhi_vmin, vmax=uhi_vmax)
+
+            # Map each °C bin midpoint through the same palette normalization
+            # The UHI image is z-score, so convert bin midpoints to z-scores
+            bin_midpoints_lst = [27.5, 32.5, 37.5, 42.5, 47.5]
+            colors_uhi = []
+            for mp in bin_midpoints_lst:
+                z_mp = (mp - _heat_mean) / _std_v
+                colors_uhi.append(
+                    _mc_uhi.to_hex(_uhi_cmap(_uhi_norm(np.clip(z_mp, uhi_vmin, uhi_vmax))))
+                )
+
+            pairs_uhi = [(c, p, col)
+                         for c, p, col in zip(classes_uhi, pcts_uhi, colors_uhi)
+                         if p > 0.1]
 
             if pairs_uhi:
                 cls_u, pv_u, cv_u = zip(*pairs_uhi)
-                fig, ax = plt.subplots(figsize=(6, 3.5))
+                fig, ax = plt.subplots(figsize=(max(5, len(pairs_uhi) * 1.2), 3.5))
                 bars = ax.bar(cls_u, pv_u, color=cv_u, edgecolor='white',
                               linewidth=0.5, width=0.6)
                 ax.set_ylim(0, max(pv_u) * 1.3)
@@ -835,9 +854,9 @@ def make_stats_charts(stats, var_name, label):
                             bar.get_height() + max(pv_u) * 0.02,
                             f'{pct:.1f}%', ha='center', va='bottom', fontsize=8,
                             fontweight='bold', color='#333')
-                ax.set_xlabel('UHI z-score class', fontsize=9)
+                ax.set_xlabel('Temperature class', fontsize=9)
                 ax.set_ylabel('Area share (%)', fontsize=9)
-                ax.set_title('UHI zone composition (z-score)', fontsize=10, fontweight='bold')
+                ax.set_title('UHI heat class composition', fontsize=10, fontweight='bold')
                 ax.spines['top'].set_visible(False)
                 ax.spines['right'].set_visible(False)
                 fig.tight_layout()

@@ -482,7 +482,23 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                             float(_np2.mean((_samp >= 40) & (_samp < 45)) * 100),
                                             float(_np2.mean(_samp >= 45) * 100),
                                         ]
-                                        _cls_colors = ['#0502b8', '#269db1', '#3be285', '#f5a800', '#ff500d']
+                                        # Sample colors from the UHI palette (same as the map) at
+                                        # the z-score position of each bin midpoint so bar colors
+                                        # match exactly what is rendered on the interactive map.
+                                        import matplotlib.colors as _mc2
+                                        _uhi_pal   = VIS['uhi']['palette']
+                                        _uhi_vmin  = VIS['uhi']['min']   # z-score min (e.g. -4)
+                                        _uhi_vmax  = VIS['uhi']['max']   # z-score max (e.g.  4)
+                                        _uhi_cmap2 = _mc2.LinearSegmentedColormap.from_list('uhi2', _uhi_pal)
+                                        _uhi_norm2 = _mc2.Normalize(vmin=_uhi_vmin, vmax=_uhi_vmax)
+                                        _bin_mids  = [27.5, 32.5, 37.5, 42.5, 47.5]  # °C midpoints
+                                        _cls_colors = [
+                                            _mc2.to_hex(_uhi_cmap2(_uhi_norm2(
+                                                _np2.clip((_mp - _mean_t) / max(_std_t, 0.1),
+                                                          _uhi_vmin, _uhi_vmax)
+                                            )))
+                                            for _mp in _bin_mids
+                                        ]
                                         _pairs = [(n, p, c) for n, p, c in zip(_cls_names, _cls_pcts, _cls_colors) if p > 0.1]
                                         if _pairs:
                                             _cn, _pv, _cv = zip(*_pairs)
