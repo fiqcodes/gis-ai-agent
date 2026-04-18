@@ -155,6 +155,8 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             job['error']  = 'GEE initialization failed. Check service account credentials.'
             return
         from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR as OUT
+        import importlib, gis_functions as _gf_mod
+        importlib.reload(_gf_mod)
         from gis_functions import (
             SURFACE_INDEX_MAP, ATMO_INDEX_MAP, KEYWORD_MAP, SYSTEM_PROMPT,
             resolve_region, fetch_web_context, generate_insight,
@@ -450,12 +452,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             }
                             map_id   = uhi_img.clip(study_area_surf).getMapId(VIS['uhi'])
                             tile_url = map_id['tile_fetcher'].url_format
-                            layers.append({'name': 'UHI (°C)', 'tile_url': tile_url,
+                            layers.append({'name': f'UHI (mean={lst_mean:.1f}\u00b0C)', 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
                             if bbox:
                                 try:
                                     arr          = get_thumb(uhi_img.clip(study_area_surf), VIS['uhi'], study_area_surf, dim=512)
-                                    analysis_b64 = make_analysis_map(arr, VIS['uhi'], 'UHI (°C)', region_name, bbox)
+                                    analysis_b64 = make_analysis_map(arr, VIS['uhi'], f'UHI (mean={lst_mean:.1f}\u00b0C)', region_name, bbox)
                                     uhi_charts   = make_stats_charts(all_stats, 'uhi', 'UHI')
 
                                     # ── Direct UHI heat class chart — generated here in app.py
