@@ -78,41 +78,18 @@ def apply_scaling(image):
     return image.addBands(optical, None, True).addBands(thermal, None, True)
 
 def apply_cloud_mask(image):
-    qa = image.select('QA_PIXEL')
-    # Bit 1: dilated cloud, Bit 3: cloud shadow, Bit 5: cloud
-    mask = (qa.bitwiseAnd(1 << 1).eq(0)
-              .And(qa.bitwiseAnd(1 << 3).eq(0))
+    qa   = image.select('QA_PIXEL')
+    mask = (qa.bitwiseAnd(1 << 3).eq(0)
               .And(qa.bitwiseAnd(1 << 5).eq(0)))
     return image.updateMask(mask)
 
 def load_landsat(study_area, start, end):
-    """Load Landsat 8 + 9 merged collection with cloud masking.
-    Falls back to a less-strict mask if fewer than 3 clear scenes are found,
-    ensuring cloudy urban/coastal regions like Tokyo still render cleanly."""
     gee_init_for_thread()
-
-    def _build_col(mask_fn):
-        l8 = (ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
-                .filterDate(start, end).filterBounds(study_area)
-                .map(apply_scaling).map(mask_fn))
-        l9 = (ee.ImageCollection('LANDSAT/LC09/C02/T1_L2')
-                .filterDate(start, end).filterBounds(study_area)
-                .map(apply_scaling).map(mask_fn))
-        return l8.merge(l9)
-
-    col = _build_col(apply_cloud_mask)
-
-    # Relax mask if too few clear scenes
-    count = col.size().getInfo()
-    if count < 3:
-        print(f'  Only {count} scenes with strict mask — relaxing to shadow+cloud only')
-        def _relaxed_mask(image):
-            qa = image.select('QA_PIXEL')
-            mask = (qa.bitwiseAnd(1 << 3).eq(0)
-                      .And(qa.bitwiseAnd(1 << 5).eq(0)))
-            return image.updateMask(mask)
-        col = _build_col(_relaxed_mask)
-
+    col = (ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+             .filterDate(start, end)
+             .filterBounds(study_area)
+             .map(apply_scaling)
+             .map(apply_cloud_mask))
     return col, col.median()
 
 # =============================================================================
@@ -122,25 +99,62 @@ def load_landsat(study_area, start, end):
 def resolve_region(region_name):
     print(f'  Resolving region: "{region_name}"...')
 
-    # Step 1: Nominatim HTTP only — store raw coords, NO ee.Geometry yet
+    # ── Step 1: Nominatim — fetch polygon (not just bbox) for cities/admin areas ─
     nom_coords = None
+    nom_geojson = None
     try:
-        url     = 'https://nominatim.openstreetmap.org/search?q=' + region_name + '&format=json&limit=1'
+        # Request polygon geometry directly; featuretype=city,state narrows results
+        url = ('https://nominatim.openstreetmap.org/search?q='
+               + requests.utils.quote(region_name)
+               + '&format=json&limit=5&polygon_geojson=1')
         headers = {'User-Agent': 'SatelliteAgent/1.0'}
-        resp    = requests.get(url, headers=headers, timeout=10).json()
-        if resp:
-            bb   = resp[0]['boundingbox']
+        results = requests.get(url, headers=headers, timeout=10).json()
+
+        # Pick the best result: prefer admin boundary types, reject country-level
+        ADMIN_TYPES = {'administrative', 'city', 'town', 'suburb',
+                       'state', 'province', 'municipality'}
+        best = None
+        for r in results:
+            rtype = r.get('type', '') or r.get('class', '')
+            bb = r.get('boundingbox', [])
+            if len(bb) == 4:
+                span_lat = abs(float(bb[1]) - float(bb[0]))
+                span_lon = abs(float(bb[3]) - float(bb[2]))
+                # Reject if bbox is country-sized (>8 degrees in either direction)
+                if span_lat > 8 or span_lon > 8:
+                    continue
+            if rtype in ADMIN_TYPES or r.get('class') == 'boundary':
+                best = r
+                break
+        if best is None and results:
+            # Still filter out country-sized results
+            for r in results:
+                bb = r.get('boundingbox', [])
+                if len(bb) == 4:
+                    span_lat = abs(float(bb[1]) - float(bb[0]))
+                    span_lon = abs(float(bb[3]) - float(bb[2]))
+                    if span_lat <= 8 and span_lon <= 8:
+                        best = r
+                        break
+
+        if best:
+            bb = best['boundingbox']
             s, n, w, e = float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])
             nom_coords = [w, s, e, n]
-            print(f'  Found via Nominatim  bbox: [{w:.2f},{s:.2f},{e:.2f},{n:.2f}]')
+            print(f'  Nominatim bbox: [{w:.2f},{s:.2f},{e:.2f},{n:.2f}]')
+            # Keep polygon GeoJSON if available (much more precise than bbox)
+            geo = best.get('geojson')
+            if geo and geo.get('type') in ('Polygon', 'MultiPolygon'):
+                nom_geojson = geo
+                print(f'  Nominatim polygon available ({geo["type"]})')
     except Exception as ex:
         print(f'  Nominatim HTTP failed: {ex}')
 
-    # Step 2: GAUL — precise polygon boundaries (states, provinces, countries)
+    # ── Step 2: GAUL — precise polygon boundaries (province/state/district) ────
     for gaul_id, level_name, field in [
+        ('FAO/GAUL/2015/level2', 'GAUL Level 2 (district/city)',  'ADM2_NAME'),
         ('FAO/GAUL/2015/level1', 'GAUL Level 1 (province/state)', 'ADM1_NAME'),
         ('FAO/GAUL/2015/level0', 'GAUL Level 0 (country)',        'ADM0_NAME'),
-        ('FAO/GAUL/2015/level2', 'GAUL Level 2 (district/city)',  'ADM2_NAME'),
     ]:
         try:
             fc    = ee.FeatureCollection(gaul_id)
@@ -152,15 +166,23 @@ def resolve_region(region_name):
                 return feat.geometry()
         except: pass
 
-    # Step 3: Fall back to Nominatim — create ee.Geometry NOW (GEE session still OK here)
+    # ── Step 3: Use Nominatim polygon if available, else bbox ────────────────
+    if nom_geojson:
+        try:
+            geom = ee.Geometry(nom_geojson)
+            print(f'  Using Nominatim polygon geometry')
+            return geom
+        except Exception as ex:
+            print(f'  Nominatim polygon GEE failed: {ex}')
+
     if nom_coords:
         try:
             w, s, e, n = nom_coords
             geom = ee.Geometry.Rectangle([w, s, e, n])
-            print(f'  Using Nominatim bbox (GAUL not available)')
+            print(f'  Using Nominatim bbox')
             return geom
         except Exception as ex:
-            print(f'  Nominatim GEE geometry failed: {ex}')
+            print(f'  Nominatim bbox GEE failed: {ex}')
 
     raise ValueError(f'Could not resolve region: "{region_name}"')
 
