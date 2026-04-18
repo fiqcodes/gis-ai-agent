@@ -125,34 +125,14 @@ def resolve_region(region_name):
     print(f'  Resolving region: "{region_name}"...')
     key = region_name.lower().strip()
 
-    # ── Step 0: Known-city hardcoded bbox (most reliable for major cities) ────
+    # ── Step 0: Known-city hardcoded bbox — return immediately, skip GAUL ──────
+    # GAUL stores Tokyo as "Tokyo-to" which includes remote island chains
+    # spanning 20°–36°N. Always use the hardcoded urban bbox for known cities.
     for city_key, bbox in CITY_BBOX_FALLBACK.items():
         if city_key in key or key in city_key:
             w, s, e, n = bbox
-            print(f'  Matched known city "{city_key}" bbox: [{w},{s},{e},{n}]')
-            # Still try GAUL polygon first for a clean boundary
-            try:
-                fc    = ee.FeatureCollection('FAO/GAUL/2015/level1')
-                match = fc.filter(ee.Filter.stringContains('ADM1_NAME', region_name)).limit(1)
-                feat  = match.first()
-                info  = feat.getInfo()
-                if info and info.get('geometry'):
-                    print(f'  Found in GAUL Level 1')
-                    return feat.geometry()
-            except: pass
-            try:
-                fc    = ee.FeatureCollection('FAO/GAUL/2015/level2')
-                match = fc.filter(ee.Filter.stringContains('ADM2_NAME', region_name)).limit(1)
-                feat  = match.first()
-                info  = feat.getInfo()
-                if info and info.get('geometry'):
-                    print(f'  Found in GAUL Level 2')
-                    return feat.geometry()
-            except: pass
-            # Fall through to hardcoded bbox
-            geom = ee.Geometry.Rectangle([w, s, e, n])
-            print(f'  Using hardcoded city bbox')
-            return geom
+            print(f'  Matched known city "{city_key}" → hardcoded bbox [{w},{s},{e},{n}]')
+            return ee.Geometry.Rectangle([w, s, e, n])
 
     # ── Step 1: Nominatim with bbox size validation ───────────────────────────
     nom_coords  = None
