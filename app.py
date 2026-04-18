@@ -90,22 +90,66 @@ def find_latest_outputs(prefix_keywords: list) -> dict:
     return results
 
 
+# City bounding boxes [W, S, E, N] — mirrors CITY_BBOX_FALLBACK in gis_functions.py
+_CITY_BBOX = {
+    'tokyo':      [139.40, 35.50, 139.95, 35.82],
+    'osaka':      [135.35, 34.55, 135.70, 34.80],
+    'beijing':    [116.10, 39.75, 116.65, 40.20],
+    'shanghai':   [121.10, 30.95, 121.75, 31.55],
+    'london':     [ -0.55, 51.35,  0.30, 51.70],
+    'paris':      [  2.20, 48.75,  2.55, 48.95],
+    'new york':   [-74.10, 40.55, -73.75, 40.90],
+    'los angeles':[-118.55,33.90,-118.10,34.20],
+    'jakarta':    [106.65, -6.40, 107.00, -6.05],
+    'bangkok':    [100.35, 13.55, 100.90, 13.95],
+    'singapore':  [103.60,  1.20, 104.05,  1.48],
+    'sydney':     [150.90,-34.10, 151.35,-33.70],
+    'dubai':      [ 55.10, 25.00,  55.55, 25.35],
+    'mumbai':     [ 72.75, 18.85,  73.05, 19.20],
+    'seoul':      [126.75, 37.40, 127.20, 37.70],
+    'berlin':     [ 13.10, 52.40,  13.75, 52.70],
+    'cairo':      [ 31.10, 29.90,  31.55, 30.20],
+    'nairobi':    [ 36.65, -1.40,  37.10, -1.15],
+    'sao paulo':  [-46.85,-23.75, -46.35,-23.45],
+    'mexico city':[-99.30, 19.25, -98.95, 19.60],
+}
+
 def geocode_region(region_name: str) -> dict:
-    """Geocode a region name using Nominatim → return bbox + center."""
-    import requests as req
-    try:
-        url = 'https://nominatim.openstreetmap.org/search'
-        params = {'q': region_name, 'format': 'json', 'limit': 1}
-        headers = {'User-Agent': 'GISAgentWebApp/1.0'}
-        resp = req.get(url, params=params, headers=headers, timeout=10).json()
-        if resp:
-            bb = resp[0]['boundingbox']
-            s, n, w, e = float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])
+    """Geocode a region name → return bbox + center.
+    Checks hardcoded city list first to avoid Nominatim returning country-level bboxes."""
+    key = region_name.lower().strip()
+
+    # Step 0: hardcoded city bbox (bypasses Nominatim country-level results)
+    for city_key, bbox in _CITY_BBOX.items():
+        if city_key in key or key in city_key:
+            w, s, e, n = bbox
+            print(f'  geocode_region: matched known city "{city_key}"')
             return {
                 'success': True,
                 'bbox': [w, s, e, n],
                 'center': [(s + n) / 2, (w + e) / 2],
-                'display_name': resp[0].get('display_name', region_name),
+                'display_name': region_name,
+            }
+
+    # Step 1: Nominatim with size guard
+    import requests as req
+    try:
+        url = 'https://nominatim.openstreetmap.org/search'
+        params = {'q': region_name, 'format': 'json', 'limit': 5}
+        headers = {'User-Agent': 'GISAgentWebApp/1.0'}
+        results = req.get(url, params=params, headers=headers, timeout=10).json()
+        for r in results:
+            bb = r.get('boundingbox', [])
+            if len(bb) != 4: continue
+            s, n, w, e = float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])
+            if abs(n - s) > 8 or abs(e - w) > 8:
+                print(f'  geocode_region: skipping oversized result "{r.get("display_name","")[:50]}"')                
+                continue
+            return {
+                'success': True,
+                'bbox': [w, s, e, n],
+                'center': [(s + n) / 2, (w + e) / 2],
+                'display_name': r.get('display_name', region_name),
             }
     except Exception as ex:
         print(f'Geocode error: {ex}')
@@ -261,7 +305,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         # ── Step 4: Run GEE analysis ──────────────────────────────────────────
         update_step(3, 'running', 10)
 
-        from gis_functions import SURFACE_INDEX_MAP, ATMO_INDEX_MAP
+        # SURFACE_INDEX_MAP and ATMO_INDEX_MAP already imported via reload above
 
         surface_keys = list(SURFACE_INDEX_MAP.keys()) + ['lst', 'uhi', 'rgb']
         atmo_keys    = list(ATMO_INDEX_MAP.keys()) + ['ffpi']
