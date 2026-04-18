@@ -448,14 +448,18 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 'z_p10'   : uhi_zstats.get('p10',   -1.3),
                                 'z_p90'   : uhi_zstats.get('p90',    1.3),
                             }
-                            map_id   = uhi_img.clip(study_area_surf).getMapId(VIS['uhi'])
+                            # Render UHI map using LST (°C) with the LST palette so that
+                            # map colours directly correspond to real temperatures and match
+                            # the temperature-class bar chart colours exactly.
+                            _uhi_lst_vis = dict(VIS['lst'])  # copy LST palette & range
+                            map_id   = lst_img.clip(study_area_surf).getMapId(_uhi_lst_vis)
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': f'UHI (mean={lst_mean:.1f}\u00b0C)', 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
                             if bbox:
                                 try:
-                                    arr          = get_thumb(uhi_img.clip(study_area_surf), VIS['uhi'], study_area_surf, dim=512)
-                                    analysis_b64 = make_analysis_map(arr, VIS['uhi'], f'UHI (mean={lst_mean:.1f}\u00b0C)', region_name, bbox)
+                                    arr          = get_thumb(lst_img.clip(study_area_surf), _uhi_lst_vis, study_area_surf, dim=512)
+                                    analysis_b64 = make_analysis_map(arr, _uhi_lst_vis, f'UHI (mean={lst_mean:.1f}\u00b0C)', region_name, bbox)
                                     uhi_charts   = make_stats_charts(all_stats, 'uhi', 'UHI')
 
                                     # ── Direct UHI heat class chart — generated here in app.py
@@ -482,22 +486,14 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                             float(_np2.mean((_samp >= 40) & (_samp < 45)) * 100),
                                             float(_np2.mean(_samp >= 45) * 100),
                                         ]
-                                        # Sample colors from the UHI palette (same as the map) at
-                                        # the z-score position of each bin midpoint so bar colors
-                                        # match exactly what is rendered on the interactive map.
+                                        # Sample colors from the LST palette at each bin's °C midpoint —
+                                        # both map and bars now share the same LST °C colour scale.
                                         import matplotlib.colors as _mc2
-                                        _uhi_pal   = VIS['uhi']['palette']
-                                        _uhi_vmin  = VIS['uhi']['min']   # z-score min (e.g. -4)
-                                        _uhi_vmax  = VIS['uhi']['max']   # z-score max (e.g.  4)
-                                        _uhi_cmap2 = _mc2.LinearSegmentedColormap.from_list('uhi2', _uhi_pal)
-                                        _uhi_norm2 = _mc2.Normalize(vmin=_uhi_vmin, vmax=_uhi_vmax)
-                                        _bin_mids  = [27.5, 32.5, 37.5, 42.5, 47.5]  # °C midpoints
+                                        _lst_cmap2 = _mc2.LinearSegmentedColormap.from_list('lst2', VIS['lst']['palette'])
+                                        _lst_norm2 = _mc2.Normalize(vmin=VIS['lst']['min'], vmax=VIS['lst']['max'])
                                         _cls_colors = [
-                                            _mc2.to_hex(_uhi_cmap2(_uhi_norm2(
-                                                _np2.clip((_mp - _mean_t) / max(_std_t, 0.1),
-                                                          _uhi_vmin, _uhi_vmax)
-                                            )))
-                                            for _mp in _bin_mids
+                                            _mc2.to_hex(_lst_cmap2(_lst_norm2(_np2.clip(_mp, VIS['lst']['min'], VIS['lst']['max']))))
+                                            for _mp in [27.5, 32.5, 37.5, 42.5, 47.5]
                                         ]
                                         _pairs = [(n, p, c) for n, p, c in zip(_cls_names, _cls_pcts, _cls_colors) if p > 0.1]
                                         if _pairs:
