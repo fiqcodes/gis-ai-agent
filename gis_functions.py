@@ -96,65 +96,97 @@ def load_landsat(study_area, start, end):
 # SECTION B - REGION RESOLVER
 # =============================================================================
 
+# Known city bounding boxes [W, S, E, N] — used when Nominatim returns a
+# country-sized bbox (e.g. "Tokyo" → Japan, "London" → UK, etc.)
+CITY_BBOX_FALLBACK = {
+    'tokyo':     [139.40, 35.50, 139.95, 35.82],
+    'osaka':     [135.35, 34.55, 135.70, 34.80],
+    'beijing':   [116.10, 39.75, 116.65, 40.20],
+    'shanghai':  [121.10, 30.95, 121.75, 31.55],
+    'london':    [ -0.55, 51.35,  0.30, 51.70],
+    'paris':     [  2.20, 48.75,  2.55, 48.95],
+    'new york':  [-74.10, 40.55, -73.75, 40.90],
+    'los angeles':[-118.55,33.90,-118.10,34.20],
+    'jakarta':   [106.65, -6.40, 107.00, -6.05],
+    'bangkok':   [100.35, 13.55, 100.90, 13.95],
+    'singapore': [103.60,  1.20, 104.05,  1.48],
+    'sydney':    [150.90,-34.10, 151.35,-33.70],
+    'dubai':     [ 55.10, 25.00,  55.55, 25.35],
+    'mumbai':    [ 72.75, 18.85,  73.05, 19.20],
+    'seoul':     [126.75, 37.40, 127.20, 37.70],
+    'berlin':    [ 13.10, 52.40,  13.75, 52.70],
+    'cairo':     [ 31.10, 29.90,  31.55, 30.20],
+    'nairobi':   [ 36.65, -1.40,  37.10, -1.15],
+    'sao paulo': [-46.85,-23.75, -46.35,-23.45],
+    'mexico city':[-99.30,19.25, -98.95, 19.60],
+}
+
 def resolve_region(region_name):
     print(f'  Resolving region: "{region_name}"...')
+    key = region_name.lower().strip()
 
-    # ── Step 1: Nominatim — fetch polygon (not just bbox) for cities/admin areas ─
-    nom_coords = None
+    # ── Step 0: Known-city hardcoded bbox (most reliable for major cities) ────
+    for city_key, bbox in CITY_BBOX_FALLBACK.items():
+        if city_key in key or key in city_key:
+            w, s, e, n = bbox
+            print(f'  Matched known city "{city_key}" bbox: [{w},{s},{e},{n}]')
+            # Still try GAUL polygon first for a clean boundary
+            try:
+                fc    = ee.FeatureCollection('FAO/GAUL/2015/level1')
+                match = fc.filter(ee.Filter.stringContains('ADM1_NAME', region_name)).limit(1)
+                feat  = match.first()
+                info  = feat.getInfo()
+                if info and info.get('geometry'):
+                    print(f'  Found in GAUL Level 1')
+                    return feat.geometry()
+            except: pass
+            try:
+                fc    = ee.FeatureCollection('FAO/GAUL/2015/level2')
+                match = fc.filter(ee.Filter.stringContains('ADM2_NAME', region_name)).limit(1)
+                feat  = match.first()
+                info  = feat.getInfo()
+                if info and info.get('geometry'):
+                    print(f'  Found in GAUL Level 2')
+                    return feat.geometry()
+            except: pass
+            # Fall through to hardcoded bbox
+            geom = ee.Geometry.Rectangle([w, s, e, n])
+            print(f'  Using hardcoded city bbox')
+            return geom
+
+    # ── Step 1: Nominatim with bbox size validation ───────────────────────────
+    nom_coords  = None
     nom_geojson = None
     try:
-        # Request polygon geometry directly; featuretype=city,state narrows results
         url = ('https://nominatim.openstreetmap.org/search?q='
                + requests.utils.quote(region_name)
                + '&format=json&limit=5&polygon_geojson=1')
         headers = {'User-Agent': 'SatelliteAgent/1.0'}
         results = requests.get(url, headers=headers, timeout=10).json()
 
-        # Pick the best result: prefer admin boundary types, reject country-level
-        ADMIN_TYPES = {'administrative', 'city', 'town', 'suburb',
-                       'state', 'province', 'municipality'}
-        best = None
+        # Accept first result whose bbox is not country-sized (< 8° in both axes)
         for r in results:
-            rtype = r.get('type', '') or r.get('class', '')
             bb = r.get('boundingbox', [])
-            if len(bb) == 4:
-                span_lat = abs(float(bb[1]) - float(bb[0]))
-                span_lon = abs(float(bb[3]) - float(bb[2]))
-                # Reject if bbox is country-sized (>8 degrees in either direction)
-                if span_lat > 8 or span_lon > 8:
-                    continue
-            if rtype in ADMIN_TYPES or r.get('class') == 'boundary':
-                best = r
-                break
-        if best is None and results:
-            # Still filter out country-sized results
-            for r in results:
-                bb = r.get('boundingbox', [])
-                if len(bb) == 4:
-                    span_lat = abs(float(bb[1]) - float(bb[0]))
-                    span_lon = abs(float(bb[3]) - float(bb[2]))
-                    if span_lat <= 8 and span_lon <= 8:
-                        best = r
-                        break
-
-        if best:
-            bb = best['boundingbox']
-            s, n, w, e = float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])
-            nom_coords = [w, s, e, n]
-            print(f'  Nominatim bbox: [{w:.2f},{s:.2f},{e:.2f},{n:.2f}]')
-            # Keep polygon GeoJSON if available (much more precise than bbox)
-            geo = best.get('geojson')
+            if len(bb) != 4: continue
+            s2, n2, w2, e2 = float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])
+            if abs(n2 - s2) > 8 or abs(e2 - w2) > 8:
+                print(f'  Skipping oversized Nominatim result: {r.get("display_name","")[:60]}')
+                continue
+            nom_coords = [w2, s2, e2, n2]
+            print(f'  Nominatim bbox: [{w2:.2f},{s2:.2f},{e2:.2f},{n2:.2f}]')
+            geo = r.get('geojson')
             if geo and geo.get('type') in ('Polygon', 'MultiPolygon'):
                 nom_geojson = geo
-                print(f'  Nominatim polygon available ({geo["type"]})')
+                print(f'  Nominatim polygon: {geo["type"]}')
+            break
     except Exception as ex:
-        print(f'  Nominatim HTTP failed: {ex}')
+        print(f'  Nominatim failed: {ex}')
 
-    # ── Step 2: GAUL — precise polygon boundaries (province/state/district) ────
+    # ── Step 2: GAUL polygon lookup ───────────────────────────────────────────
     for gaul_id, level_name, field in [
-        ('FAO/GAUL/2015/level2', 'GAUL Level 2 (district/city)',  'ADM2_NAME'),
-        ('FAO/GAUL/2015/level1', 'GAUL Level 1 (province/state)', 'ADM1_NAME'),
-        ('FAO/GAUL/2015/level0', 'GAUL Level 0 (country)',        'ADM0_NAME'),
+        ('FAO/GAUL/2015/level2', 'GAUL Level 2 (district)', 'ADM2_NAME'),
+        ('FAO/GAUL/2015/level1', 'GAUL Level 1 (province)', 'ADM1_NAME'),
+        ('FAO/GAUL/2015/level0', 'GAUL Level 0 (country)',  'ADM0_NAME'),
     ]:
         try:
             fc    = ee.FeatureCollection(gaul_id)
@@ -166,23 +198,21 @@ def resolve_region(region_name):
                 return feat.geometry()
         except: pass
 
-    # ── Step 3: Use Nominatim polygon if available, else bbox ────────────────
+    # ── Step 3: Nominatim polygon → bbox fallback ────────────────────────────
     if nom_geojson:
         try:
-            geom = ee.Geometry(nom_geojson)
             print(f'  Using Nominatim polygon geometry')
-            return geom
+            return ee.Geometry(nom_geojson)
         except Exception as ex:
-            print(f'  Nominatim polygon GEE failed: {ex}')
+            print(f'  Nominatim polygon failed: {ex}')
 
     if nom_coords:
         try:
             w, s, e, n = nom_coords
-            geom = ee.Geometry.Rectangle([w, s, e, n])
             print(f'  Using Nominatim bbox')
-            return geom
+            return ee.Geometry.Rectangle([w, s, e, n])
         except Exception as ex:
-            print(f'  Nominatim bbox GEE failed: {ex}')
+            print(f'  Nominatim bbox failed: {ex}')
 
     raise ValueError(f'Could not resolve region: "{region_name}"')
 
