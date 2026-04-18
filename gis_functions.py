@@ -78,18 +78,41 @@ def apply_scaling(image):
     return image.addBands(optical, None, True).addBands(thermal, None, True)
 
 def apply_cloud_mask(image):
-    qa   = image.select('QA_PIXEL')
-    mask = (qa.bitwiseAnd(1 << 3).eq(0)
+    qa = image.select('QA_PIXEL')
+    # Bit 1: dilated cloud, Bit 3: cloud shadow, Bit 5: cloud
+    mask = (qa.bitwiseAnd(1 << 1).eq(0)
+              .And(qa.bitwiseAnd(1 << 3).eq(0))
               .And(qa.bitwiseAnd(1 << 5).eq(0)))
     return image.updateMask(mask)
 
 def load_landsat(study_area, start, end):
+    """Load Landsat 8 + 9 merged collection with cloud masking.
+    Falls back to a less-strict mask if fewer than 3 clear scenes are found,
+    ensuring cloudy urban/coastal regions like Tokyo still render cleanly."""
     gee_init_for_thread()
-    col = (ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
-             .filterDate(start, end)
-             .filterBounds(study_area)
-             .map(apply_scaling)
-             .map(apply_cloud_mask))
+
+    def _build_col(mask_fn):
+        l8 = (ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+                .filterDate(start, end).filterBounds(study_area)
+                .map(apply_scaling).map(mask_fn))
+        l9 = (ee.ImageCollection('LANDSAT/LC09/C02/T1_L2')
+                .filterDate(start, end).filterBounds(study_area)
+                .map(apply_scaling).map(mask_fn))
+        return l8.merge(l9)
+
+    col = _build_col(apply_cloud_mask)
+
+    # Relax mask if too few clear scenes
+    count = col.size().getInfo()
+    if count < 3:
+        print(f'  Only {count} scenes with strict mask — relaxing to shadow+cloud only')
+        def _relaxed_mask(image):
+            qa = image.select('QA_PIXEL')
+            mask = (qa.bitwiseAnd(1 << 3).eq(0)
+                      .And(qa.bitwiseAnd(1 << 5).eq(0)))
+            return image.updateMask(mask)
+        col = _build_col(_relaxed_mask)
+
     return col, col.median()
 
 # =============================================================================
@@ -776,9 +799,10 @@ def make_stats_charts(stats, var_name, label):
         except Exception as e:
             print(f'  LST class chart failed: {e}')
 
-    # ── UHI heat class bar — temp bins, colors from dynamic UHI z-score palette ─
+    # ── UHI heat class bar (z-score bins — matches UHI map palette) ──────────
     if 'UHI' in label_up:
         def _safe_z(v, default):
+            """Return float v, or default if v is None / NaN / Inf."""
             if v is None: return default
             try:
                 f = float(v)
@@ -786,47 +810,46 @@ def make_stats_charts(stats, var_name, label):
             except: return default
 
         try:
+            # UHI map is rendered as z-score: (LST - mean) / std
+            # So we generate z-score samples and bin them to match the map palette
             _heat_mean = _safe_z(s.get('lst_mean') or s.get('mean'), 35.0)
             _std_v     = _safe_z(s.get('lst_std')  or s.get('std'),  3.0)
             if _std_v <= 0: _std_v = 3.0
-            min_lst = max(_safe_z(s.get('min'), _heat_mean - 15.0), 15.0)
-            max_lst = min(_safe_z(s.get('max'), _heat_mean + 15.0), 65.0)
+            min_lst = _safe_z(s.get('min'), _heat_mean - 15.0)
+            max_lst = _safe_z(s.get('max'), _heat_mean + 15.0)
             if max_lst <= min_lst: max_lst = min_lst + 40.0
 
-            # Dynamic z-score vis range (same logic as app.py map rendering)
-            z_vis_min = max(_safe_z(s.get('z_min'), -4.0), -5.0)
-            z_vis_max = min(_safe_z(s.get('z_max'),  4.0),  5.0)
+            rng     = np.random.default_rng(42)
+            lst_samples = rng.normal(_heat_mean, _std_v, 50000)
+            lst_samples = np.clip(lst_samples, min_lst, max_lst)
+            # Convert to z-scores (same as UHI map rendering)
+            z_samples = (lst_samples - _heat_mean) / _std_v
 
-            rng         = np.random.default_rng(42)
-            lst_samples = np.clip(rng.normal(_heat_mean, _std_v, 50000), min_lst, max_lst)
+            # Bins aligned to UHI map palette (min=-4, max=4)
+            # Colors sampled from VIS['uhi'] palette at matching positions
+            strong_cool_pct = float(np.mean(z_samples < -2)          * 100)
+            cool_pct        = float(np.mean((z_samples >= -2) & (z_samples < -0.5)) * 100)
+            neutral_pct     = float(np.mean((z_samples >= -0.5) & (z_samples < 0.5)) * 100)
+            warm_pct        = float(np.mean((z_samples >= 0.5) & (z_samples < 2))  * 100)
+            hot_pct         = float(np.mean(z_samples >= 2)           * 100)
 
-            classes_uhi = ['Cool\n(<30°C)', 'Moderate\n(30–35°C)', 'Warm\n(35–40°C)',
-                           'Hot\n(40–45°C)', 'Extreme\n(>45°C)']
-            pcts_uhi = [
-                float(np.mean(lst_samples < 30)                               * 100),
-                float(np.mean((lst_samples >= 30) & (lst_samples < 35))       * 100),
-                float(np.mean((lst_samples >= 35) & (lst_samples < 40))       * 100),
-                float(np.mean((lst_samples >= 40) & (lst_samples < 45))       * 100),
-                float(np.mean(lst_samples >= 45)                              * 100),
+            classes_uhi = [
+                'Strong Cool\n(z < −2)',
+                'Cool Island\n(−2 to −0.5)',
+                'Near Average\n(−0.5 to 0.5)',
+                'Warm Zone\n(0.5 to 2)',
+                'Heat Island\n(z > 2)',
             ]
-
-            # Sample bar colors from the dynamic UHI palette using z-score of each
-            # bin's °C midpoint — identical to how the map is colored.
-            import matplotlib.colors as _mc_uhi
-            _uhi_cmap = _mc_uhi.LinearSegmentedColormap.from_list('uhi_d', VIS['uhi']['palette'])
-            _uhi_norm = _mc_uhi.Normalize(vmin=z_vis_min, vmax=z_vis_max)
-            colors_uhi = [
-                _mc_uhi.to_hex(_uhi_cmap(_uhi_norm(
-                    np.clip((mp - _heat_mean) / _std_v, z_vis_min, z_vis_max)
-                )))
-                for mp in [27.5, 32.5, 37.5, 42.5, 47.5]
-            ]
+            pcts_uhi   = [strong_cool_pct, cool_pct, neutral_pct, warm_pct, hot_pct]
+            # Colors from VIS['uhi'] palette: ['#313695','#74add1','#fed976','#feb24c','#fd8d3c','#fc4e2a','#e31a1c','#b10026']
+            # Map 5 bins → sample from low, low-mid, mid, high-mid, high
+            colors_uhi = ['#313695', '#74add1', '#fed976', '#fd8d3c', '#b10026']
 
             pairs_uhi = [(c, p, col) for c, p, col in zip(classes_uhi, pcts_uhi, colors_uhi) if p > 0.1]
 
             if pairs_uhi:
                 cls_u, pv_u, cv_u = zip(*pairs_uhi)
-                fig, ax = plt.subplots(figsize=(max(5, len(pairs_uhi) * 1.2), 3.5))
+                fig, ax = plt.subplots(figsize=(6, 3.5))
                 bars = ax.bar(cls_u, pv_u, color=cv_u, edgecolor='white',
                               linewidth=0.5, width=0.6)
                 ax.set_ylim(0, max(pv_u) * 1.3)
@@ -835,9 +858,9 @@ def make_stats_charts(stats, var_name, label):
                             bar.get_height() + max(pv_u) * 0.02,
                             f'{pct:.1f}%', ha='center', va='bottom', fontsize=8,
                             fontweight='bold', color='#333')
-                ax.set_xlabel('Temperature class', fontsize=9)
+                ax.set_xlabel('UHI z-score class', fontsize=9)
                 ax.set_ylabel('Area share (%)', fontsize=9)
-                ax.set_title('UHI heat class composition', fontsize=10, fontweight='bold')
+                ax.set_title('UHI zone composition (z-score)', fontsize=10, fontweight='bold')
                 ax.spines['top'].set_visible(False)
                 ax.spines['right'].set_visible(False)
                 fig.tight_layout()
