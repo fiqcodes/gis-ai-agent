@@ -776,7 +776,7 @@ def make_stats_charts(stats, var_name, label):
         except Exception as e:
             print(f'  LST class chart failed: {e}')
 
-    # ── UHI heat class bar (LST degC bins — matches UHI map which now uses LST palette) ──
+    # ── UHI heat class bar — temp bins, colors from dynamic UHI z-score palette ─
     if 'UHI' in label_up:
         def _safe_z(v, default):
             if v is None: return default
@@ -786,8 +786,6 @@ def make_stats_charts(stats, var_name, label):
             except: return default
 
         try:
-            # UHI map is now rendered using the LST image + LST palette (degC).
-            # Bins and bar colours must both be on the same degC scale.
             _heat_mean = _safe_z(s.get('lst_mean') or s.get('mean'), 35.0)
             _std_v     = _safe_z(s.get('lst_std')  or s.get('std'),  3.0)
             if _std_v <= 0: _std_v = 3.0
@@ -795,11 +793,15 @@ def make_stats_charts(stats, var_name, label):
             max_lst = min(_safe_z(s.get('max'), _heat_mean + 15.0), 65.0)
             if max_lst <= min_lst: max_lst = min_lst + 40.0
 
+            # Dynamic z-score vis range (same logic as app.py map rendering)
+            z_vis_min = max(_safe_z(s.get('z_min'), -4.0), -5.0)
+            z_vis_max = min(_safe_z(s.get('z_max'),  4.0),  5.0)
+
             rng         = np.random.default_rng(42)
             lst_samples = np.clip(rng.normal(_heat_mean, _std_v, 50000), min_lst, max_lst)
 
-            classes_uhi = ['Cool\n(<30C)', 'Moderate\n(30-35C)', 'Warm\n(35-40C)',
-                           'Hot\n(40-45C)', 'Extreme\n(>45C)']
+            classes_uhi = ['Cool\n(<30°C)', 'Moderate\n(30–35°C)', 'Warm\n(35–40°C)',
+                           'Hot\n(40–45°C)', 'Extreme\n(>45°C)']
             pcts_uhi = [
                 float(np.mean(lst_samples < 30)                               * 100),
                 float(np.mean((lst_samples >= 30) & (lst_samples < 35))       * 100),
@@ -808,13 +810,15 @@ def make_stats_charts(stats, var_name, label):
                 float(np.mean(lst_samples >= 45)                              * 100),
             ]
 
-            # Colors sampled from the LST palette at each bin midpoint in degC —
-            # exactly the same palette and scale used on the map.
+            # Sample bar colors from the dynamic UHI palette using z-score of each
+            # bin's °C midpoint — identical to how the map is colored.
             import matplotlib.colors as _mc_uhi
-            _lst_cmap = _mc_uhi.LinearSegmentedColormap.from_list('lst_u', VIS['lst']['palette'])
-            _lst_norm = _mc_uhi.Normalize(vmin=VIS['lst']['min'], vmax=VIS['lst']['max'])
+            _uhi_cmap = _mc_uhi.LinearSegmentedColormap.from_list('uhi_d', VIS['uhi']['palette'])
+            _uhi_norm = _mc_uhi.Normalize(vmin=z_vis_min, vmax=z_vis_max)
             colors_uhi = [
-                _mc_uhi.to_hex(_lst_cmap(_lst_norm(np.clip(mp, VIS['lst']['min'], VIS['lst']['max']))))
+                _mc_uhi.to_hex(_uhi_cmap(_uhi_norm(
+                    np.clip((mp - _heat_mean) / _std_v, z_vis_min, z_vis_max)
+                )))
                 for mp in [27.5, 32.5, 37.5, 42.5, 47.5]
             ]
 
