@@ -15,8 +15,11 @@ from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 
 # ── Add parent dir so we can import agent modules ─────────────────────────────
-PARENT_DIR = Path(__file__).parent.parent
-sys.path.insert(0, str(PARENT_DIR))
+PARENT_DIR  = Path(__file__).parent.parent
+PROJECT_DIR = Path(__file__).parent   # gis-ai-agent/ — must come FIRST
+# Insert project dir at 0 so its gis_functions.py is found before ~/Downloads/gis_functions.py
+sys.path.insert(0, str(PROJECT_DIR))
+sys.path.insert(1, str(PARENT_DIR))
 
 app = Flask(__name__)
 CORS(app)
@@ -765,7 +768,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     else:
                         map_id = lulc_clipped.getMapId(lulc_vis)
                     layers.append({
-                        'name'      : f'LULC {start_date[:4]}' if is_multiyear else 'Land Cover Classification',
+                        'name'      : 'Land Cover Classification',
                         'tile_url'  : map_id['tile_fetcher'].url_format,
                         'type'      : 'tile',
                         'bbox'      : geo.get('bbox'),
@@ -1034,57 +1037,14 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 ylc = yr_lulc['lulc_img'].clip(study_area_main)
                                 mid = (ylc.sldStyle(ylv['sld_style']).getMapId({}) if 'sld_style' in ylv
                                        else ylc.getMapId(ylv))
-                                layers.append({'name': f'LULC {yr}',
+                                layers.append({'name': f'Land Cover — {yr}',
                                                'tile_url': mid['tile_fetcher'].url_format,
                                                'type': 'tile', 'bbox': bbox,
                                                'lulc_stats': yr_lulc['stats']})
-
-                                # Generate proper static map (same method as year-0)
-                                yr_lulc_map_b64 = None
-                                if bbox:
-                                    try:
-                                        import numpy as _np_yr
-                                        import matplotlib.pyplot as _plt_yr
-                                        import matplotlib.patches as _mp_yr
-                                        yr_arr = (get_thumb(ylc.sldStyle(ylv['sld_style']), {}, study_area_main, dim=512)
-                                                  if 'sld_style' in ylv
-                                                  else get_thumb(ylc, ylv, study_area_main, dim=512))
-                                        yr_classes = yr_lulc['stats'].get('classes', {})
-                                        _w, _s, _e, _n = bbox
-                                        _fig_yr, _ax_yr = _plt_yr.subplots(figsize=(7, 6))
-                                        _ax_yr.imshow(yr_arr, extent=[_w, _e, _s, _n], aspect='auto', origin='upper')
-                                        _patches = [_mp_yr.Patch(color=info['color'],
-                                                    label=f"{cls} ({info['percentage']:.1f}%)")
-                                                    for cls, info in yr_classes.items()]
-                                        _ax_yr.legend(handles=_patches, loc='lower right', fontsize=7,
-                                                      framealpha=0.85, edgecolor='#ccc',
-                                                      title='Land Cover', title_fontsize=8)
-                                        _lon = _np_yr.linspace(_w, _e, 5)
-                                        _lat = _np_yr.linspace(_s, _n, 5)
-                                        _ax_yr.set_xticks(_lon); _ax_yr.set_yticks(_lat)
-                                        _ax_yr.set_xticklabels([f'{v:.2f}°' for v in _lon], fontsize=8, color='#555')
-                                        _ax_yr.set_yticklabels([f'{v:.2f}°' for v in _lat], fontsize=8, color='#555')
-                                        _ax_yr.grid(False)
-                                        _ax_yr.set_title(f'Land Cover — {region_name} ({yr})', fontsize=11, fontweight='bold', pad=10)
-                                        for _sp in _ax_yr.spines.values():
-                                            _sp.set_edgecolor('#cccccc'); _sp.set_linewidth(0.8)
-                                        _ax_yr.text(0.01, 0.01, '© Landsat / Google Earth Engine',
-                                                    transform=_ax_yr.transAxes, fontsize=7, color='white',
-                                                    bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.4))
-                                        _plt_yr.tight_layout()
-                                        yr_lulc_map_b64 = fig_to_base64(_fig_yr)
-                                        _plt_yr.close(_fig_yr)
-                                        print(f'  ✓ LULC static map for {yr}')
-                                    except Exception as _lme_yr:
-                                        print(f'  LULC static map failed for {yr}: {_lme_yr}')
-
-                                # No individual pie in multi-year mode — combined bar shown in multiyear_figures
                                 figures[f'LULC — {yr}'] = {
-                                    'analysis_map': yr_lulc_map_b64,
-                                    'charts'      : [],
+                                    'analysis_map': None,
+                                    'charts': _mlc(yr_lulc['stats']),
                                     'rgb_overview': None,
-                                    'lulc_stats'  : yr_lulc['stats'],
-                                    'year'        : yr,
                                 }
                         except Exception as lulc_yr_err:
                             print(f'    [LULC {yr}] failed: {lulc_yr_err}')

@@ -977,28 +977,11 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
       const varStats   = stats && stats[varLabel];
       const varInsight = varInsights && varInsights[varLabel];
       const isLULC     = varLabel.toUpperCase() === 'LULC';
-      // Detect per-year LULC blocks like "LULC — 2024"
-      const isLULCYear = /^LULC\s*[—-]\s*\d{4}$/.test(varLabel);
 
       html += `<div class="var-section">`;
 
-      // ── Per-year LULC in multi-year mode: just show the map, no pie ──────────
-      if (isLULCYear) {
-        const yr = varLabel.match(/\d{4}/)?.[0] || '';
-        if (fig.analysis_map) {
-          html += `<div class="result-section-label">Land Cover Map — ${yr}</div>`;
-          html += `<div class="result-img-wrap">
-            <img src="${fig.analysis_map}" class="result-img" loading="lazy"/>
-            <div class="result-img-caption">Land Cover Classification — ${escapeHtml(region)} · ${yr}</div>
-          </div>`;
-          // Show class stats table for this year
-          if (fig.lulc_stats && fig.lulc_stats.classes) {
-            html += buildSingleStatHTML('LULC', fig.lulc_stats);
-          }
-        }
-
-      // ── Main LULC block (year-0) ──────────────────────────────────────────
-      } else if (isLULC) {
+      // For LULC: show RGB overview first (same as non-LULC vars), then LULC map
+      if (isLULC) {
         // 1a. RGB overview (same as study area block for other vars)
         if (fig.rgb_overview) {
           html += `<div class="result-section-label">Study Area</div>`;
@@ -1019,9 +1002,8 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
         if (varStats) {
           html += buildSingleStatHTML(varLabel, varStats);
         }
-        // 3. Charts: pie chart — skip in multi-year mode (combined bar shown in multiyear section)
-        const isMY = yearsList && yearsList.length > 1;
-        if (!isMY && fig.charts && fig.charts.length > 0) {
+        // 3. Charts: only pie chart (bar chart removed)
+        if (fig.charts && fig.charts.length > 0) {
           const lulcPie = fig.charts.find(c => c[0] === 'lulc_pie');
           if (lulcPie) {
             html += `<div class="result-section-label" style="margin-top:16px">Area Distribution</div>`;
