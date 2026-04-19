@@ -15,8 +15,11 @@ from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 
 # ── Add parent dir so we can import agent modules ─────────────────────────────
-PARENT_DIR = Path(__file__).parent.parent
-sys.path.insert(0, str(PARENT_DIR))
+PARENT_DIR  = Path(__file__).parent.parent
+PROJECT_DIR = Path(__file__).parent   # gis-ai-agent/ — must come FIRST
+# Insert project dir at 0 so its gis_functions.py is found before ~/Downloads/gis_functions.py
+sys.path.insert(0, str(PROJECT_DIR))
+sys.path.insert(1, str(PARENT_DIR))
 
 app = Flask(__name__)
 CORS(app)
