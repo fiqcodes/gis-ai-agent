@@ -247,6 +247,7 @@ function addImageOverlay(name, base64Img, bbox) {
     layer  : overlay,
     type   : 'raster',
     visible: true,
+    bbox   : bbox,
   });
 
   renderLayersList();
@@ -331,8 +332,14 @@ function toggleLayerVisibility(id) {
 
 function zoomToLayer(id) {
   const item = mapLayers.find(l => l.id === id);
-  if (!item || !item.layer.getBounds) return;
-  try { map.fitBounds(item.layer.getBounds(), { padding: [40, 40] }); } catch(e){}
+  if (!item) return;
+  // Tile layers don't have getBounds() — use stored bbox instead
+  if (item.bbox) {
+    const [w, s, e, n] = item.bbox;
+    map.fitBounds([[s, w], [n, e]], { padding: [40, 40] });
+  } else if (item.layer.getBounds) {
+    try { map.fitBounds(item.layer.getBounds(), { padding: [40, 40] }); } catch(e) {}
+  }
 }
 
 function removeLayerById(id) {
