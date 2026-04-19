@@ -1066,105 +1066,82 @@ def make_lulc_charts(lulc_stats):
 # MULTI-YEAR COMBINED CHART FUNCTIONS
 # =============================================================================
 
-# Colors for up to 10 years in multi-year overlaid charts
 _YEAR_COLORS = [
     '#2196F3', '#FF5722', '#4CAF50', '#9C27B0', '#FF9800',
     '#00BCD4', '#F44336', '#8BC34A', '#673AB7', '#FFC107',
 ]
 
-def make_multiyear_trend_chart(yearly_stats: dict, label: str, n_years: int) -> str:
+def make_multiyear_trend_chart(yearly_stats: dict, label: str, n_years: int):
     """
-    Build a combined trend chart for multi-year analysis.
-    - n_years <= 3: monthly lines, one per year (overlaid)
-    - n_years >= 4: yearly bar chart showing annual means
+    Monthly overlaid lines per year (n_years <= 3) or annual bar chart (n_years >= 4).
     Returns base64 PNG or None.
     """
     try:
         years = sorted(yearly_stats.keys())
         if n_years >= 4:
-            # ── Yearly bar chart ─────────────────────────────────────────────
-            means = []
-            valid_years = []
+            # Annual bar chart
+            means, valid_years = [], []
             for yr in years:
                 s = yearly_stats[yr]
                 if isinstance(s, dict) and s.get('mean') is not None:
-                    means.append(s['mean'])
+                    means.append(float(s['mean']))
                     valid_years.append(str(yr))
-            if not means:
-                return None
+            if not means: return None
             colors = [_YEAR_COLORS[i % len(_YEAR_COLORS)] for i in range(len(valid_years))]
             fig, ax = plt.subplots(figsize=(max(6, len(valid_years) * 1.2), 4))
             bars = ax.bar(valid_years, means, color=colors, edgecolor='white', linewidth=0.5, width=0.6)
+            rng = max(means) - min(means) if len(means) > 1 else abs(means[0]) * 0.1 + 0.001
             for bar, val in zip(bars, means):
                 ax.text(bar.get_x() + bar.get_width() / 2,
-                        bar.get_height() + abs(max(means) - min(means)) * 0.02,
+                        bar.get_height() + rng * 0.03,
                         f'{val:.3f}', ha='center', va='bottom', fontsize=8, fontweight='bold')
             ax.set_xlabel('Year', fontsize=9)
             ax.set_ylabel(label, fontsize=9)
             ax.set_title(f'{label} Annual Mean by Year', fontsize=10, fontweight='bold')
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
             fig.tight_layout()
-            result = fig_to_base64(fig)
-            plt.close(fig)
-            return result
+            result = fig_to_base64(fig); plt.close(fig); return result
         else:
-            # ── Monthly overlaid lines, one per year ─────────────────────────
+            # Monthly overlaid lines
             fig, ax = plt.subplots(figsize=(9, 4))
             has_any = False
             for i, yr in enumerate(years):
                 s = yearly_stats[yr]
-                if not isinstance(s, dict):
-                    continue
+                if not isinstance(s, dict): continue
                 monthly = s.get('monthly', {})
-                if not monthly:
-                    continue
-                # Extract month number (MM) for x axis
-                sorted_months = sorted(monthly.keys())
-                x_vals = [int(m.split('-')[1]) for m in sorted_months]
-                y_vals = [monthly[m] for m in sorted_months]
-                color  = _YEAR_COLORS[i % len(_YEAR_COLORS)]
-                ax.plot(x_vals, y_vals, color=color, linewidth=2,
-                        marker='o', markersize=5, markerfacecolor='white',
-                        markeredgecolor=color, markeredgewidth=1.5, label=str(yr))
+                if not monthly: continue
+                sorted_m = sorted(monthly.keys())
+                x_vals = [int(m.split('-')[1]) for m in sorted_m]
+                y_vals = [monthly[m] for m in sorted_m]
+                color = _YEAR_COLORS[i % len(_YEAR_COLORS)]
+                ax.plot(x_vals, y_vals, color=color, linewidth=2, marker='o', markersize=5,
+                        markerfacecolor='white', markeredgecolor=color, markeredgewidth=1.5, label=str(yr))
                 baseline = min(y_vals) - abs(min(y_vals)) * 0.05
                 ax.fill_between(x_vals, y_vals, baseline, alpha=0.08, color=color)
                 has_any = True
-            if not has_any:
-                plt.close(fig)
-                return None
-            month_labels = ['Jan','Feb','Mar','Apr','May','Jun',
-                            'Jul','Aug','Sep','Oct','Nov','Dec']
-            ax.set_xticks(range(1, 13))
-            ax.set_xticklabels(month_labels, fontsize=8)
+            if not has_any: plt.close(fig); return None
+            month_labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+            ax.set_xticks(range(1, 13)); ax.set_xticklabels(month_labels, fontsize=8)
             ax.set_ylabel(label, fontsize=9)
             ax.set_title(f'{label} Monthly Mean — Year Comparison', fontsize=10, fontweight='bold')
             ax.legend(fontsize=8, framealpha=0.7)
             ax.grid(True, axis='y', linestyle='--', linewidth=0.5, alpha=0.5)
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
             fig.tight_layout()
-            result = fig_to_base64(fig)
-            plt.close(fig)
-            return result
+            result = fig_to_base64(fig); plt.close(fig); return result
     except Exception as e:
-        print(f'  Multi-year trend chart failed: {e}')
-        return None
+        print(f'  make_multiyear_trend_chart failed: {e}'); return None
 
 
-def make_multiyear_distribution_chart(yearly_stats: dict, label: str) -> str:
-    """
-    Build overlaid distribution (histogram/KDE) comparing all years.
-    Returns base64 PNG or None.
-    """
+def make_multiyear_distribution_chart(yearly_stats: dict, label: str):
+    """Overlaid histograms for each year. Returns base64 PNG or None."""
     try:
         years = sorted(yearly_stats.keys())
         fig, ax = plt.subplots(figsize=(7, 4))
         has_any = False
         for i, yr in enumerate(years):
             s = yearly_stats[yr]
-            if not isinstance(s, dict) or s.get('mean') is None:
-                continue
+            if not isinstance(s, dict) or s.get('mean') is None: continue
             mean_v = float(s['mean'])
             std_v  = float(s.get('std') or 0.1) or 0.1
             min_v  = float(s['min']) if s.get('min') is not None else mean_v - 3 * std_v
@@ -1173,187 +1150,137 @@ def make_multiyear_distribution_chart(yearly_stats: dict, label: str) -> str:
             color = _YEAR_COLORS[i % len(_YEAR_COLORS)]
             rng   = np.random.default_rng(42 + i)
             samp  = np.clip(rng.normal(mean_v, std_v, 30000), min_v, max_v)
-            ax.hist(samp, bins=40, color=color, alpha=0.45, edgecolor='none',
-                    density=True, label=str(yr))
-            # Mean vline
+            ax.hist(samp, bins=40, color=color, alpha=0.45, edgecolor='none', density=True, label=str(yr))
             ax.axvline(mean_v, color=color, linewidth=1.5, linestyle='--', alpha=0.9)
             has_any = True
-        if not has_any:
-            plt.close(fig)
-            return None
-        ax.set_xlabel(label, fontsize=9)
-        ax.set_ylabel('Density', fontsize=9)
+        if not has_any: plt.close(fig); return None
+        ax.set_xlabel(label, fontsize=9); ax.set_ylabel('Density', fontsize=9)
         ax.set_title(f'{label} Distribution — Year Comparison', fontsize=10, fontweight='bold')
         ax.legend(fontsize=8, framealpha=0.7)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
         fig.tight_layout()
-        result = fig_to_base64(fig)
-        plt.close(fig)
-        return result
+        result = fig_to_base64(fig); plt.close(fig); return result
     except Exception as e:
-        print(f'  Multi-year distribution chart failed: {e}')
-        return None
+        print(f'  make_multiyear_distribution_chart failed: {e}'); return None
 
 
-def make_multiyear_class_chart(yearly_stats: dict, label: str) -> str:
+def make_multiyear_class_chart(yearly_stats: dict, label: str):
     """
-    Build grouped bar chart showing class composition % per year side by side.
-    Works for index variables (NDVI/SAVI/LST/etc) and UHI.
+    Grouped bar chart comparing class composition % across years.
     Returns base64 PNG or None.
     """
     try:
-        import matplotlib.ticker as mticker
-        years = sorted(yearly_stats.keys())
-        n_years = len(years)
-
-        # Determine class bins from label (same as make_stats_charts)
         label_up = label.upper()
         if 'NDVI' in label_up:
             class_names = ['Bare\n(<0.1)', 'Stressed\n(0.1–0.3)', 'Moderate\n(0.3–0.6)', 'Healthy\n(>0.6)']
-            bounds = [-1, 0.1, 0.3, 0.6, 1]
-            clip_range = (-1, 1)
+            bounds = [-1, 0.1, 0.3, 0.6, 1]; clip_r = (-1, 1)
         elif 'EVI' in label_up or 'SAVI' in label_up:
             class_names = ['Sparse\n(<0.1)', 'Low\n(0.1–0.3)', 'Moderate\n(0.3–0.5)', 'Dense\n(>0.5)']
-            bounds = [-1, 0.1, 0.3, 0.5, 1]
-            clip_range = (-1, 1)
+            bounds = [-1, 0.1, 0.3, 0.5, 1]; clip_r = (-1, 1)
         elif 'NDBI' in label_up:
             class_names = ['Non-built\n(<–0.1)', 'Low\n(–0.1–0)', 'Moderate\n(0–0.1)', 'High\n(>0.1)']
-            bounds = [-1, -0.1, 0.0, 0.1, 1]
-            clip_range = (-1, 1)
+            bounds = [-1, -0.1, 0.0, 0.1, 1]; clip_r = (-1, 1)
         elif 'NDWI' in label_up or 'MNDWI' in label_up:
             class_names = ['Dry\n(<–0.3)', 'Transition\n(–0.3–0)', 'Moist\n(0–0.3)', 'Water\n(>0.3)']
-            bounds = [-1, -0.3, 0.0, 0.3, 1]
-            clip_range = (-1, 1)
+            bounds = [-1, -0.3, 0.0, 0.3, 1]; clip_r = (-1, 1)
         elif 'BSI' in label_up:
             class_names = ['Vegetated\n(<–0.1)', 'Mixed\n(–0.1–0.1)', 'Bare\n(>0.1)']
-            bounds = [-1, -0.1, 0.1, 1]
-            clip_range = (-1, 1)
+            bounds = [-1, -0.1, 0.1, 1]; clip_r = (-1, 1)
         elif 'UI' in label_up and 'UHI' not in label_up:
             class_names = ['Vegetation\n(<–0.1)', 'Transition\n(–0.1–0.1)', 'Urban\n(>0.1)']
-            bounds = [-1, -0.1, 0.1, 1]
-            clip_range = (-1, 1)
+            bounds = [-1, -0.1, 0.1, 1]; clip_r = (-1, 1)
         elif 'LST' in label_up or 'UHI' in label_up:
             class_names = ['Cool\n(<30°C)', 'Moderate\n(30–35°C)', 'Warm\n(35–40°C)',
                            'Hot\n(40–45°C)', 'Extreme\n(>45°C)']
-            bounds = [-999, 30, 35, 40, 45, 999]
-            clip_range = None
+            bounds = [-999, 30, 35, 40, 45, 999]; clip_r = None
         else:
-            return None  # Unknown variable, skip
+            return None
 
-        n_classes = len(class_names)
-        # Build pct matrix: [year_idx][class_idx]
-        pct_matrix = []
+        years    = sorted(yearly_stats.keys())
+        n_years  = len(years)
+        n_cls    = len(class_names)
+        pct_mat  = []
+
         for yr in years:
             s = yearly_stats[yr]
             if not isinstance(s, dict) or s.get('mean') is None:
-                pct_matrix.append([0.0] * n_classes)
-                continue
+                pct_mat.append([0.0] * n_cls); continue
             mean_v = float(s.get('lst_mean') or s.get('mean'))
             std_v  = float(s.get('lst_std')  or s.get('std') or 3.0) or 3.0
             min_v  = float(s['min']) if s.get('min') is not None else mean_v - 15
             max_v  = float(s['max']) if s.get('max') is not None else mean_v + 15
             if max_v <= min_v: max_v = min_v + 1e-6
-            rng  = np.random.default_rng(42)
             samp = np.random.default_rng(42).normal(mean_v, std_v, 50000)
-            if clip_range:
-                samp = np.clip(samp, clip_range[0], clip_range[1])
-            else:
-                samp = np.clip(samp, min_v, max_v)
-            row = [float(np.mean((samp >= bounds[j]) & (samp < bounds[j+1])) * 100)
-                   for j in range(n_classes)]
-            pct_matrix.append(row)
+            samp = np.clip(samp, clip_r[0], clip_r[1]) if clip_r else np.clip(samp, min_v, max_v)
+            row  = [float(np.mean((samp >= bounds[j]) & (samp < bounds[j+1])) * 100) for j in range(n_cls)]
+            pct_mat.append(row)
 
-        # Grouped bar chart
-        x = np.arange(n_classes)
+        x     = np.arange(n_cls)
         bar_w = 0.8 / n_years
-        fig, ax = plt.subplots(figsize=(max(8, n_classes * 1.4 + n_years * 0.5), 4))
+        fig, ax = plt.subplots(figsize=(max(8, n_cls * 1.4 + n_years * 0.5), 4))
         for i, yr in enumerate(years):
             offset = (i - n_years / 2 + 0.5) * bar_w
-            vals   = pct_matrix[i]
+            vals   = pct_mat[i]
             color  = _YEAR_COLORS[i % len(_YEAR_COLORS)]
             bars   = ax.bar(x + offset, vals, bar_w * 0.92, label=str(yr),
                             color=color, edgecolor='white', linewidth=0.4, alpha=0.85)
             for bar, val in zip(bars, vals):
                 if val > 1.0:
                     ax.text(bar.get_x() + bar.get_width() / 2,
-                            bar.get_height() + 0.5,
-                            f'{val:.0f}%', ha='center', va='bottom', fontsize=6.5,
-                            fontweight='bold', color='#333')
-        ax.set_xticks(x)
-        ax.set_xticklabels(class_names, fontsize=8)
+                            bar.get_height() + 0.5, f'{val:.0f}%',
+                            ha='center', va='bottom', fontsize=6.5, fontweight='bold', color='#333')
+        ax.set_xticks(x); ax.set_xticklabels(class_names, fontsize=8)
         ax.set_ylabel('Area share (%)', fontsize=9)
         ax.set_title(f'{label} Class Composition — Year Comparison', fontsize=10, fontweight='bold')
         ax.legend(fontsize=8, framealpha=0.7)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
         fig.tight_layout()
-        result = fig_to_base64(fig)
-        plt.close(fig)
-        return result
+        result = fig_to_base64(fig); plt.close(fig); return result
     except Exception as e:
-        print(f'  Multi-year class chart failed: {e}')
-        import traceback; traceback.print_exc()
-        return None
+        print(f'  make_multiyear_class_chart failed: {e}'); import traceback; traceback.print_exc(); return None
 
 
-def make_multiyear_lulc_chart(yearly_lulc_stats: dict) -> str:
+def make_multiyear_lulc_chart(yearly_lulc_stats: dict):
     """
-    Build grouped bar chart showing LULC class % per year side by side.
-    yearly_lulc_stats: { year: { 'classes': {name: {percentage, color}}, 'total_ha': ... } }
+    Grouped bar chart comparing LULC class % across years.
+    yearly_lulc_stats: { year: { 'classes': {name: {percentage, color}}, ... } }
     Returns base64 PNG or None.
     """
     try:
         years = sorted(yearly_lulc_stats.keys())
         n_years = len(years)
-
-        # Collect all class names that appear across any year
-        all_classes = []
-        class_colors = {}
+        all_classes = []; class_colors = {}
         for yr in years:
-            s = yearly_lulc_stats[yr]
-            for cls, info in s.get('classes', {}).items():
+            for cls, info in yearly_lulc_stats[yr].get('classes', {}).items():
                 if cls not in all_classes:
                     all_classes.append(cls)
                     class_colors[cls] = info.get('color', '#aaaaaa')
-
-        if not all_classes:
-            return None
-
-        n_classes = len(all_classes)
-        x = np.arange(n_classes)
+        if not all_classes: return None
+        n_cls = len(all_classes)
+        x     = np.arange(n_cls)
         bar_w = 0.8 / n_years
-
-        fig, ax = plt.subplots(figsize=(max(8, n_classes * 1.5 + n_years * 0.5), 4.5))
+        fig, ax = plt.subplots(figsize=(max(8, n_cls * 1.5 + n_years * 0.5), 4.5))
         for i, yr in enumerate(years):
-            s = yearly_lulc_stats[yr]
-            classes = s.get('classes', {})
-            vals   = [classes.get(cls, {}).get('percentage', 0.0) for cls in all_classes]
-            color  = _YEAR_COLORS[i % len(_YEAR_COLORS)]
-            offset = (i - n_years / 2 + 0.5) * bar_w
-            bars   = ax.bar(x + offset, vals, bar_w * 0.92, label=str(yr),
-                            color=color, edgecolor='white', linewidth=0.4, alpha=0.85)
+            classes = yearly_lulc_stats[yr].get('classes', {})
+            vals    = [classes.get(cls, {}).get('percentage', 0.0) for cls in all_classes]
+            color   = _YEAR_COLORS[i % len(_YEAR_COLORS)]
+            offset  = (i - n_years / 2 + 0.5) * bar_w
+            bars    = ax.bar(x + offset, vals, bar_w * 0.92, label=str(yr),
+                             color=color, edgecolor='white', linewidth=0.4, alpha=0.85)
             for bar, val in zip(bars, vals):
                 if val > 1.0:
                     ax.text(bar.get_x() + bar.get_width() / 2,
-                            bar.get_height() + 0.3,
-                            f'{val:.0f}%', ha='center', va='bottom', fontsize=6.5,
-                            fontweight='bold', color='#333')
-
-        ax.set_xticks(x)
-        ax.set_xticklabels(all_classes, fontsize=8, rotation=20, ha='right')
+                            bar.get_height() + 0.3, f'{val:.0f}%',
+                            ha='center', va='bottom', fontsize=6.5, fontweight='bold', color='#333')
+        ax.set_xticks(x); ax.set_xticklabels(all_classes, fontsize=8, rotation=20, ha='right')
         ax.set_ylabel('Area share (%)', fontsize=9)
         ax.set_title('Land Cover Change — Year Comparison', fontsize=10, fontweight='bold')
         ax.legend(fontsize=8, framealpha=0.7)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
         fig.tight_layout()
-        result = fig_to_base64(fig)
-        plt.close(fig)
-        return result
+        result = fig_to_base64(fig); plt.close(fig); return result
     except Exception as e:
-        print(f'  Multi-year LULC chart failed: {e}')
-        return None
+        print(f'  make_multiyear_lulc_chart failed: {e}'); return None
 
 
 def plot_panels(panels, title, ncols=2, dim=300):
@@ -1470,33 +1397,21 @@ SYSTEM_PROMPT = (
     "STRICT RULE: Do NOT add any variables the user did not explicitly ask for.\n\n"
     "Extract:\n"
     "1. region - the place name\n"
-    "2. start_date - YYYY-MM-DD (first day of the requested period in the FIRST year)\n"
-    "3. end_date - YYYY-MM-DD (last day of the requested period in the LAST year)\n"
-    "4. variables - ONLY what the user explicitly said.\n"
-    "5. years - list of years if user requests multiple years explicitly (e.g. '2023-2025' → [2023,2024,2025], '2022,2023' → [2022,2023]). null if single year.\n"
-    "6. month_start - 1-12, the starting month of the period within each year (null if full year).\n"
-    "7. month_end - 1-12, the ending month of the period within each year (null if full year).\n\n"
-    "SEASONAL MONTH MAPPING (Northern Hemisphere defaults unless region implies Southern):\n"
-    "  summer=6-8, winter=12-2, spring=3-5, autumn/fall=9-11\n"
-    "  dry season (tropical)=4-9, wet/rainy season (tropical)=10-3\n"
-    "  monsoon (South/SE Asia)=6-9\n\n"
-    "MULTI-YEAR RULES:\n"
-    "  '2023-2025' or '2023 to 2025' → years=[2023,2024,2025], start_date=first year Jan 1, end_date=last year Dec 31\n"
-    "  'summer 2022-2024' → years=[2022,2023,2024], month_start=6, month_end=8\n"
-    "  Single year like '2023' or '2023-01-01 to 2023-12-31' → years=null\n\n"
+    "2. start_date - YYYY-MM-DD\n"
+    "3. end_date - YYYY-MM-DD\n"
+    "4. variables - ONLY what the user explicitly said. "
+    "If user says 'NO2 and CO', return EXACTLY ['no2', 'co']. "
+    "NEVER add ch4, aerosol, so2, or anything else not mentioned.\n\n"
     "Available variables:\n"
     "Surface: ndvi, evi, savi, ndwi, mndwi, ndbi, ui, nbi, bsi, ndsi, lst, uhi, rgb\n"
     "Atmospheric: co, ch4, no2, so2, aerosol, o3, gpp, burned, ffpi\n"
-    "Special: all_surface, all_atmo, lulc\n\n"
+    "Special: all_surface, all_atmo\n\n"
     'Respond with ONLY this JSON, nothing else:\n'
     '{\n'
     '  "intent": "analysis" or "question" or "unknown",\n'
     '  "region": "place name or null",\n'
     '  "start_date": "YYYY-MM-DD or null",\n'
     '  "end_date": "YYYY-MM-DD or null",\n'
-    '  "years": [2023, 2024, 2025] or null,\n'
-    '  "month_start": 1-12 or null,\n'
-    '  "month_end": 1-12 or null,\n'
     '  "variables": ["exactly", "what", "user", "asked"],\n'
     '  "response": "brief confirmation"\n'
     '}\n'

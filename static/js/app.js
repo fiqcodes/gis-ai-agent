@@ -1104,26 +1104,26 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
   // ── MULTI-YEAR COMBINED CHARTS ────────────────────────────────────────────
   if (multiyearFigures && Object.keys(multiyearFigures).length > 0 && yearsList && yearsList.length > 1) {
     html += `<div class="var-section">`;
-    html += `<div class="result-section-label" style="margin-top:4px">Multi-Year Comparison (${yearsList.join(' · ')})</div>`;
-
+    html += `<div class="result-section-label">Multi-Year Comparison — ${yearsList.join(' · ')}</div>`;
     for (const [varLabel, myFig] of Object.entries(multiyearFigures)) {
       if (!myFig || !myFig.charts || myFig.charts.length === 0) continue;
       html += `<div style="margin-top:14px">`;
       html += `<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);margin-bottom:6px">${escapeHtml(varLabel)}</div>`;
-
-      const trend  = myFig.charts.find(c => c[0] === 'multiyear_trend');
-      const dist   = myFig.charts.find(c => c[0] === 'multiyear_dist');
-      const cls    = myFig.charts.find(c => c[0] === 'multiyear_class');
-      const lulcB  = myFig.charts.find(c => c[0] === 'multiyear_bar');
-
+      const trend = myFig.charts.find(c => c[0] === 'multiyear_trend');
+      const dist  = myFig.charts.find(c => c[0] === 'multiyear_dist');
+      const cls   = myFig.charts.find(c => c[0] === 'multiyear_class');
+      const lulcB = myFig.charts.find(c => c[0] === 'multiyear_bar');
       if (trend) {
-        html += `<div class="result-section-label" style="margin-top:10px">Yearly / Seasonal Trend</div>`;
+        html += `<div class="result-section-label" style="margin-top:10px">Trend</div>`;
         html += `<div class="result-img-wrap"><img src="${trend[1]}" class="result-img" loading="lazy"/></div>`;
       }
-      if (dist || cls) {
-        html += `<div class="result-section-label" style="margin-top:10px">Distribution &amp; Class Comparison</div>`;
-        if (dist) html += `<div class="result-img-wrap"><img src="${dist[1]}" class="result-img" loading="lazy"/></div>`;
-        if (cls)  html += `<div class="result-img-wrap" style="margin-top:8px"><img src="${cls[1]}" class="result-img" loading="lazy"/></div>`;
+      if (dist) {
+        html += `<div class="result-section-label" style="margin-top:10px">Distribution Comparison</div>`;
+        html += `<div class="result-img-wrap"><img src="${dist[1]}" class="result-img" loading="lazy"/></div>`;
+      }
+      if (cls) {
+        html += `<div class="result-section-label" style="margin-top:10px">Class Composition Comparison</div>`;
+        html += `<div class="result-img-wrap"><img src="${cls[1]}" class="result-img" loading="lazy"/></div>`;
       }
       if (lulcB) {
         html += `<div class="result-section-label" style="margin-top:10px">Land Cover Change</div>`;
