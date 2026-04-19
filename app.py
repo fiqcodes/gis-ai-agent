@@ -230,6 +230,14 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         end_date    = parsed.get('end_date')   or '2023-12-31'
         variables   = parsed.get('variables')  or []
         intent      = parsed.get('intent', 'analysis')
+        years_list  = parsed.get('years')       or None   # e.g. [2023, 2024, 2025] or None
+        month_start = parsed.get('month_start') or None   # 1-12 or None
+        month_end   = parsed.get('month_end')   or None   # 1-12 or None
+
+        # Determine multi-year mode
+        is_multiyear = bool(years_list and len(years_list) > 1)
+        if is_multiyear:
+            years_list = sorted(int(y) for y in years_list)
 
         # Normalize variables
         normalized = []
@@ -247,7 +255,8 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         job['parsed'] = {
             'region': region_name, 'start_date': start_date,
             'end_date': end_date, 'variables': variables,
-            'intent': intent,
+            'intent': intent, 'is_multiyear': is_multiyear,
+            'years': years_list,
         }
 
         # Handle QA intent
@@ -787,6 +796,277 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
 
         update_step(3, 'done', 100)
 
+        # ── Step 4a: Multi-year combined charts ───────────────────────────────
+        # If multi-year, run the same analysis for each additional year,
+        # then produce combined overlay charts.
+        multiyear_figures = {}   # label → { 'charts': [...], 'year_stats': {yr: stats} }
+
+        if is_multiyear and years_list:
+            print(f'\n[MULTI-YEAR] Running additional years: {years_list}')
+            n_years = len(years_list)
+
+            # Build per-year date ranges
+            def _year_dates(yr, ms, me):
+                """Return (start_str, end_str) for a given year and optional month range."""
+                if ms and me:
+                    # Seasonal: apply month range to this year
+                    if me >= ms:
+                        return f'{yr}-{ms:02d}-01', f'{yr}-{me:02d}-28'
+                    else:
+                        # Wraps year-boundary (e.g. winter Dec-Feb)
+                        return f'{yr}-{ms:02d}-01', f'{yr+1}-{me:02d}-28'
+                else:
+                    return f'{yr}-01-01', f'{yr}-12-31'
+
+            # Collect per-year stats for all variables (reuse year 1 from already-run analysis)
+            # We need to know which year was the "first" year in the existing run
+            first_year = int(start_date[:4])
+            year_all_stats = {first_year: dict(all_stats)}  # year → all_stats
+
+            from gis_functions import (
+                load_landsat, compute_lst, compute_uhi, get_stats,
+                SURFACE_INDEX_MAP, ATMO_INDEX_MAP, VIS,
+                get_thumb, make_rgb_overview, make_analysis_map, make_stats_charts,
+                compute_ffpi, fig_to_base64,
+                make_multiyear_trend_chart, make_multiyear_distribution_chart,
+                make_multiyear_class_chart, make_multiyear_lulc_chart,
+            )
+
+            for yr in years_list:
+                if yr == first_year:
+                    continue   # already have this year's stats
+                yr_start, yr_end = _year_dates(yr, month_start, month_end)
+                print(f'  [MULTI-YEAR] Running year {yr}: {yr_start} → {yr_end}')
+                yr_stats = {}
+                bbox = geo.get('bbox')
+
+                try:
+                    # Surface vars
+                    yr_surface_vars = [v for v in variables_with_rgb if v in surface_keys]
+                    if yr_surface_vars:
+                        yr_col, yr_comp = load_landsat(study_area_main, yr_start, yr_end)
+                        yr_cnt = yr_col.size().getInfo()
+                        print(f'    {yr_cnt} Landsat scenes for {yr}')
+                        yr_lst_img = None
+
+                        # Tile layers for this year
+                        for v in yr_surface_vars:
+                            try:
+                                if v == 'rgb':
+                                    yr_map_id = yr_comp.clip(study_area_main).getMapId(VIS['rgb'])
+                                    layers.append({
+                                        'name'    : f'True Color (RGB) — {yr}',
+                                        'tile_url': yr_map_id['tile_fetcher'].url_format,
+                                        'type'    : 'tile', 'bbox': bbox,
+                                    })
+                                elif v == 'lst':
+                                    yr_lst_img, _ = compute_lst(yr_comp, study_area_main)
+                                    s_yr = get_stats(yr_lst_img, 'LST', study_area_main, scale=90)
+                                    # Monthly stats for this year
+                                    import datetime as _dt_yr
+                                    monthly_yr = {}
+                                    cur_yr = _dt_yr.datetime.strptime(yr_start, '%Y-%m-%d').replace(day=1)
+                                    end_yr = _dt_yr.datetime.strptime(yr_end, '%Y-%m-%d')
+                                    while cur_yr <= end_yr:
+                                        m_s = cur_yr.strftime('%Y-%m-%d')
+                                        m_e = (cur_yr.replace(year=cur_yr.year+1, month=1, day=1)
+                                               if cur_yr.month == 12
+                                               else cur_yr.replace(month=cur_yr.month+1, day=1)).strftime('%Y-%m-%d')
+                                        try:
+                                            m_sc = yr_col.filterDate(m_s, m_e)
+                                            if m_sc.size().getInfo() > 0:
+                                                thermal = m_sc.select('ST_B10').median().subtract(273.15)
+                                                ms = thermal.reduceRegion(ee.Reducer.mean(), study_area_main, 90, maxPixels=1e9).getInfo()
+                                                val = list(ms.values())[0] if ms else None
+                                                if val is not None:
+                                                    monthly_yr[cur_yr.strftime('%Y-%m')] = round(val, 4)
+                                        except: pass
+                                        cur_yr = (cur_yr.replace(year=cur_yr.year+1, month=1, day=1)
+                                                  if cur_yr.month == 12
+                                                  else cur_yr.replace(month=cur_yr.month+1, day=1))
+                                    s_yr['monthly'] = monthly_yr
+                                    yr_stats['LST'] = s_yr
+                                    yr_map_id = yr_lst_img.clip(study_area_main).getMapId(VIS['lst'])
+                                    layers.append({'name': f'LST (°C) — {yr}',
+                                                   'tile_url': yr_map_id['tile_fetcher'].url_format,
+                                                   'type': 'tile', 'bbox': bbox})
+                                    # Per-year single chart (keeps existing style)
+                                    if bbox:
+                                        arr_yr = get_thumb(yr_lst_img.clip(study_area_main), VIS['lst'], study_area_main, dim=512)
+                                        am_yr  = make_analysis_map(arr_yr, VIS['lst'], f'LST (°C) — {yr}', region_name, bbox)
+                                        ch_yr  = make_stats_charts({f'LST': s_yr}, 'lst', 'LST')
+                                        figures[f'LST — {yr}'] = {
+                                            'analysis_map': am_yr, 'charts': ch_yr, 'rgb_overview': None,
+                                        }
+                                elif v == 'uhi':
+                                    if yr_lst_img is None:
+                                        yr_lst_img, _ = compute_lst(yr_comp, study_area_main)
+                                    yr_uhi_img, yr_lm, yr_ls = compute_uhi(yr_lst_img, study_area_main)
+                                    yr_lst_base = yr_stats.get('LST') or get_stats(yr_lst_img, 'LST', study_area_main, scale=90)
+                                    yr_stats['UHI'] = {
+                                        'mean': yr_lm, 'std': yr_ls,
+                                        'min': yr_lst_base.get('min'), 'max': yr_lst_base.get('max'),
+                                        'median': yr_lst_base.get('median'),
+                                        'p10': yr_lst_base.get('p10'), 'p90': yr_lst_base.get('p90'),
+                                        'lst_mean': yr_lm, 'lst_std': yr_ls,
+                                        'monthly': yr_lst_base.get('monthly', {}),
+                                    }
+                                    yr_map_id = yr_uhi_img.clip(study_area_main).getMapId(VIS['uhi'])
+                                    layers.append({'name': f'UHI — {yr}',
+                                                   'tile_url': yr_map_id['tile_fetcher'].url_format,
+                                                   'type': 'tile', 'bbox': bbox})
+                                    if bbox:
+                                        arr_yr = get_thumb(yr_uhi_img.clip(study_area_main), VIS['uhi'], study_area_main, dim=512)
+                                        am_yr  = make_analysis_map(arr_yr, VIS['uhi'], f'UHI — {yr}', region_name, bbox)
+                                        figures[f'UHI — {yr}'] = {
+                                            'analysis_map': am_yr,
+                                            'charts': make_stats_charts({'UHI': yr_stats['UHI']}, 'uhi', 'UHI'),
+                                            'rgb_overview': None,
+                                        }
+                                elif v in SURFACE_INDEX_MAP:
+                                    lbl, func, vis_key, scale = SURFACE_INDEX_MAP[v]
+                                    yr_img = func(yr_comp)
+                                    s_yr   = get_stats(yr_img, lbl, study_area_main, scale=scale)
+                                    # Monthly
+                                    import datetime as _dt_yr2
+                                    monthly_yr2 = {}
+                                    cur2 = _dt_yr2.datetime.strptime(yr_start, '%Y-%m-%d').replace(day=1)
+                                    end2 = _dt_yr2.datetime.strptime(yr_end, '%Y-%m-%d')
+                                    while cur2 <= end2:
+                                        m_s2 = cur2.strftime('%Y-%m-%d')
+                                        m_e2 = (cur2.replace(year=cur2.year+1, month=1, day=1)
+                                                if cur2.month == 12
+                                                else cur2.replace(month=cur2.month+1, day=1)).strftime('%Y-%m-%d')
+                                        try:
+                                            m_sc2 = yr_col.filterDate(m_s2, m_e2)
+                                            if m_sc2.size().getInfo() > 0:
+                                                m_img2 = func(m_sc2.median())
+                                                ms2 = m_img2.reduceRegion(ee.Reducer.mean(), study_area_main, scale, maxPixels=1e9).getInfo()
+                                                val2 = ms2.get(lbl)
+                                                if val2 is not None:
+                                                    monthly_yr2[cur2.strftime('%Y-%m')] = round(val2, 6)
+                                        except: pass
+                                        cur2 = (cur2.replace(year=cur2.year+1, month=1)
+                                                if cur2.month == 12
+                                                else cur2.replace(month=cur2.month+1))
+                                    s_yr['monthly'] = monthly_yr2
+                                    yr_stats[lbl] = s_yr
+                                    yr_map_id = yr_img.clip(study_area_main).getMapId(VIS[vis_key])
+                                    layers.append({'name': f'{lbl} — {yr}',
+                                                   'tile_url': yr_map_id['tile_fetcher'].url_format,
+                                                   'type': 'tile', 'bbox': bbox})
+                                    if bbox:
+                                        arr_yr = get_thumb(yr_img.clip(study_area_main), VIS[vis_key], study_area_main, dim=512)
+                                        am_yr  = make_analysis_map(arr_yr, VIS[vis_key], f'{lbl} — {yr}', region_name, bbox)
+                                        figures[f'{lbl} — {yr}'] = {
+                                            'analysis_map': am_yr,
+                                            'charts': make_stats_charts({lbl: s_yr}, v, lbl),
+                                            'rgb_overview': None,
+                                        }
+                            except Exception as ve_yr:
+                                print(f'    [{v} {yr}] failed: {ve_yr}')
+
+                    # Atmo vars for this year
+                    yr_atmo_vars = [v for v in variables if v in atmo_keys]
+                    for v in yr_atmo_vars:
+                        try:
+                            if v == 'ffpi':
+                                yr_ffpi, _ = compute_ffpi(study_area_main, yr_start, yr_end)
+                                s_yr = get_stats(yr_ffpi, 'FFPI', study_area_main, scale=3500)
+                                yr_stats['FFPI'] = s_yr
+                                yr_map_id = yr_ffpi.clip(study_area_main).getMapId(VIS['ffpi'])
+                                layers.append({'name': f'FFPI — {yr}',
+                                               'tile_url': yr_map_id['tile_fetcher'].url_format,
+                                               'type': 'tile', 'bbox': bbox})
+                            elif v in ATMO_INDEX_MAP:
+                                lbl, func, vis_key, unit = ATMO_INDEX_MAP[v]
+                                yr_img, yr_col2 = func(study_area_main, yr_start, yr_end)
+                                if yr_col2.size().getInfo() > 0:
+                                    band_name = yr_img.bandNames().getInfo()[0]
+                                    s_yr = get_stats(yr_img, band_name, study_area_main, scale=3500)
+                                    yr_stats[lbl] = s_yr
+                                    yr_map_id = yr_img.clip(study_area_main).getMapId(VIS[vis_key])
+                                    layers.append({'name': f'{lbl} — {yr}',
+                                                   'tile_url': yr_map_id['tile_fetcher'].url_format,
+                                                   'type': 'tile', 'bbox': bbox})
+                                    if bbox:
+                                        arr_yr = get_thumb(yr_img.clip(study_area_main), VIS[vis_key], study_area_main, dim=512)
+                                        figures[f'{lbl} — {yr}'] = {
+                                            'analysis_map': make_analysis_map(arr_yr, VIS[vis_key], f'{lbl} — {yr}', region_name, bbox),
+                                            'charts': make_stats_charts({lbl: s_yr}, v, lbl),
+                                            'rgb_overview': None,
+                                        }
+                        except Exception as ve_atmo:
+                            print(f'    [{v} atmo {yr}] failed: {ve_atmo}')
+
+                    # LULC for this year
+                    if 'lulc' in variables:
+                        try:
+                            from gis_functions import compute_lulc, make_lulc_charts
+                            yr_lulc = compute_lulc(study_area_main, yr_start, yr_end, region_name)
+                            if yr_lulc['success']:
+                                yr_stats['LULC'] = yr_lulc['stats']
+                                yr_lulc_vis     = yr_lulc['vis_params']
+                                yr_lulc_clip    = yr_lulc['lulc_img'].clip(study_area_main)
+                                if 'sld_style' in yr_lulc_vis:
+                                    yr_map_id = yr_lulc_clip.sldStyle(yr_lulc_vis['sld_style']).getMapId({})
+                                else:
+                                    yr_map_id = yr_lulc_clip.getMapId(yr_lulc_vis)
+                                layers.append({'name': f'Land Cover — {yr}',
+                                               'tile_url': yr_map_id['tile_fetcher'].url_format,
+                                               'type': 'tile', 'bbox': bbox,
+                                               'lulc_stats': yr_lulc['stats']})
+                                figures[f'LULC — {yr}'] = {
+                                    'analysis_map': None,
+                                    'charts': make_lulc_charts(yr_lulc['stats']),
+                                    'rgb_overview': None,
+                                }
+                        except Exception as lulc_yr_err:
+                            print(f'    [LULC {yr}] failed: {lulc_yr_err}')
+
+                    year_all_stats[yr] = yr_stats
+                    print(f'  [MULTI-YEAR] ✓ Year {yr} done: {list(yr_stats.keys())}')
+
+                except Exception as yr_err:
+                    print(f'  [MULTI-YEAR] Year {yr} failed: {yr_err}')
+                    import traceback as _tb_yr; _tb_yr.print_exc()
+
+            # ── Build combined multi-year charts ─────────────────────────────
+            print(f'\n[MULTI-YEAR] Building combined charts...')
+            # Collect all variable labels across all years
+            all_var_labels = set()
+            for yr_s in year_all_stats.values():
+                all_var_labels.update(yr_s.keys())
+
+            for var_label in all_var_labels:
+                yearly_var_stats = {yr: year_all_stats[yr].get(var_label, {})
+                                    for yr in years_list if year_all_stats.get(yr, {}).get(var_label)}
+                if not yearly_var_stats:
+                    continue
+
+                if var_label == 'LULC':
+                    # LULC combined bar
+                    yearly_lulc = {yr: s for yr, s in yearly_var_stats.items()}
+                    lulc_combined = make_multiyear_lulc_chart(yearly_lulc)
+                    if lulc_combined:
+                        multiyear_figures['LULC'] = {
+                            'charts': [('multiyear_bar', lulc_combined)],
+                        }
+                else:
+                    charts_combined = []
+                    trend_b64 = make_multiyear_trend_chart(yearly_var_stats, var_label, n_years)
+                    if trend_b64:
+                        charts_combined.append(('multiyear_trend', trend_b64))
+                    dist_b64 = make_multiyear_distribution_chart(yearly_var_stats, var_label)
+                    if dist_b64:
+                        charts_combined.append(('multiyear_dist', dist_b64))
+                    class_b64 = make_multiyear_class_chart(yearly_var_stats, var_label)
+                    if class_b64:
+                        charts_combined.append(('multiyear_class', class_b64))
+                    if charts_combined:
+                        multiyear_figures[var_label] = {'charts': charts_combined}
+                        print(f'  ✓ Combined charts for {var_label}: {len(charts_combined)} charts')
+
         # ── Step 5: Layers already collected via GEE URLs above ─────────────
         update_step(4, 'running', 80)
         print(f'  {len(layers)} layers ready for map display')
@@ -818,19 +1098,22 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
 
         job['status'] = 'complete'
         job['result'] = {
-            'type'        : 'analysis',
-            'region'      : region_name,
-            'start_date'  : start_date,
-            'end_date'    : end_date,
-            'variables'   : variables,
-            'stats'       : all_stats,
-            'layers'      : layers,
-            'figures'     : figures,
-            'geo'         : geo,
-            'insight'     : insight or '',
-            'var_insights': var_insights,
-            'conclusion'  : conclusion or '',
-            'web_context' : web_context or '',
+            'type'             : 'analysis',
+            'region'           : region_name,
+            'start_date'       : start_date,
+            'end_date'         : end_date,
+            'variables'        : variables,
+            'stats'            : all_stats,
+            'layers'           : layers,
+            'figures'          : figures,
+            'multiyear_figures': multiyear_figures,
+            'is_multiyear'     : is_multiyear,
+            'years'            : years_list,
+            'geo'              : geo,
+            'insight'          : insight or '',
+            'var_insights'     : var_insights,
+            'conclusion'       : conclusion or '',
+            'web_context'      : web_context or '',
         }
 
     except Exception as ex:

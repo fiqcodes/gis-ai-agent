@@ -247,7 +247,6 @@ function addImageOverlay(name, base64Img, bbox) {
     layer  : overlay,
     type   : 'raster',
     visible: true,
-    bbox   : bbox,
   });
 
   renderLayersList();
@@ -332,14 +331,8 @@ function toggleLayerVisibility(id) {
 
 function zoomToLayer(id) {
   const item = mapLayers.find(l => l.id === id);
-  if (!item) return;
-  // Tile layers don't have getBounds() — use stored bbox instead
-  if (item.bbox) {
-    const [w, s, e, n] = item.bbox;
-    map.fitBounds([[s, w], [n, e]], { padding: [40, 40] });
-  } else if (item.layer.getBounds) {
-    try { map.fitBounds(item.layer.getBounds(), { padding: [40, 40] }); } catch(e) {}
-  }
+  if (!item || !item.layer.getBounds) return;
+  try { map.fitBounds(item.layer.getBounds(), { padding: [40, 40] }); } catch(e){}
 }
 
 function removeLayerById(id) {
@@ -834,7 +827,7 @@ function handleResult(result) {
   }
 
   // Analysis result
-  const { region, start_date, end_date, variables, stats, layers, geo, insight, figures, var_insights, conclusion } = result;
+  const { region, start_date, end_date, variables, stats, layers, geo, insight, figures, var_insights, conclusion, multiyear_figures, is_multiyear, years } = result;
 
   // Add new GEE tile layers on top of existing ones — do NOT clear previous layers.
   // Users can toggle or remove individual layers from the layers panel.
@@ -886,7 +879,7 @@ function handleResult(result) {
   }
 
   // 2. Build chat message
-  let html = buildResultHTML(region, start_date, end_date, variables, stats, layers, figures, var_insights || {}, conclusion || insight || '');
+  let html = buildResultHTML(region, start_date, end_date, variables, stats, layers, figures, var_insights || {}, conclusion || insight || '', multiyear_figures || {}, years || []);
   appendAIMessage(html);
 
   // Auto-save this chat to history after result is rendered
@@ -920,7 +913,7 @@ const VAR_DESC_MAP = {
   'LULC'   : 'Land Use / Land Cover classification (LULC)',
 };
 
-function buildResultHTML(region, startDate, endDate, variables, stats, layers, figures, varInsights, conclusion) {
+function buildResultHTML(region, startDate, endDate, variables, stats, layers, figures, varInsights, conclusion, multiyearFigures, yearsList) {
   const dateStr   = `${startDate} → ${endDate}`;
   const startYear = startDate.slice(0, 4);
   const endYear   = endDate.slice(0, 4);
@@ -1106,6 +1099,39 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
 
       html += `</div>`; // end .var-section
     }
+  }
+
+  // ── MULTI-YEAR COMBINED CHARTS ────────────────────────────────────────────
+  if (multiyearFigures && Object.keys(multiyearFigures).length > 0 && yearsList && yearsList.length > 1) {
+    html += `<div class="var-section">`;
+    html += `<div class="result-section-label" style="margin-top:4px">Multi-Year Comparison (${yearsList.join(' · ')})</div>`;
+
+    for (const [varLabel, myFig] of Object.entries(multiyearFigures)) {
+      if (!myFig || !myFig.charts || myFig.charts.length === 0) continue;
+      html += `<div style="margin-top:14px">`;
+      html += `<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);margin-bottom:6px">${escapeHtml(varLabel)}</div>`;
+
+      const trend  = myFig.charts.find(c => c[0] === 'multiyear_trend');
+      const dist   = myFig.charts.find(c => c[0] === 'multiyear_dist');
+      const cls    = myFig.charts.find(c => c[0] === 'multiyear_class');
+      const lulcB  = myFig.charts.find(c => c[0] === 'multiyear_bar');
+
+      if (trend) {
+        html += `<div class="result-section-label" style="margin-top:10px">Yearly / Seasonal Trend</div>`;
+        html += `<div class="result-img-wrap"><img src="${trend[1]}" class="result-img" loading="lazy"/></div>`;
+      }
+      if (dist || cls) {
+        html += `<div class="result-section-label" style="margin-top:10px">Distribution &amp; Class Comparison</div>`;
+        if (dist) html += `<div class="result-img-wrap"><img src="${dist[1]}" class="result-img" loading="lazy"/></div>`;
+        if (cls)  html += `<div class="result-img-wrap" style="margin-top:8px"><img src="${cls[1]}" class="result-img" loading="lazy"/></div>`;
+      }
+      if (lulcB) {
+        html += `<div class="result-section-label" style="margin-top:10px">Land Cover Change</div>`;
+        html += `<div class="result-img-wrap"><img src="${lulcB[1]}" class="result-img" loading="lazy"/></div>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
   }
 
   // ── CONCLUSION ────────────────────────────────────────────────────────────
