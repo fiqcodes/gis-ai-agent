@@ -578,232 +578,6 @@ def make_analysis_map(img_arr, vis_params, label, region_name, bbox):
         return None
 
 
-def make_multiyear_grid_map(year_panels, label, region_name):
-    """
-    Render a side-by-side grid of analysis maps, one per year.
-    year_panels: list of (year_str, img_array, vis_params)
-    Each panel gets its OWN colorbar so different-year ranges are shown correctly.
-    Returns base64 PNG string.
-    """
-    try:
-        n = len(year_panels)
-        if n == 0:
-            return None
-        # Fit up to 4 columns
-        ncols = min(n, 4)
-        nrows = (n + ncols - 1) // ncols
-        fig, axes = plt.subplots(nrows, ncols,
-                                 figsize=(ncols * 4.5, nrows * 4.2),
-                                 squeeze=False)
-        fig.suptitle(f'{label} — {region_name} (Year-by-Year)',
-                     fontsize=12, fontweight='bold', y=1.01)
-
-        unit_map = {
-            'LST': '°C', 'UHI': 'z-score', 'NDVI': 'index',
-            'EVI': 'index', 'SAVI': 'index', 'NDWI': 'index',
-            'MNDWI': 'index', 'NDBI': 'index', 'NO2': 'mol/m²',
-            'CO': 'mol/m²', 'SO2': 'mol/m²', 'CH4': 'ppb',
-            'O3': 'DU', 'Aerosol': 'AAI', 'FFPI': '0-1',
-        }
-        unit = next((v for k, v in unit_map.items() if k.upper() in label.upper()), 'value')
-
-        for i, (year_str, img_arr, vis_params) in enumerate(year_panels):
-            row, col = divmod(i, ncols)
-            ax = axes[row][col]
-            ax.imshow(img_arr, aspect='auto', origin='upper')
-            ax.set_title(str(year_str), fontsize=10, fontweight='bold', pad=6)
-            ax.axis('off')
-
-            # Individual colorbar per panel (each year has its own data range)
-            if 'palette' in vis_params and 'min' in vis_params:
-                cmap = mcolors.LinearSegmentedColormap.from_list(
-                    f'{label}_{year_str}', vis_params['palette'])
-                norm = mcolors.Normalize(vmin=vis_params['min'], vmax=vis_params['max'])
-                sm   = cm.ScalarMappable(cmap=cmap, norm=norm)
-                sm.set_array([])
-                cbar = fig.colorbar(sm, ax=ax, orientation='vertical',
-                                    fraction=0.046, pad=0.04, aspect=20)
-                cbar.ax.tick_params(labelsize=7)
-                cbar.set_label(unit, fontsize=7)
-
-            ax.text(0.02, 0.02, '© GEE', transform=ax.transAxes,
-                    fontsize=6, color='white',
-                    bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.4))
-
-        # Hide any unused axes
-        for i in range(len(year_panels), nrows * ncols):
-            row, col = divmod(i, ncols)
-            axes[row][col].set_visible(False)
-
-        plt.tight_layout()
-        result = fig_to_base64(fig)
-        print(f'  ✓ Multi-year grid map: {n} panels')
-        return result
-    except Exception as e:
-        print(f'  Multi-year grid map failed: {e}')
-        return None
-
-
-def make_multiyear_trend_chart(yearly_stats, label, mode='yearly'):
-    """
-    For multi-year analysis: generate a yearly mean bar+line chart.
-    yearly_stats: dict of {year_str: stats_dict}
-    mode: 'yearly' (bar per year) or 'monthly_combined' (all months across years on one chart)
-    Returns (chart_type, base64_png).
-    """
-    try:
-        years  = sorted(yearly_stats.keys())
-        means  = [yearly_stats[y].get('mean') for y in years]
-        # Filter out None
-        valid  = [(y, m) for y, m in zip(years, means) if m is not None]
-        if len(valid) < 2:
-            return None
-
-        years_v, means_v = zip(*valid)
-
-        fig, ax = plt.subplots(figsize=(max(5, len(years_v) * 1.1), 3.8))
-        colors = ['#2196F3' if i % 2 == 0 else '#1565C0' for i in range(len(years_v))]
-        bars = ax.bar(years_v, means_v, color=colors, edgecolor='white',
-                      linewidth=0.6, width=0.55, zorder=3)
-        ax.plot(years_v, means_v, color='#FF5722', linewidth=2,
-                marker='o', markersize=5, markerfacecolor='white',
-                markeredgecolor='#FF5722', zorder=4)
-
-        y_min = min(means_v)
-        y_max = max(means_v)
-        margin = (y_max - y_min) * 0.15 if y_max != y_min else abs(y_max) * 0.1 + 0.01
-        ax.set_ylim(y_min - margin, y_max + margin * 2)
-
-        for bar, val in zip(bars, means_v):
-            ax.text(bar.get_x() + bar.get_width() / 2,
-                    bar.get_height() + margin * 0.3,
-                    f'{val:.3f}', ha='center', va='bottom',
-                    fontsize=8, fontweight='bold', color='#333')
-
-        ax.set_xlabel('Year', fontsize=9)
-        ax.set_ylabel(label, fontsize=9)
-        ax.set_title(f'{label} Yearly Mean', fontsize=10, fontweight='bold')
-        ax.grid(True, axis='y', linestyle='--', linewidth=0.5, alpha=0.5, zorder=0)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        plt.tight_layout()
-        return ('yearly_trend', fig_to_base64(fig))
-    except Exception as e:
-        print(f'  Yearly trend chart failed: {e}')
-        return None
-
-
-def make_multiyear_combined_monthly_chart(yearly_stats, label):
-    """
-    For <=3 years: overlay monthly means of each year as separate lines on one chart.
-    yearly_stats: dict of {year_str: stats_dict with 'monthly' key}
-    Returns (chart_type, base64_png).
-    """
-    try:
-        COLORS = ['#2196F3', '#FF5722', '#4CAF50', '#9C27B0', '#FF9800']
-        fig, ax = plt.subplots(figsize=(9, 3.8))
-        plotted = 0
-        month_labels = ['01','02','03','04','05','06',
-                        '07','08','09','10','11','12']
-
-        for idx, year in enumerate(sorted(yearly_stats.keys())):
-            monthly = yearly_stats[year].get('monthly', {})
-            if not monthly:
-                continue
-            # Build array of 12 months (None where missing)
-            vals = []
-            x_idx = []
-            for mi, mm in enumerate(month_labels):
-                key = f'{year}-{mm}'
-                if key in monthly:
-                    vals.append(monthly[key])
-                    x_idx.append(mi)
-            if len(vals) < 2:
-                continue
-            color = COLORS[idx % len(COLORS)]
-            ax.plot(x_idx, vals, color=color, linewidth=2,
-                    marker='o', markersize=4, markerfacecolor='white',
-                    markeredgecolor=color, markeredgewidth=1.5,
-                    label=str(year))
-            baseline = min(vals) - abs(min(vals)) * 0.02
-            ax.fill_between(x_idx, vals, baseline, alpha=0.08, color=color)
-            plotted += 1
-
-        if plotted == 0:
-            plt.close(fig)
-            return None
-
-        ax.set_xticks(range(12))
-        ax.set_xticklabels(['Jan','Feb','Mar','Apr','May','Jun',
-                            'Jul','Aug','Sep','Oct','Nov','Dec'],
-                           fontsize=8, rotation=30)
-        ax.set_ylabel(label, fontsize=9)
-        ax.set_title(f'{label} Monthly Mean (Combined)', fontsize=10, fontweight='bold')
-        ax.legend(fontsize=8, frameon=False)
-        ax.grid(True, axis='y', linestyle='--', linewidth=0.5, alpha=0.5)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        plt.tight_layout()
-        return ('monthly_combined', fig_to_base64(fig))
-    except Exception as e:
-        print(f'  Combined monthly chart failed: {e}')
-        return None
-
-
-def make_multiyear_lulc_grid(year_lulc_list, region_name):
-    """
-    Render LULC pie charts side by side, one per year.
-    year_lulc_list: list of (year_str, lulc_stats_dict)
-    Returns base64 PNG.
-    """
-    try:
-        n = len(year_lulc_list)
-        if n == 0:
-            return None
-        ncols = min(n, 4)
-        nrows = (n + ncols - 1) // ncols
-        fig, axes = plt.subplots(nrows, ncols,
-                                 figsize=(ncols * 4.5, nrows * 4.2),
-                                 squeeze=False)
-        fig.suptitle(f'Land Cover Change — {region_name}',
-                     fontsize=12, fontweight='bold', y=1.01)
-
-        for i, (year_str, stats) in enumerate(year_lulc_list):
-            row, col = divmod(i, ncols)
-            ax = axes[row][col]
-            classes  = stats.get('classes', {})
-            if not classes:
-                ax.set_visible(False)
-                continue
-            names   = list(classes.keys())
-            pcts    = [classes[n]['percentage'] for n in names]
-            colors  = [classes[n].get('color', '#aaaaaa') for n in names]
-            total   = stats.get('total_ha', 0)
-            wedges, _, autotexts = ax.pie(
-                pcts, labels=None, colors=colors,
-                autopct=lambda p: f'{p:.0f}%' if p > 4 else '',
-                startangle=140, pctdistance=0.78,
-                wedgeprops=dict(edgecolor='white', linewidth=1.2))
-            for at in autotexts:
-                at.set_fontsize(7); at.set_fontweight('bold'); at.set_color('white')
-            ax.set_title(f'{year_str}\n({total:,.0f} ha)', fontsize=9, fontweight='bold')
-            ax.legend(wedges, [f'{nm} ({classes[nm]["percentage"]:.0f}%)' for nm in names],
-                      loc='lower center', bbox_to_anchor=(0.5, -0.22),
-                      ncol=2, fontsize=6, frameon=False)
-
-        for i in range(len(year_lulc_list), nrows * ncols):
-            row, col = divmod(i, ncols)
-            axes[row][col].set_visible(False)
-
-        plt.tight_layout()
-        result = fig_to_base64(fig)
-        print(f'  ✓ Multi-year LULC pie grid: {n} years')
-        return result
-    except Exception as e:
-        print(f'  Multi-year LULC grid failed: {e}')
-        return None
-
-
 def make_stats_charts(stats, var_name, label):
     """
     Generate histogram + optional class bar chart using matplotlib.
@@ -1402,21 +1176,15 @@ SYSTEM_PROMPT = (
     "STRICT RULE: Do NOT add any variables the user did not explicitly ask for.\n\n"
     "Extract:\n"
     "1. region - the place name\n"
-    "2. start_date - YYYY-MM-DD (first day of the earliest year/date mentioned)\n"
-    "3. end_date - YYYY-MM-DD (last day of the latest year/date mentioned)\n"
-    "4. variables - ONLY what the user explicitly said.\n"
-    "5. multi_year - if the user requests MULTIPLE SPECIFIC YEARS (e.g. '2023-2025', "
-    "'from 2020 to 2024', 'each year 2021 2022 2023'), set this to a list of those years "
-    "as integers e.g. [2023, 2024, 2025]. If single year or single period, set to null.\n\n"
-    "MULTI-YEAR DETECTION RULE: \n"
-    "- 'NDVI in Bandung 2023-2025' → multi_year=[2023,2024,2025], start_date=2023-01-01, end_date=2025-12-31\n"
-    "- 'LST Jakarta 2020 to 2023' → multi_year=[2020,2021,2022,2023]\n"
-    "- 'NDVI Bandung in 2023' → multi_year=null (single year)\n"
-    "- 'NDVI Bandung Jan-Jun 2024' → multi_year=null (single period)\n\n"
+    "2. start_date - YYYY-MM-DD\n"
+    "3. end_date - YYYY-MM-DD\n"
+    "4. variables - ONLY what the user explicitly said. "
+    "If user says 'NO2 and CO', return EXACTLY ['no2', 'co']. "
+    "NEVER add ch4, aerosol, so2, or anything else not mentioned.\n\n"
     "Available variables:\n"
     "Surface: ndvi, evi, savi, ndwi, mndwi, ndbi, ui, nbi, bsi, ndsi, lst, uhi, rgb\n"
     "Atmospheric: co, ch4, no2, so2, aerosol, o3, gpp, burned, ffpi\n"
-    "Special: all_surface, all_atmo, lulc\n\n"
+    "Special: all_surface, all_atmo\n\n"
     'Respond with ONLY this JSON, nothing else:\n'
     '{\n'
     '  "intent": "analysis" or "question" or "unknown",\n'
@@ -1424,7 +1192,6 @@ SYSTEM_PROMPT = (
     '  "start_date": "YYYY-MM-DD or null",\n'
     '  "end_date": "YYYY-MM-DD or null",\n'
     '  "variables": ["exactly", "what", "user", "asked"],\n'
-    '  "multi_year": [2023, 2024, 2025] or null,\n'
     '  "response": "brief confirmation"\n'
     '}\n'
     'No text outside the JSON. No extra variables.'

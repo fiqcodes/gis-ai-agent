@@ -827,7 +827,7 @@ function handleResult(result) {
   }
 
   // Analysis result
-  const { region, start_date, end_date, variables, stats, layers, geo, insight, figures, var_insights, conclusion, multi_year } = result;
+  const { region, start_date, end_date, variables, stats, layers, geo, insight, figures, var_insights, conclusion } = result;
 
   // Add new GEE tile layers on top of existing ones — do NOT clear previous layers.
   // Users can toggle or remove individual layers from the layers panel.
@@ -879,7 +879,7 @@ function handleResult(result) {
   }
 
   // 2. Build chat message
-  let html = buildResultHTML(region, start_date, end_date, variables, stats, layers, figures, var_insights || {}, conclusion || insight || '', multi_year || null);
+  let html = buildResultHTML(region, start_date, end_date, variables, stats, layers, figures, var_insights || {}, conclusion || insight || '');
   appendAIMessage(html);
 
   // Auto-save this chat to history after result is rendered
@@ -913,7 +913,7 @@ const VAR_DESC_MAP = {
   'LULC'   : 'Land Use / Land Cover classification (LULC)',
 };
 
-function buildResultHTML(region, startDate, endDate, variables, stats, layers, figures, varInsights, conclusion, multiYear) {
+function buildResultHTML(region, startDate, endDate, variables, stats, layers, figures, varInsights, conclusion) {
   const dateStr   = `${startDate} → ${endDate}`;
   const startYear = startDate.slice(0, 4);
   const endYear   = endDate.slice(0, 4);
@@ -974,13 +974,6 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
   if (figures && Object.keys(figures).length > 0) {
     for (const [varLabel, fig] of Object.entries(figures)) {
       if (!fig) continue;
-      // In multi-year mode: skip individual year figures (e.g. "NDVI_2023"),
-      // only render the combined "_multiyear" entries
-      if (multiYear && multiYear.length > 1) {
-        const isMultiyearFig = varLabel.endsWith('_multiyear') ||
-                               varLabel.toUpperCase() === 'LULC_MULTIYEAR';
-        if (!isMultiyearFig) continue;
-      }
       const varStats   = stats && stats[varLabel];
       const varInsight = varInsights && varInsights[varLabel];
       const isLULC     = varLabel.toUpperCase() === 'LULC';
@@ -1028,105 +1021,6 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           html += `<div class="var-insight-block">
             <div class="var-insight-text">${escapeHtml(varInsight)}</div>
           </div>`;
-        }
-
-      } else if (fig.is_multiyear) {
-        // ── MULTI-YEAR layout ─────────────────────────────────────────────────
-        // Strip the "_multiyear" suffix for display
-        const displayLabel = varLabel.replace(/_multiyear$/i, '');
-        const years = fig.years || [];
-
-        // 1. Multi-year grid map
-        if (fig.analysis_map) {
-          html += `<div class="result-section-label">${escapeHtml(displayLabel)} — Year-by-Year Maps</div>`;
-          html += `<div class="result-img-wrap">
-            <img src="${fig.analysis_map}" class="result-img" loading="lazy"/>
-            <div class="result-img-caption">${escapeHtml(displayLabel)} grid (${years.join(', ')}) — ${escapeHtml(region)}</div>
-          </div>`;
-        }
-
-        // 2. Trend / combined monthly chart (first chart in list)
-        const charts = fig.charts || [];
-        const trendChart = charts.find(c =>
-          c[0] === 'yearly_trend' || c[0] === 'monthly_combined');
-        if (trendChart) {
-          const trendLabel = trendChart[0] === 'yearly_trend' ? 'Yearly Trend' : 'Monthly Trend (Combined)';
-          html += `<div class="result-section-label" style="margin-top:16px">${trendLabel}</div>`;
-          html += `<div class="result-img-wrap">
-            <img src="${trendChart[1]}" class="result-img" loading="lazy"/>
-          </div>`;
-        }
-
-        // 3. Per-year distribution + class charts grouped by year
-        const shownTypes = new Set(trendChart ? [trendChart[0]] : []);
-        // Group remaining charts by year suffix
-        const byYear = {};
-        for (const [type, b64] of charts) {
-          if (shownTypes.has(type)) continue;
-          // type format: "histogram_2023", "class_bar_2023", etc.
-          const parts = type.split('_');
-          const yr    = parts[parts.length - 1];
-          const base  = parts.slice(0, -1).join('_');
-          if (!byYear[yr]) byYear[yr] = {};
-          byYear[yr][base] = b64;
-        }
-        const sortedYears = Object.keys(byYear).sort();
-        if (sortedYears.length > 0) {
-          html += `<div class="result-section-label" style="margin-top:16px">Per-Year Distribution &amp; Class Composition</div>`;
-          for (const yr of sortedYears) {
-            html += `<div style="margin:8px 0 4px;font-size:11px;font-weight:600;color:var(--text2)">${yr}</div>`;
-            const yrCharts = byYear[yr];
-            if (yrCharts['histogram']) {
-              html += `<div class="result-img-wrap" style="margin-bottom:8px">
-                <img src="${yrCharts['histogram']}" class="result-img" loading="lazy"/>
-              </div>`;
-            }
-            if (yrCharts['class_bar']) {
-              html += `<div class="result-img-wrap" style="margin-bottom:12px">
-                <img src="${yrCharts['class_bar']}" class="result-img" loading="lazy"/>
-              </div>`;
-            }
-          }
-        }
-
-        // 4. AI insight if available
-        if (varInsight) {
-          html += `<div class="var-insight-block">
-            <div class="var-insight-text">${escapeHtml(varInsight)}</div>
-          </div>`;
-        }
-
-      } else if (varLabel.toUpperCase() === 'LULC_MULTIYEAR') {
-        // ── MULTI-YEAR LULC layout ────────────────────────────────────────────
-        const years = fig.years || [];
-        if (fig.analysis_map) {
-          html += `<div class="result-section-label">Land Cover Change — Year-by-Year</div>`;
-          html += `<div class="result-img-wrap">
-            <img src="${fig.analysis_map}" class="result-img" loading="lazy"/>
-            <div class="result-img-caption">Land Cover grids (${years.join(', ')}) — ${escapeHtml(region)}</div>
-          </div>`;
-        }
-        // Per-year individual pie charts
-        const lulcCharts = fig.charts || [];
-        const byYrLulc = {};
-        for (const [type, b64] of lulcCharts) {
-          const parts = type.split('_');
-          const yr    = parts[parts.length - 1];
-          const base  = parts.slice(0, -1).join('_');
-          if (!byYrLulc[yr]) byYrLulc[yr] = {};
-          byYrLulc[yr][base] = b64;
-        }
-        const sortedLulcYrs = Object.keys(byYrLulc).sort();
-        if (sortedLulcYrs.length > 0) {
-          html += `<div class="result-section-label" style="margin-top:16px">Per-Year Area Distribution</div>`;
-          for (const yr of sortedLulcYrs) {
-            if (byYrLulc[yr]['lulc_pie']) {
-              html += `<div style="margin:8px 0 4px;font-size:11px;font-weight:600;color:var(--text2)">${yr}</div>`;
-              html += `<div class="result-img-wrap" style="margin-bottom:12px">
-                <img src="${byYrLulc[yr]['lulc_pie']}" class="result-img" loading="lazy"/>
-              </div>`;
-            }
-          }
         }
 
       } else {
