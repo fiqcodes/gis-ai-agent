@@ -184,15 +184,10 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         from config import GEE_PROJECT
 
         def init_gee():
-            """Initialize GEE fresh for this thread — loads gis_functions from project dir."""
+            """Initialize GEE fresh for this thread — delegates to gis_functions."""
             try:
-                import importlib.util as _ilu2, sys as _sys2
-                _path2 = str(PROJECT_DIR / 'gis_functions.py')
-                _spec2 = _ilu2.spec_from_file_location('gis_functions', _path2)
-                _mod2  = _ilu2.module_from_spec(_spec2)
-                _sys2.modules['gis_functions'] = _mod2
-                _spec2.loader.exec_module(_mod2)
-                _mod2.gee_init_for_thread()
+                from gis_functions import gee_init_for_thread
+                gee_init_for_thread()
                 print('  GEE initialized ✓')
                 return True
             except Exception as e:
@@ -204,17 +199,8 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             job['error']  = 'GEE initialization failed. Check service account credentials.'
             return
         from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR as OUT
-
-        # ── Force-load gis_functions from THIS project directory ──────────────
-        # Prevents Python from using ~/Downloads/gis_functions.py (the old file)
-        # even when it is already cached in sys.modules from a previous import.
-        import importlib, importlib.util as _ilu, sys as _sys
-        _gf_path = str(PROJECT_DIR / 'gis_functions.py')
-        _gf_spec = _ilu.spec_from_file_location('gis_functions', _gf_path)
-        _gf_mod  = _ilu.module_from_spec(_gf_spec)
-        _sys.modules['gis_functions'] = _gf_mod   # override any cached wrong module
-        _gf_spec.loader.exec_module(_gf_mod)
-
+        import importlib, gis_functions as _gf_mod
+        importlib.reload(_gf_mod)
         from gis_functions import (
             SURFACE_INDEX_MAP, ATMO_INDEX_MAP, KEYWORD_MAP, SYSTEM_PROMPT,
             resolve_region, fetch_web_context, generate_insight,
@@ -779,7 +765,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     else:
                         map_id = lulc_clipped.getMapId(lulc_vis)
                     layers.append({
-                        'name'      : 'Land Cover Classification',
+                        'name'      : f'LULC {start_date[:4]}' if is_multiyear else 'Land Cover Classification',
                         'tile_url'  : map_id['tile_fetcher'].url_format,
                         'type'      : 'tile',
                         'bbox'      : geo.get('bbox'),
@@ -1048,14 +1034,57 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 ylc = yr_lulc['lulc_img'].clip(study_area_main)
                                 mid = (ylc.sldStyle(ylv['sld_style']).getMapId({}) if 'sld_style' in ylv
                                        else ylc.getMapId(ylv))
-                                layers.append({'name': f'Land Cover — {yr}',
+                                layers.append({'name': f'LULC {yr}',
                                                'tile_url': mid['tile_fetcher'].url_format,
                                                'type': 'tile', 'bbox': bbox,
                                                'lulc_stats': yr_lulc['stats']})
+
+                                # Generate proper static map (same method as year-0)
+                                yr_lulc_map_b64 = None
+                                if bbox:
+                                    try:
+                                        import numpy as _np_yr
+                                        import matplotlib.pyplot as _plt_yr
+                                        import matplotlib.patches as _mp_yr
+                                        yr_arr = (get_thumb(ylc.sldStyle(ylv['sld_style']), {}, study_area_main, dim=512)
+                                                  if 'sld_style' in ylv
+                                                  else get_thumb(ylc, ylv, study_area_main, dim=512))
+                                        yr_classes = yr_lulc['stats'].get('classes', {})
+                                        _w, _s, _e, _n = bbox
+                                        _fig_yr, _ax_yr = _plt_yr.subplots(figsize=(7, 6))
+                                        _ax_yr.imshow(yr_arr, extent=[_w, _e, _s, _n], aspect='auto', origin='upper')
+                                        _patches = [_mp_yr.Patch(color=info['color'],
+                                                    label=f"{cls} ({info['percentage']:.1f}%)")
+                                                    for cls, info in yr_classes.items()]
+                                        _ax_yr.legend(handles=_patches, loc='lower right', fontsize=7,
+                                                      framealpha=0.85, edgecolor='#ccc',
+                                                      title='Land Cover', title_fontsize=8)
+                                        _lon = _np_yr.linspace(_w, _e, 5)
+                                        _lat = _np_yr.linspace(_s, _n, 5)
+                                        _ax_yr.set_xticks(_lon); _ax_yr.set_yticks(_lat)
+                                        _ax_yr.set_xticklabels([f'{v:.2f}°' for v in _lon], fontsize=8, color='#555')
+                                        _ax_yr.set_yticklabels([f'{v:.2f}°' for v in _lat], fontsize=8, color='#555')
+                                        _ax_yr.grid(False)
+                                        _ax_yr.set_title(f'Land Cover — {region_name} ({yr})', fontsize=11, fontweight='bold', pad=10)
+                                        for _sp in _ax_yr.spines.values():
+                                            _sp.set_edgecolor('#cccccc'); _sp.set_linewidth(0.8)
+                                        _ax_yr.text(0.01, 0.01, '© Landsat / Google Earth Engine',
+                                                    transform=_ax_yr.transAxes, fontsize=7, color='white',
+                                                    bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.4))
+                                        _plt_yr.tight_layout()
+                                        yr_lulc_map_b64 = fig_to_base64(_fig_yr)
+                                        _plt_yr.close(_fig_yr)
+                                        print(f'  ✓ LULC static map for {yr}')
+                                    except Exception as _lme_yr:
+                                        print(f'  LULC static map failed for {yr}: {_lme_yr}')
+
+                                # No individual pie in multi-year mode — combined bar shown in multiyear_figures
                                 figures[f'LULC — {yr}'] = {
-                                    'analysis_map': None,
-                                    'charts': _mlc(yr_lulc['stats']),
+                                    'analysis_map': yr_lulc_map_b64,
+                                    'charts'      : [],
                                     'rgb_overview': None,
+                                    'lulc_stats'  : yr_lulc['stats'],
+                                    'year'        : yr,
                                 }
                         except Exception as lulc_yr_err:
                             print(f'    [LULC {yr}] failed: {lulc_yr_err}')
