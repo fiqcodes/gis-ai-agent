@@ -467,7 +467,8 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             map_id   = lst_img.clip(study_area_surf).getMapId(VIS['lst'])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': 'LST (°C)', 'tile_url': tile_url,
-                                           'type': 'tile', 'bbox': bbox})                            if bbox:
+                                           'type': 'tile', 'bbox': bbox})
+                            if bbox:
                                 arr          = get_thumb(lst_img.clip(study_area_surf), VIS['lst'], study_area_surf, dim=512)
                                 analysis_b64 = make_analysis_map(arr, VIS['lst'], 'LST (°C)', region_name, bbox)
                                 charts       = make_stats_charts(all_stats, 'lst', 'LST')
