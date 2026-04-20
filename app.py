@@ -93,26 +93,16 @@ def find_latest_outputs(prefix_keywords: list) -> dict:
     return results
 
 
-# City bounding boxes [W, S, E, N] — mirrors CITY_BBOX_FALLBACK in gis_functions.py
+# Cities kept here are those whose Nominatim lookup returns country-sized bboxes.
+# Cities with reliable Nominatim/GAUL polygon boundaries are intentionally omitted
+# so the exact polygon boundary is used on the Leaflet map instead of a rectangle.
 _CITY_BBOX = {
     'tokyo':      [139.40, 35.50, 139.95, 35.82],
     'osaka':      [135.35, 34.55, 135.70, 34.80],
-    'beijing':    [116.10, 39.75, 116.65, 40.20],
-    'shanghai':   [121.10, 30.95, 121.75, 31.55],
-    'london':     [ -0.55, 51.35,  0.30, 51.70],
-    'paris':      [  2.20, 48.75,  2.55, 48.95],
-    'new york':   [-74.10, 40.55, -73.75, 40.90],
-    'los angeles':[-118.55,33.90,-118.10,34.20],
-    'jakarta':    [106.65, -6.40, 107.00, -6.05],
+    'seoul':      [126.75, 37.40, 127.20, 37.70],
     'bangkok':    [100.35, 13.55, 100.90, 13.95],
     'singapore':  [103.60,  1.20, 104.05,  1.48],
-    'sydney':     [150.90,-34.10, 151.35,-33.70],
     'dubai':      [ 55.10, 25.00,  55.55, 25.35],
-    'mumbai':     [ 72.75, 18.85,  73.05, 19.20],
-    'seoul':      [126.75, 37.40, 127.20, 37.70],
-    'berlin':     [ 13.10, 52.40,  13.75, 52.70],
-    'cairo':      [ 31.10, 29.90,  31.55, 30.20],
-    'nairobi':    [ 36.65, -1.40,  37.10, -1.15],
     'sao paulo':  [-46.85,-23.75, -46.35,-23.45],
     'mexico city':[-99.30, 19.25, -98.95, 19.60],
 }
@@ -477,8 +467,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             map_id   = lst_img.clip(study_area_surf).getMapId(VIS['lst'])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': 'LST (°C)', 'tile_url': tile_url,
-                                           'type': 'tile', 'bbox': bbox})
-                            if bbox:
+                                           'type': 'tile', 'bbox': bbox})                            if bbox:
                                 arr          = get_thumb(lst_img.clip(study_area_surf), VIS['lst'], study_area_surf, dim=512)
                                 analysis_b64 = make_analysis_map(arr, VIS['lst'], 'LST (°C)', region_name, bbox)
                                 charts       = make_stats_charts(all_stats, 'lst', 'LST')
@@ -768,7 +757,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     else:
                         map_id = lulc_clipped.getMapId(lulc_vis)
                     layers.append({
-                        'name'      : 'Land Cover Classification',
+                        'name'      : 'Land Cover',
                         'tile_url'  : map_id['tile_fetcher'].url_format,
                         'type'      : 'tile',
                         'bbox'      : geo.get('bbox'),
@@ -874,13 +863,26 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 compute_ffpi, fig_to_base64,
                 make_multiyear_trend_chart, make_multiyear_distribution_chart,
                 make_multiyear_class_chart, make_multiyear_lulc_chart,
+                make_multiyear_map_grid, make_multiyear_lulc_pie_grid,
             )
 
             # Seed year-0 stats from already-run single analysis
             year_all_stats = {first_year: dict(all_stats)}
 
+            # Per-variable collectors for multi-year map grids:
+            # { var_label: { yr: { 'composite': gee_img, 'analysis_img': gee_img, 'vis_params': dict } } }
+            _yr_grid_data = {}   # var_label → { yr → { composite, analysis_img, vis_params } }
+            _yr_lulc_stats = {}  # yr → lulc stats (for pie grid)
+
+            # Seed first-year grid data from already-computed objects
+            # We store the GEE image objects so we can re-download at grid resolution later
+            _yr_grid_data.setdefault('_composites', {})[first_year] = composite if 'composite' in dir() else None
+
             for yr in years_list:
                 if yr == first_year:
+                    # Collect first-year LULC stats if available
+                    if 'lulc' in variables and all_stats.get('LULC'):
+                        _yr_lulc_stats[first_year] = all_stats['LULC']
                     continue
                 yr_start, yr_end = _year_dates(yr, month_start, month_end)
                 print(f'  [MULTI-YEAR] Year {yr}: {yr_start} → {yr_end}')
@@ -893,18 +895,19 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                         yr_col, yr_comp = load_landsat(study_area_main, yr_start, yr_end)
                         print(f'    {yr_col.size().getInfo()} Landsat scenes')
                         yr_lst_img = None
+                        # Store composite for grid
+                        _yr_grid_data.setdefault('_composites', {})[yr] = yr_comp
 
                         for v in yr_surface:
                             try:
                                 if v == 'rgb':
                                     mid = yr_comp.clip(study_area_main).getMapId(VIS['rgb'])
-                                    layers.append({'name': f'True Color (RGB) — {yr}',
+                                    layers.append({'name': f'RGB — {yr}',
                                                    'tile_url': mid['tile_fetcher'].url_format,
                                                    'type': 'tile', 'bbox': bbox})
                                 elif v == 'lst':
                                     yr_lst_img, _ = compute_lst(yr_comp, study_area_main)
                                     s_yr = get_stats(yr_lst_img, 'LST', study_area_main, scale=90)
-                                    # Monthly
                                     import datetime as _dty; monthly_yr = {}
                                     cur = _dty.datetime.strptime(yr_start, '%Y-%m-%d').replace(day=1)
                                     end_d = _dty.datetime.strptime(yr_end, '%Y-%m-%d')
@@ -924,17 +927,13 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                                else cur.replace(month=cur.month+1,day=1))
                                     s_yr['monthly'] = monthly_yr
                                     yr_stats['LST'] = s_yr
+                                    # Store GEE image for grid
+                                    _yr_grid_data.setdefault('LST', {})[yr] = {
+                                        'analysis_img': yr_lst_img, 'vis_params': VIS['lst']}
                                     mid = yr_lst_img.clip(study_area_main).getMapId(VIS['lst'])
-                                    layers.append({'name': f'LST (°C) — {yr}',
+                                    layers.append({'name': f'LST — {yr}',
                                                    'tile_url': mid['tile_fetcher'].url_format,
                                                    'type': 'tile', 'bbox': bbox})
-                                    if bbox:
-                                        arr_yr = get_thumb(yr_lst_img.clip(study_area_main), VIS['lst'], study_area_main, dim=512)
-                                        figures[f'LST — {yr}'] = {
-                                            'analysis_map': make_analysis_map(arr_yr, VIS['lst'], f'LST (°C) — {yr}', region_name, bbox),
-                                            'charts': make_stats_charts({'LST': s_yr}, 'lst', 'LST'),
-                                            'rgb_overview': None,
-                                        }
                                 elif v == 'uhi':
                                     if yr_lst_img is None:
                                         yr_lst_img, _ = compute_lst(yr_comp, study_area_main)
@@ -946,17 +945,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                         'median': lb.get('median'), 'p10': lb.get('p10'), 'p90': lb.get('p90'),
                                         'lst_mean': yr_lm, 'lst_std': yr_ls, 'monthly': lb.get('monthly', {}),
                                     }
+                                    _yr_grid_data.setdefault('UHI', {})[yr] = {
+                                        'analysis_img': yr_uhi, 'vis_params': VIS['uhi']}
                                     mid = yr_uhi.clip(study_area_main).getMapId(VIS['uhi'])
                                     layers.append({'name': f'UHI — {yr}',
                                                    'tile_url': mid['tile_fetcher'].url_format,
                                                    'type': 'tile', 'bbox': bbox})
-                                    if bbox:
-                                        arr_yr = get_thumb(yr_uhi.clip(study_area_main), VIS['uhi'], study_area_main, dim=512)
-                                        figures[f'UHI — {yr}'] = {
-                                            'analysis_map': make_analysis_map(arr_yr, VIS['uhi'], f'UHI — {yr}', region_name, bbox),
-                                            'charts': make_stats_charts({'UHI': yr_stats['UHI']}, 'uhi', 'UHI'),
-                                            'rgb_overview': None,
-                                        }
                                 elif v in SURFACE_INDEX_MAP:
                                     lbl, func, vis_key, scale = SURFACE_INDEX_MAP[v]
                                     yr_img = func(yr_comp)
@@ -980,17 +974,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                                 else cur2.replace(month=cur2.month+1))
                                     s_yr['monthly'] = monthly_yr2
                                     yr_stats[lbl] = s_yr
+                                    _yr_grid_data.setdefault(lbl, {})[yr] = {
+                                        'analysis_img': yr_img, 'vis_params': VIS[vis_key]}
                                     mid = yr_img.clip(study_area_main).getMapId(VIS[vis_key])
                                     layers.append({'name': f'{lbl} — {yr}',
                                                    'tile_url': mid['tile_fetcher'].url_format,
                                                    'type': 'tile', 'bbox': bbox})
-                                    if bbox:
-                                        arr_yr = get_thumb(yr_img.clip(study_area_main), VIS[vis_key], study_area_main, dim=512)
-                                        figures[f'{lbl} — {yr}'] = {
-                                            'analysis_map': make_analysis_map(arr_yr, VIS[vis_key], f'{lbl} — {yr}', region_name, bbox),
-                                            'charts': make_stats_charts({lbl: s_yr}, v, lbl),
-                                            'rgb_overview': None,
-                                        }
                             except Exception as ve_yr:
                                 print(f'    [{v} {yr}] failed: {ve_yr}')
                                 import traceback as _tb_vyr; _tb_vyr.print_exc()
@@ -1003,6 +992,8 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 fi, _ = compute_ffpi(study_area_main, yr_start, yr_end)
                                 s_yr = get_stats(fi, 'FFPI', study_area_main, scale=3500)
                                 yr_stats['FFPI'] = s_yr
+                                _yr_grid_data.setdefault('FFPI', {})[yr] = {
+                                    'analysis_img': fi, 'vis_params': VIS['ffpi']}
                                 mid = fi.clip(study_area_main).getMapId(VIS['ffpi'])
                                 layers.append({'name': f'FFPI — {yr}', 'tile_url': mid['tile_fetcher'].url_format,
                                                'type': 'tile', 'bbox': bbox})
@@ -1013,16 +1004,11 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                     bn = ai.bandNames().getInfo()[0]
                                     s_yr = get_stats(ai, bn, study_area_main, scale=3500)
                                     yr_stats[lbl] = s_yr
+                                    _yr_grid_data.setdefault(lbl, {})[yr] = {
+                                        'analysis_img': ai, 'vis_params': VIS[vis_key]}
                                     mid = ai.clip(study_area_main).getMapId(VIS[vis_key])
                                     layers.append({'name': f'{lbl} — {yr}', 'tile_url': mid['tile_fetcher'].url_format,
                                                    'type': 'tile', 'bbox': bbox})
-                                    if bbox:
-                                        arr_yr = get_thumb(ai.clip(study_area_main), VIS[vis_key], study_area_main, dim=512)
-                                        figures[f'{lbl} — {yr}'] = {
-                                            'analysis_map': make_analysis_map(arr_yr, VIS[vis_key], f'{lbl} — {yr}', region_name, bbox),
-                                            'charts': make_stats_charts({lbl: s_yr}, v, lbl),
-                                            'rgb_overview': None,
-                                        }
                         except Exception as ve_atmo:
                             print(f'    [{v} atmo {yr}] failed: {ve_atmo}')
 
@@ -1033,6 +1019,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             yr_lulc = compute_lulc(study_area_main, yr_start, yr_end, region_name)
                             if yr_lulc['success']:
                                 yr_stats['LULC'] = yr_lulc['stats']
+                                _yr_lulc_stats[yr] = yr_lulc['stats']
                                 ylv = yr_lulc['vis_params']
                                 ylc = yr_lulc['lulc_img'].clip(study_area_main)
                                 mid = (ylc.sldStyle(ylv['sld_style']).getMapId({}) if 'sld_style' in ylv
@@ -1041,11 +1028,6 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                                'tile_url': mid['tile_fetcher'].url_format,
                                                'type': 'tile', 'bbox': bbox,
                                                'lulc_stats': yr_lulc['stats']})
-                                figures[f'LULC — {yr}'] = {
-                                    'analysis_map': None,
-                                    'charts': _mlc(yr_lulc['stats']),
-                                    'rgb_overview': None,
-                                }
                         except Exception as lulc_yr_err:
                             print(f'    [LULC {yr}] failed: {lulc_yr_err}')
 
@@ -1056,7 +1038,37 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     print(f'  [MULTI-YEAR] Year {yr} failed: {yr_err}')
                     import traceback as _tb_yr; _tb_yr.print_exc()
 
-            # ── Build combined overlay charts ──────────────────────────────────
+            # ── Seed first-year GEE images into _yr_grid_data ─────────────────
+            # The first year's analysis images are already computed above in the
+            # single-analysis block. Re-seed them here from the figures dict.
+            _first_yr_start, _first_yr_end = _year_dates(first_year, month_start, month_end)
+            try:
+                _fy_col, _fy_comp = load_landsat(study_area_main, _first_yr_start, _first_yr_end)
+                _yr_grid_data.setdefault('_composites', {})[first_year] = _fy_comp
+                _fy_lst_img = None
+                for _v in [v for v in variables_with_rgb if v in surface_keys]:
+                    try:
+                        if _v == 'lst':
+                            _fy_lst_img, _ = compute_lst(_fy_comp, study_area_main)
+                            _yr_grid_data.setdefault('LST', {})[first_year] = {
+                                'analysis_img': _fy_lst_img, 'vis_params': VIS['lst']}
+                        elif _v == 'uhi':
+                            if _fy_lst_img is None:
+                                _fy_lst_img, _ = compute_lst(_fy_comp, study_area_main)
+                            _fy_uhi, _, _ = compute_uhi(_fy_lst_img, study_area_main)
+                            _yr_grid_data.setdefault('UHI', {})[first_year] = {
+                                'analysis_img': _fy_uhi, 'vis_params': VIS['uhi']}
+                        elif _v in SURFACE_INDEX_MAP:
+                            _lbl, _func, _vis_key, _scale = SURFACE_INDEX_MAP[_v]
+                            _fy_img = _func(_fy_comp)
+                            _yr_grid_data.setdefault(_lbl, {})[first_year] = {
+                                'analysis_img': _fy_img, 'vis_params': VIS[_vis_key]}
+                    except Exception as _fy_ve:
+                        print(f'  [GRID SEED] {_v} year {first_year} failed: {_fy_ve}')
+            except Exception as _fy_err:
+                print(f'  [GRID SEED] Landsat load failed for year {first_year}: {_fy_err}')
+
+            # ── Build combined overlay charts + map grids ──────────────────────
             print(f'[MULTI-YEAR] Building combined charts for {list(year_all_stats.keys())}...')
             all_var_labels = set()
             for ys in year_all_stats.values():
@@ -1069,11 +1081,35 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 if not yearly_var:
                     continue
                 if var_label == 'LULC':
+                    # Bar chart (year comparison)
                     cb = make_multiyear_lulc_chart(yearly_var)
-                    if cb:
-                        multiyear_figures['LULC'] = {'charts': [('multiyear_bar', cb)]}
+                    # Combined pie grid (all years side by side)
+                    pg = make_multiyear_lulc_pie_grid(_yr_lulc_stats) if _yr_lulc_stats else None
+                    charts_lulc = []
+                    if pg: charts_lulc.append(('lulc_pie_grid', pg))
+                    if cb: charts_lulc.append(('multiyear_bar', cb))
+                    if charts_lulc:
+                        multiyear_figures['LULC'] = {'charts': charts_lulc}
+                        print(f'  ✓ LULC combined: pie_grid={bool(pg)}, bar={bool(cb)}')
                 else:
                     charts_c = []
+                    # Map grid (RGB + analysis per year)
+                    _grid_info = _yr_grid_data.get(var_label, {})
+                    _composites_by_yr = _yr_grid_data.get('_composites', {})
+                    _grid_yr_labels = sorted([yr for yr in years_list if yr in _grid_info and yr in _composites_by_yr])
+                    if len(_grid_yr_labels) >= 2:
+                        try:
+                            _gc = [_composites_by_yr[yr] for yr in _grid_yr_labels]
+                            _ga = [_grid_info[yr]['analysis_img'] for yr in _grid_yr_labels]
+                            _vp = _grid_info[_grid_yr_labels[0]]['vis_params']
+                            mg = make_multiyear_map_grid(
+                                _gc, _ga, [str(yr) for yr in _grid_yr_labels],
+                                var_label, _vp, region_name, study_area_main, bbox)
+                            if mg:
+                                charts_c.append(('multiyear_map_grid', mg))
+                                print(f'  ✓ Map grid: {var_label} ({len(_grid_yr_labels)} years)')
+                        except Exception as _mge:
+                            print(f'  Map grid {var_label} failed: {_mge}')
                     t = make_multiyear_trend_chart(yearly_var, var_label, n_years)
                     if t: charts_c.append(('multiyear_trend', t))
                     d = make_multiyear_distribution_chart(yearly_var, var_label)

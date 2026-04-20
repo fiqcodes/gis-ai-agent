@@ -974,6 +974,9 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
   if (figures && Object.keys(figures).length > 0) {
     for (const [varLabel, fig] of Object.entries(figures)) {
       if (!fig) continue;
+      // In multi-year mode, skip per-year figure entries (e.g. 'LST — 2023', 'LULC — 2024')
+      // They are rendered in the combined map grid in the multi-year section below.
+      if (isMultiYear && /—\s*\d{4}$/.test(varLabel)) continue;
       const varStats   = stats && stats[varLabel];
       const varInsight = varInsights && varInsights[varLabel];
       const isLULC     = varLabel.toUpperCase() === 'LULC';
@@ -1109,10 +1112,24 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
       if (!myFig || !myFig.charts || myFig.charts.length === 0) continue;
       html += `<div style="margin-top:14px">`;
       html += `<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);margin-bottom:6px">${escapeHtml(varLabel)}</div>`;
-      const trend = myFig.charts.find(c => c[0] === 'multiyear_trend');
-      const dist  = myFig.charts.find(c => c[0] === 'multiyear_dist');
-      const cls   = myFig.charts.find(c => c[0] === 'multiyear_class');
-      const lulcB = myFig.charts.find(c => c[0] === 'multiyear_bar');
+
+      const mapGrid  = myFig.charts.find(c => c[0] === 'multiyear_map_grid');
+      const trend    = myFig.charts.find(c => c[0] === 'multiyear_trend');
+      const dist     = myFig.charts.find(c => c[0] === 'multiyear_dist');
+      const cls      = myFig.charts.find(c => c[0] === 'multiyear_class');
+      const lulcB    = myFig.charts.find(c => c[0] === 'multiyear_bar');
+      const lulcPieG = myFig.charts.find(c => c[0] === 'lulc_pie_grid');
+
+      // Map grid: RGB + analysis map side-by-side per year (shown first, before charts)
+      if (mapGrid) {
+        html += `<div class="result-section-label" style="margin-top:10px">Maps by Year</div>`;
+        html += `<div class="result-img-wrap"><img src="${mapGrid[1]}" class="result-img" loading="lazy"/></div>`;
+      }
+      // LULC combined pie grid
+      if (lulcPieG) {
+        html += `<div class="result-section-label" style="margin-top:10px">Area Distribution by Year</div>`;
+        html += `<div class="result-img-wrap"><img src="${lulcPieG[1]}" class="result-img" loading="lazy"/></div>`;
+      }
       if (trend) {
         html += `<div class="result-section-label" style="margin-top:10px">Trend</div>`;
         html += `<div class="result-img-wrap"><img src="${trend[1]}" class="result-img" loading="lazy"/></div>`;

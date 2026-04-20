@@ -98,27 +98,26 @@ def load_landsat(study_area, start, end):
 
 # Known city bounding boxes [W, S, E, N] — used when Nominatim returns a
 # country-sized bbox (e.g. "Tokyo" → Japan, "London" → UK, etc.)
+# Cities kept here are those whose GAUL lookup fails or returns an oversized/wrong boundary.
+# Cities with reliable GAUL boundaries (London, Paris, Jakarta, etc.) are intentionally
+# NOT listed here — they fall through to GAUL so the exact polygon is used instead of a rectangle.
 CITY_BBOX_FALLBACK = {
-    'tokyo':     [139.40, 35.50, 139.95, 35.82],
-    'osaka':     [135.35, 34.55, 135.70, 34.80],
-    'beijing':   [116.10, 39.75, 116.65, 40.20],
-    'shanghai':  [121.10, 30.95, 121.75, 31.55],
-    'london':    [ -0.55, 51.35,  0.30, 51.70],
-    'paris':     [  2.20, 48.75,  2.55, 48.95],
-    'new york':  [-74.10, 40.55, -73.75, 40.90],
-    'los angeles':[-118.55,33.90,-118.10,34.20],
-    'jakarta':   [106.65, -6.40, 107.00, -6.05],
-    'bangkok':   [100.35, 13.55, 100.90, 13.95],
-    'singapore': [103.60,  1.20, 104.05,  1.48],
-    'sydney':    [150.90,-34.10, 151.35,-33.70],
-    'dubai':     [ 55.10, 25.00,  55.55, 25.35],
-    'mumbai':    [ 72.75, 18.85,  73.05, 19.20],
-    'seoul':     [126.75, 37.40, 127.20, 37.70],
-    'berlin':    [ 13.10, 52.40,  13.75, 52.70],
-    'cairo':     [ 31.10, 29.90,  31.55, 30.20],
-    'nairobi':   [ 36.65, -1.40,  37.10, -1.15],
-    'sao paulo': [-46.85,-23.75, -46.35,-23.45],
-    'mexico city':[-99.30,19.25, -98.95, 19.60],
+    # Tokyo GAUL entry "Tokyo-to" includes remote island chains spanning 20°–36°N — use bbox
+    'tokyo':      [139.40, 35.50, 139.95, 35.82],
+    # Osaka — GAUL stores as prefecture, oversized
+    'osaka':      [135.35, 34.55, 135.70, 34.80],
+    # Seoul — GAUL can match multiple admin levels; urban bbox is safer
+    'seoul':      [126.75, 37.40, 127.20, 37.70],
+    # Bangkok — GAUL level mismatch common
+    'bangkok':    [100.35, 13.55, 100.90, 13.95],
+    # Dubai — small emirate, GAUL may not have city-level
+    'dubai':      [ 55.10, 25.00,  55.55, 25.35],
+    # Singapore — city-state, GAUL country-level is too large
+    'singapore':  [103.60,  1.20, 104.05,  1.48],
+    # Sao Paulo — GAUL may return state boundary
+    'sao paulo':  [-46.85,-23.75, -46.35,-23.45],
+    # Mexico City — GAUL can return federal entity (oversized)
+    'mexico city':[-99.30, 19.25, -98.95, 19.60],
 }
 
 def resolve_region(region_name):
@@ -1238,6 +1237,116 @@ def make_multiyear_class_chart(yearly_stats: dict, label: str):
         result = fig_to_base64(fig); plt.close(fig); return result
     except Exception as e:
         print(f'  make_multiyear_class_chart failed: {e}'); import traceback; traceback.print_exc(); return None
+
+
+
+
+def make_multiyear_map_grid(year_composites, year_analysis_imgs,
+                            year_labels, var_label, vis_params,
+                            region_name, study_area, bbox):
+    """
+    Create a side-by-side grid: RGB row on top, analysis map row on bottom, one column per year.
+    Returns base64 PNG string or None.
+    """
+    try:
+        n = len(year_labels)
+        if n == 0:
+            return None
+        fig, axes = plt.subplots(2, n, figsize=(5 * n, 8))
+        if n == 1:
+            axes = [[axes[0]], [axes[1]]]
+        for col, (yr_label, composite, analysis_img) in enumerate(
+                zip(year_labels, year_composites, year_analysis_imgs)):
+            ax_rgb = axes[0][col]
+            try:
+                rgb_arr = get_thumb(composite.clip(study_area), VIS['rgb'], study_area, dim=400)
+                ax_rgb.imshow(rgb_arr)
+            except Exception as e:
+                ax_rgb.text(0.5, 0.5, f'RGB N/A\n{str(e)[:40]}',
+                            ha='center', va='center', transform=ax_rgb.transAxes,
+                            fontsize=8, color='gray')
+            ax_rgb.set_title(f'{yr_label}', fontsize=11, fontweight='bold', pad=6)
+            ax_rgb.set_xlabel('RGB', fontsize=8, color='#555')
+            ax_rgb.set_xticks([]); ax_rgb.set_yticks([])
+            ax_ana = axes[1][col]
+            try:
+                ana_arr = get_thumb(analysis_img.clip(study_area), vis_params, study_area, dim=400)
+                ax_ana.imshow(ana_arr)
+                if 'palette' in vis_params and 'min' in vis_params:
+                    cmap = mcolors.LinearSegmentedColormap.from_list(var_label, vis_params['palette'])
+                    norm = mcolors.Normalize(vmin=vis_params['min'], vmax=vis_params['max'])
+                    sm   = cm.ScalarMappable(cmap=cmap, norm=norm)
+                    sm.set_array([])
+                    fig.colorbar(sm, ax=ax_ana, orientation='horizontal',
+                                 fraction=0.046, pad=0.08, aspect=25).ax.tick_params(labelsize=7)
+            except Exception as e:
+                ax_ana.text(0.5, 0.5, f'{var_label} N/A\n{str(e)[:40]}',
+                            ha='center', va='center', transform=ax_ana.transAxes,
+                            fontsize=8, color='gray')
+            ax_ana.set_xlabel(var_label, fontsize=8, color='#555')
+            ax_ana.set_xticks([]); ax_ana.set_yticks([])
+        fig.text(0.01, 0.01, '© Landsat / Google Earth Engine', fontsize=7, color='#999')
+        fig.suptitle(f'{var_label} — {region_name}', fontsize=12, fontweight='bold', y=1.01)
+        plt.tight_layout()
+        result = fig_to_base64(fig)
+        plt.close(fig)
+        return result
+    except Exception as e:
+        print(f'  make_multiyear_map_grid failed: {e}')
+        import traceback; traceback.print_exc()
+        return None
+
+
+def make_multiyear_lulc_pie_grid(yearly_lulc_stats):
+    """
+    Combined pie chart: one pie per year, all in a single row.
+    yearly_lulc_stats: { year: { 'classes': {name: {percentage, hectares, color}}, 'total_ha': ... } }
+    Returns base64 PNG string or None.
+    """
+    try:
+        years = sorted(yearly_lulc_stats.keys())
+        n = len(years)
+        if n == 0:
+            return None
+        fig, axes = plt.subplots(1, n, figsize=(5 * n, 5.5))
+        if n == 1:
+            axes = [axes]
+        for col, yr in enumerate(years):
+            stats = yearly_lulc_stats[yr]
+            ax = axes[col]
+            classes  = stats.get('classes', {})
+            total_ha = stats.get('total_ha', 0)
+            if not classes:
+                ax.text(0.5, 0.5, 'No data', ha='center', va='center',
+                        transform=ax.transAxes, fontsize=10, color='gray')
+                ax.axis('off')
+                continue
+            names  = list(classes.keys())
+            pcts   = [classes[nm]['percentage'] for nm in names]
+            colors = [classes[nm].get('color', '#aaaaaa') for nm in names]
+            wedges, texts, autotexts = ax.pie(
+                pcts, labels=None, colors=colors,
+                autopct=lambda p: f'{p:.1f}%' if p > 3 else '',
+                startangle=140, pctdistance=0.78,
+                wedgeprops=dict(edgecolor='white', linewidth=1.2),
+            )
+            for at in autotexts:
+                at.set_fontsize(7); at.set_fontweight('bold'); at.set_color('white')
+            ax.set_title(f'{yr}\n({total_ha:,.0f} ha)', fontsize=10, fontweight='bold', pad=8)
+            ax.legend(
+                wedges,
+                [f'{nm} ({p:.1f}%)' for nm, p in zip(names, pcts)],
+                loc='lower center', bbox_to_anchor=(0.5, -0.25),
+                ncol=1, fontsize=7, frameon=False,
+            )
+        fig.suptitle('Land Cover Distribution by Year', fontsize=12, fontweight='bold', y=1.02)
+        plt.tight_layout()
+        result = fig_to_base64(fig)
+        plt.close(fig)
+        return result
+    except Exception as e:
+        print(f'  make_multiyear_lulc_pie_grid failed: {e}')
+        return None
 
 
 def make_multiyear_lulc_chart(yearly_lulc_stats: dict):
