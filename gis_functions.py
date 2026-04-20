@@ -1241,52 +1241,69 @@ def make_multiyear_class_chart(yearly_stats: dict, label: str):
 
 
 
-def make_multiyear_map_grid(year_composites, year_analysis_imgs,
-                            year_labels, var_label, vis_params,
-                            region_name, study_area, bbox):
+def make_multiyear_map_grid(year_rgb_arrays, year_analysis_arrays,
+                            year_labels, var_label, region_name,
+                            vis_params=None):
     """
-    Create a side-by-side grid: RGB row on top, analysis map row on bottom, one column per year.
+    Create a side-by-side grid from pre-downloaded numpy arrays.
+    Layout: 2 rows (RGB top, analysis bottom) × N columns (one per year).
+    
+    year_rgb_arrays      : list of numpy arrays (H,W,3) — RGB thumbnails
+    year_analysis_arrays : list of numpy arrays (H,W,3/4) — analysis thumbnails
+                           OR list of None to skip bottom row
+    year_labels          : list of year strings ['2023','2024','2025']
+    vis_params           : optional dict with 'palette','min','max' for colorbar
     Returns base64 PNG string or None.
     """
     try:
         n = len(year_labels)
         if n == 0:
             return None
-        fig, axes = plt.subplots(2, n, figsize=(5 * n, 8))
-        if n == 1:
-            axes = [[axes[0]], [axes[1]]]
-        for col, (yr_label, composite, analysis_img) in enumerate(
-                zip(year_labels, year_composites, year_analysis_imgs)):
+
+        has_analysis = any(a is not None for a in year_analysis_arrays)
+        nrows = 2 if has_analysis else 1
+
+        fig, axes = plt.subplots(nrows, n, figsize=(5 * n, 5 * nrows),
+                                 squeeze=False)
+
+        for col, yr_label in enumerate(year_labels):
+            # Row 0: RGB
             ax_rgb = axes[0][col]
-            try:
-                rgb_arr = get_thumb(composite.clip(study_area), VIS['rgb'], study_area, dim=400)
+            rgb_arr = year_rgb_arrays[col] if col < len(year_rgb_arrays) else None
+            if rgb_arr is not None:
                 ax_rgb.imshow(rgb_arr)
-            except Exception as e:
-                ax_rgb.text(0.5, 0.5, f'RGB N/A\n{str(e)[:40]}',
-                            ha='center', va='center', transform=ax_rgb.transAxes,
-                            fontsize=8, color='gray')
-            ax_rgb.set_title(f'{yr_label}', fontsize=11, fontweight='bold', pad=6)
+            else:
+                ax_rgb.text(0.5, 0.5, 'RGB\nN/A', ha='center', va='center',
+                            transform=ax_rgb.transAxes, fontsize=9, color='gray')
+            ax_rgb.set_title(yr_label, fontsize=11, fontweight='bold', pad=5)
             ax_rgb.set_xlabel('RGB', fontsize=8, color='#555')
             ax_rgb.set_xticks([]); ax_rgb.set_yticks([])
-            ax_ana = axes[1][col]
-            try:
-                ana_arr = get_thumb(analysis_img.clip(study_area), vis_params, study_area, dim=400)
-                ax_ana.imshow(ana_arr)
-                if 'palette' in vis_params and 'min' in vis_params:
-                    cmap = mcolors.LinearSegmentedColormap.from_list(var_label, vis_params['palette'])
-                    norm = mcolors.Normalize(vmin=vis_params['min'], vmax=vis_params['max'])
-                    sm   = cm.ScalarMappable(cmap=cmap, norm=norm)
-                    sm.set_array([])
-                    fig.colorbar(sm, ax=ax_ana, orientation='horizontal',
-                                 fraction=0.046, pad=0.08, aspect=25).ax.tick_params(labelsize=7)
-            except Exception as e:
-                ax_ana.text(0.5, 0.5, f'{var_label} N/A\n{str(e)[:40]}',
-                            ha='center', va='center', transform=ax_ana.transAxes,
-                            fontsize=8, color='gray')
-            ax_ana.set_xlabel(var_label, fontsize=8, color='#555')
-            ax_ana.set_xticks([]); ax_ana.set_yticks([])
+
+            # Row 1: Analysis map
+            if has_analysis:
+                ax_ana = axes[1][col]
+                ana_arr = year_analysis_arrays[col] if col < len(year_analysis_arrays) else None
+                if ana_arr is not None:
+                    ax_ana.imshow(ana_arr)
+                    # Colorbar
+                    if vis_params and 'palette' in vis_params and 'min' in vis_params:
+                        cmap = mcolors.LinearSegmentedColormap.from_list(
+                            var_label, vis_params['palette'])
+                        norm = mcolors.Normalize(
+                            vmin=vis_params['min'], vmax=vis_params['max'])
+                        sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+                        sm.set_array([])
+                        fig.colorbar(sm, ax=ax_ana, orientation='horizontal',
+                                     fraction=0.046, pad=0.1, aspect=25
+                                     ).ax.tick_params(labelsize=7)
+                else:
+                    ax_ana.text(0.5, 0.5, f'{var_label}\nN/A', ha='center', va='center',
+                                transform=ax_ana.transAxes, fontsize=9, color='gray')
+                ax_ana.set_xlabel(var_label, fontsize=8, color='#555')
+                ax_ana.set_xticks([]); ax_ana.set_yticks([])
+
         fig.text(0.01, 0.01, '© Landsat / Google Earth Engine', fontsize=7, color='#999')
-        fig.suptitle(f'{var_label} — {region_name}', fontsize=12, fontweight='bold', y=1.01)
+        fig.suptitle(f'{var_label} — {region_name}', fontsize=12, fontweight='bold', y=1.02)
         plt.tight_layout()
         result = fig_to_base64(fig)
         plt.close(fig)

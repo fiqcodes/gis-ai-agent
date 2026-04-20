@@ -865,19 +865,50 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 make_multiyear_trend_chart, make_multiyear_distribution_chart,
                 make_multiyear_class_chart, make_multiyear_lulc_chart,
                 make_multiyear_map_grid, make_multiyear_lulc_pie_grid,
+                get_thumb,
             )
 
             # Seed year-0 stats from already-run single analysis
             year_all_stats = {first_year: dict(all_stats)}
 
-            # Per-variable collectors for multi-year map grids:
-            # { var_label: { yr: { 'composite': gee_img, 'analysis_img': gee_img, 'vis_params': dict } } }
-            _yr_grid_data = {}   # var_label → { yr → { composite, analysis_img, vis_params } }
-            _yr_lulc_stats = {}  # yr → lulc stats (for pie grid)
+            # Array caches for map grid (numpy arrays downloaded during loop)
+            # _yr_rgb_arrs[yr]      = numpy RGB thumbnail array
+            # _yr_ana_arrs[var][yr] = numpy analysis thumbnail array
+            # _yr_vis_params[var]   = vis_params dict for that variable
+            _yr_rgb_arrs   = {}   # yr → numpy array
+            _yr_ana_arrs   = {}   # var_label → { yr → numpy array }
+            _yr_vis_params = {}   # var_label → vis_params
+            _yr_lulc_stats = {}   # yr → lulc stats (for pie grid)
+            _yr_lulc_arrs  = {}   # yr → numpy LULC thumbnail array
 
-            # Seed first-year grid data from already-computed objects
-            # We store the GEE image objects so we can re-download at grid resolution later
-            _yr_grid_data.setdefault('_composites', {})[first_year] = composite if 'composite' in dir() else None
+            # Seed first-year arrays from already-computed figures
+            _bbox = geo.get('bbox')
+            if _bbox and 'composite' in dir() and composite is not None:
+                try:
+                    _rgb0 = get_thumb(composite.clip(study_area_main), VIS['rgb'], study_area_main, dim=400)
+                    _yr_rgb_arrs[first_year] = _rgb0
+                    print(f'  [GRID SEED] RGB array seeded for {first_year}')
+                except Exception as _e0:
+                    print(f'  [GRID SEED] RGB seed failed: {_e0}')
+            # Seed first-year LULC arrays
+            if 'lulc' in variables and all_stats.get('LULC'):
+                _yr_lulc_stats[first_year] = all_stats['LULC']
+                # Re-use the already-computed lulc_map_b64 thumbnail if it exists
+                # We'll store it as a base64 string instead and handle separately
+            # Seed first-year analysis arrays from figures
+            for _vl, _fig in figures.items():
+                if not _fig or _vl.upper() == 'LULC': continue
+                # _fig['analysis_map'] is a base64 PNG — decode back to numpy
+                if _fig.get('analysis_map'):
+                    try:
+                        import base64 as _b64m
+                        from io import BytesIO as _BIO
+                        _raw = _b64m.b64decode(_fig['analysis_map'].split(',')[1])
+                        _arr = np.array(PILImage.open(_BIO(_raw)))
+                        _yr_ana_arrs.setdefault(_vl, {})[first_year] = _arr
+                        print(f'  [GRID SEED] Analysis array seeded: {_vl} {first_year}')
+                    except Exception as _ae:
+                        print(f'  [GRID SEED] Analysis seed failed {_vl}: {_ae}')
 
             for yr in years_list:
                 if yr == first_year:
@@ -896,8 +927,13 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                         yr_col, yr_comp = load_landsat(study_area_main, yr_start, yr_end)
                         print(f'    {yr_col.size().getInfo()} Landsat scenes')
                         yr_lst_img = None
-                        # Store composite for grid
-                        _yr_grid_data.setdefault('_composites', {})[yr] = yr_comp
+
+                        # Download RGB thumbnail array for map grid
+                        try:
+                            _rgb_arr = get_thumb(yr_comp.clip(study_area_main), VIS['rgb'], study_area_main, dim=400)
+                            _yr_rgb_arrs[yr] = _rgb_arr
+                        except Exception as _re:
+                            print(f'    RGB thumb {yr} failed: {_re}')
 
                         for v in yr_surface:
                             try:
@@ -928,9 +964,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                                else cur.replace(month=cur.month+1,day=1))
                                     s_yr['monthly'] = monthly_yr
                                     yr_stats['LST'] = s_yr
-                                    # Store GEE image for grid
-                                    _yr_grid_data.setdefault('LST', {})[yr] = {
-                                        'analysis_img': yr_lst_img, 'vis_params': VIS['lst']}
+                                    _yr_vis_params['LST'] = VIS['lst']
+                                    # Download analysis thumbnail for map grid
+                                    try:
+                                        _ana_arr = get_thumb(yr_lst_img.clip(study_area_main), VIS['lst'], study_area_main, dim=400)
+                                        _yr_ana_arrs.setdefault('LST', {})[yr] = _ana_arr
+                                    except: pass
                                     mid = yr_lst_img.clip(study_area_main).getMapId(VIS['lst'])
                                     layers.append({'name': f'LST — {yr}',
                                                    'tile_url': mid['tile_fetcher'].url_format,
@@ -946,8 +985,11 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                         'median': lb.get('median'), 'p10': lb.get('p10'), 'p90': lb.get('p90'),
                                         'lst_mean': yr_lm, 'lst_std': yr_ls, 'monthly': lb.get('monthly', {}),
                                     }
-                                    _yr_grid_data.setdefault('UHI', {})[yr] = {
-                                        'analysis_img': yr_uhi, 'vis_params': VIS['uhi']}
+                                    _yr_vis_params['UHI'] = VIS['uhi']
+                                    try:
+                                        _ana_arr = get_thumb(yr_uhi.clip(study_area_main), VIS['uhi'], study_area_main, dim=400)
+                                        _yr_ana_arrs.setdefault('UHI', {})[yr] = _ana_arr
+                                    except: pass
                                     mid = yr_uhi.clip(study_area_main).getMapId(VIS['uhi'])
                                     layers.append({'name': f'UHI — {yr}',
                                                    'tile_url': mid['tile_fetcher'].url_format,
@@ -975,8 +1017,11 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                                 else cur2.replace(month=cur2.month+1))
                                     s_yr['monthly'] = monthly_yr2
                                     yr_stats[lbl] = s_yr
-                                    _yr_grid_data.setdefault(lbl, {})[yr] = {
-                                        'analysis_img': yr_img, 'vis_params': VIS[vis_key]}
+                                    _yr_vis_params[lbl] = VIS[vis_key]
+                                    try:
+                                        _ana_arr = get_thumb(yr_img.clip(study_area_main), VIS[vis_key], study_area_main, dim=400)
+                                        _yr_ana_arrs.setdefault(lbl, {})[yr] = _ana_arr
+                                    except: pass
                                     mid = yr_img.clip(study_area_main).getMapId(VIS[vis_key])
                                     layers.append({'name': f'{lbl} — {yr}',
                                                    'tile_url': mid['tile_fetcher'].url_format,
@@ -993,8 +1038,11 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 fi, _ = compute_ffpi(study_area_main, yr_start, yr_end)
                                 s_yr = get_stats(fi, 'FFPI', study_area_main, scale=3500)
                                 yr_stats['FFPI'] = s_yr
-                                _yr_grid_data.setdefault('FFPI', {})[yr] = {
-                                    'analysis_img': fi, 'vis_params': VIS['ffpi']}
+                                _yr_vis_params['FFPI'] = VIS['ffpi']
+                                try:
+                                    _ana_arr = get_thumb(fi.clip(study_area_main), VIS['ffpi'], study_area_main, dim=400)
+                                    _yr_ana_arrs.setdefault('FFPI', {})[yr] = _ana_arr
+                                except: pass
                                 mid = fi.clip(study_area_main).getMapId(VIS['ffpi'])
                                 layers.append({'name': f'FFPI — {yr}', 'tile_url': mid['tile_fetcher'].url_format,
                                                'type': 'tile', 'bbox': bbox})
@@ -1005,8 +1053,11 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                     bn = ai.bandNames().getInfo()[0]
                                     s_yr = get_stats(ai, bn, study_area_main, scale=3500)
                                     yr_stats[lbl] = s_yr
-                                    _yr_grid_data.setdefault(lbl, {})[yr] = {
-                                        'analysis_img': ai, 'vis_params': VIS[vis_key]}
+                                    _yr_vis_params[lbl] = VIS[vis_key]
+                                    try:
+                                        _ana_arr = get_thumb(ai.clip(study_area_main), VIS[vis_key], study_area_main, dim=400)
+                                        _yr_ana_arrs.setdefault(lbl, {})[yr] = _ana_arr
+                                    except: pass
                                     mid = ai.clip(study_area_main).getMapId(VIS[vis_key])
                                     layers.append({'name': f'{lbl} — {yr}', 'tile_url': mid['tile_fetcher'].url_format,
                                                    'type': 'tile', 'bbox': bbox})
@@ -1023,6 +1074,13 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 _yr_lulc_stats[yr] = yr_lulc['stats']
                                 ylv = yr_lulc['vis_params']
                                 ylc = yr_lulc['lulc_img'].clip(study_area_main)
+                                # Download LULC thumbnail for map grid
+                                try:
+                                    _styled = ylc.sldStyle(ylv['sld_style']) if 'sld_style' in ylv else ylc
+                                    _lulc_arr = get_thumb(_styled, {}, study_area_main, dim=400)
+                                    _yr_lulc_arrs[yr] = _lulc_arr
+                                except Exception as _la:
+                                    print(f'    LULC thumb {yr} failed: {_la}')
                                 mid = (ylc.sldStyle(ylv['sld_style']).getMapId({}) if 'sld_style' in ylv
                                        else ylc.getMapId(ylv))
                                 layers.append({'name': f'Land Cover — {yr}',
@@ -1039,54 +1097,24 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     print(f'  [MULTI-YEAR] Year {yr} failed: {yr_err}')
                     import traceback as _tb_yr; _tb_yr.print_exc()
 
-            # ── Seed first-year GEE images into _yr_grid_data ─────────────────
-            # The first year's analysis images are already computed above in the
-            # single-analysis block. Re-seed them here from the figures dict.
-            _first_yr_start, _first_yr_end = _year_dates(first_year, month_start, month_end)
-            try:
-                _fy_col, _fy_comp = load_landsat(study_area_main, _first_yr_start, _first_yr_end)
-                _yr_grid_data.setdefault('_composites', {})[first_year] = _fy_comp
-                _fy_lst_img = None
-                for _v in [v for v in variables_with_rgb if v in surface_keys]:
-                    try:
-                        if _v == 'lst':
-                            _fy_lst_img, _ = compute_lst(_fy_comp, study_area_main)
-                            _yr_grid_data.setdefault('LST', {})[first_year] = {
-                                'analysis_img': _fy_lst_img, 'vis_params': VIS['lst']}
-                        elif _v == 'uhi':
-                            if _fy_lst_img is None:
-                                _fy_lst_img, _ = compute_lst(_fy_comp, study_area_main)
-                            _fy_uhi, _, _ = compute_uhi(_fy_lst_img, study_area_main)
-                            _yr_grid_data.setdefault('UHI', {})[first_year] = {
-                                'analysis_img': _fy_uhi, 'vis_params': VIS['uhi']}
-                        elif _v in SURFACE_INDEX_MAP:
-                            _lbl, _func, _vis_key, _scale = SURFACE_INDEX_MAP[_v]
-                            _fy_img = _func(_fy_comp)
-                            _yr_grid_data.setdefault(_lbl, {})[first_year] = {
-                                'analysis_img': _fy_img, 'vis_params': VIS[_vis_key]}
-                    except Exception as _fy_ve:
-                        print(f'  [GRID SEED] {_v} year {first_year} failed: {_fy_ve}')
-            except Exception as _fy_err:
-                print(f'  [GRID SEED] Landsat load failed for year {first_year}: {_fy_err}')
+            # ── Also seed first-year LULC thumbnail if available ─────────────
+            if 'lulc' in variables and figures.get('LULC', {}).get('analysis_map'):
+                try:
+                    import base64 as _b64lulc
+                    from io import BytesIO as _BIO2
+                    _raw_l = _b64lulc.b64decode(figures['LULC']['analysis_map'].split(',')[1])
+                    _yr_lulc_arrs[first_year] = np.array(PILImage.open(_BIO2(_raw_l)))
+                    print(f'  [GRID SEED] LULC array seeded for {first_year}')
+                except Exception as _le0:
+                    print(f'  [GRID SEED] LULC seed failed: {_le0}')
 
-            # ── Add per-year RGB tile layers (including first year) ────────────
-            # Replace the generic 'RGB' layer added during single analysis with
-            # per-year RGB layers so the map panel shows one entry per year.
-            # Remove the existing generic 'RGB' layer first.
-            layers[:] = [l for l in layers if l.get('name') != 'RGB']
-            _composites_by_yr = _yr_grid_data.get('_composites', {})
-            bbox = geo.get('bbox')
-            for _yr in years_list:
-                _yr_comp_rgb = _composites_by_yr.get(_yr)
-                if _yr_comp_rgb is not None:
-                    try:
-                        _mid_rgb = _yr_comp_rgb.clip(study_area_main).getMapId(VIS['rgb'])
-                        layers.append({'name': f'RGB — {_yr}',
-                                       'tile_url': _mid_rgb['tile_fetcher'].url_format,
-                                       'type': 'tile', 'bbox': bbox})
-                        print(f'  ✓ RGB tile layer: {_yr}')
-                    except Exception as _rgb_err:
-                        print(f'  RGB tile {_yr} failed: {_rgb_err}')
+            # ── Add per-year RGB tile layers for first year (others added in loop) ──
+            # The generic 'RGB' layer from single analysis covers only the first year;
+            # rename it to 'RGB — {first_year}' and add the already-collected tile.
+            for _l in layers:
+                if _l.get('name') == 'RGB':
+                    _l['name'] = f'RGB — {first_year}'
+                    break
 
             # ── Build combined overlay charts + map grids ──────────────────────
             print(f'[MULTI-YEAR] Building combined charts for {list(year_all_stats.keys())}...')
@@ -1100,34 +1128,50 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                               if year_all_stats.get(yr, {}).get(var_label)}
                 if not yearly_var:
                     continue
+
                 if var_label == 'LULC':
-                    # Bar chart (year comparison)
-                    cb = make_multiyear_lulc_chart(yearly_var)
+                    charts_lulc = []
                     # Combined pie grid (all years side by side)
                     pg = make_multiyear_lulc_pie_grid(_yr_lulc_stats) if _yr_lulc_stats else None
-                    charts_lulc = []
                     if pg: charts_lulc.append(('lulc_pie_grid', pg))
+                    # LULC map grid (RGB top, LULC map bottom)
+                    _lulc_grid_yrs = [yr for yr in years_list if yr in _yr_lulc_arrs and yr in _yr_rgb_arrs]
+                    if len(_lulc_grid_yrs) >= 1:
+                        try:
+                            _rgb_list  = [_yr_rgb_arrs.get(yr) for yr in _lulc_grid_yrs]
+                            _lulc_list = [_yr_lulc_arrs.get(yr) for yr in _lulc_grid_yrs]
+                            mg_lulc = make_multiyear_map_grid(
+                                _rgb_list, _lulc_list,
+                                [str(yr) for yr in _lulc_grid_yrs],
+                                'Land Cover', region_name)
+                            if mg_lulc:
+                                charts_lulc.insert(0, ('multiyear_map_grid', mg_lulc))
+                                print(f'  ✓ LULC map grid: {len(_lulc_grid_yrs)} years')
+                        except Exception as _lge:
+                            print(f'  LULC map grid failed: {_lge}')
+                    # Bar chart (year comparison)
+                    cb = make_multiyear_lulc_chart(yearly_var)
                     if cb: charts_lulc.append(('multiyear_bar', cb))
                     if charts_lulc:
                         multiyear_figures['LULC'] = {'charts': charts_lulc}
-                        print(f'  ✓ LULC combined: pie_grid={bool(pg)}, bar={bool(cb)}')
+                        print(f'  ✓ LULC combined: map_grid={bool(_lulc_grid_yrs)}, pie_grid={bool(pg)}, bar={bool(cb)}')
                 else:
                     charts_c = []
-                    # Map grid (RGB + analysis per year)
-                    _grid_info = _yr_grid_data.get(var_label, {})
-                    _composites_by_yr = _yr_grid_data.get('_composites', {})
-                    _grid_yr_labels = sorted([yr for yr in years_list if yr in _grid_info and yr in _composites_by_yr])
-                    if len(_grid_yr_labels) >= 2:
+                    # Map grid (RGB top, analysis bottom) — use cached numpy arrays
+                    _ana_by_yr = _yr_ana_arrs.get(var_label, {})
+                    _grid_yrs  = [yr for yr in years_list if yr in _yr_rgb_arrs or yr in _ana_by_yr]
+                    if len(_grid_yrs) >= 1:
                         try:
-                            _gc = [_composites_by_yr[yr] for yr in _grid_yr_labels]
-                            _ga = [_grid_info[yr]['analysis_img'] for yr in _grid_yr_labels]
-                            _vp = _grid_info[_grid_yr_labels[0]]['vis_params']
+                            _rgb_list = [_yr_rgb_arrs.get(yr) for yr in _grid_yrs]
+                            _ana_list = [_ana_by_yr.get(yr) for yr in _grid_yrs]
+                            _vp = _yr_vis_params.get(var_label)
                             mg = make_multiyear_map_grid(
-                                _gc, _ga, [str(yr) for yr in _grid_yr_labels],
-                                var_label, _vp, region_name, study_area_main, bbox)
+                                _rgb_list, _ana_list,
+                                [str(yr) for yr in _grid_yrs],
+                                var_label, region_name, _vp)
                             if mg:
                                 charts_c.append(('multiyear_map_grid', mg))
-                                print(f'  ✓ Map grid: {var_label} ({len(_grid_yr_labels)} years)')
+                                print(f'  ✓ Map grid: {var_label} ({len(_grid_yrs)} years)')
                         except Exception as _mge:
                             print(f'  Map grid {var_label} failed: {_mge}')
                     t = make_multiyear_trend_chart(yearly_var, var_label, n_years)
