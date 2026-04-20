@@ -835,8 +835,8 @@ function handleResult(result) {
   if (layers && layers.length > 0) {
     console.log('Loading', layers.length, 'tile layers onto map');
     const sorted = [
-      ...layers.filter(l =>  l.name.toLowerCase().includes('rgb') ||  l.name.toLowerCase().includes('true color')),
-      ...layers.filter(l => !l.name.toLowerCase().includes('rgb') && !l.name.toLowerCase().includes('true color')),
+      ...layers.filter(l =>  l.name.toLowerCase().includes('rgb')),
+      ...layers.filter(l => !l.name.toLowerCase().includes('rgb')),
     ];
     // Track existing tile count before adding so we only zoom on the first new layer
     const existingTileCount = mapLayers.filter(l => l.type === 'tile').length;
@@ -1005,8 +1005,8 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
         if (varStats) {
           html += buildSingleStatHTML(varLabel, varStats);
         }
-        // 3. Charts: only pie chart (bar chart removed)
-        if (fig.charts && fig.charts.length > 0) {
+        // 3. Charts: pie chart — skip in multi-year (shown as combined grid below instead)
+        if (fig.charts && fig.charts.length > 0 && !isMultiYear) {
           const lulcPie = fig.charts.find(c => c[0] === 'lulc_pie');
           if (lulcPie) {
             html += `<div class="result-section-label" style="margin-top:16px">Area Distribution</div>`;

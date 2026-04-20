@@ -418,7 +418,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             map_id   = composite.clip(study_area_surf).getMapId(VIS['rgb'])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({
-                                'name'    : 'True Color (RGB)',
+                                'name'    : 'RGB',
                                 'tile_url': tile_url,
                                 'type'    : 'tile',
                                 'bbox'    : bbox,
@@ -466,7 +466,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             all_stats['LST'] = s
                             map_id   = lst_img.clip(study_area_surf).getMapId(VIS['lst'])
                             tile_url = map_id['tile_fetcher'].url_format
-                            layers.append({'name': 'LST (°C)', 'tile_url': tile_url,
+                            layers.append({'name': 'LST', 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
                             if bbox:
                                 arr          = get_thumb(lst_img.clip(study_area_surf), VIS['lst'], study_area_surf, dim=512)
@@ -546,7 +546,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             }
                             map_id   = uhi_img.clip(study_area_surf).getMapId(VIS['uhi'])
                             tile_url = map_id['tile_fetcher'].url_format
-                            layers.append({'name': f'UHI (mean={lst_mean:.1f}\u00b0C)', 'tile_url': tile_url,
+                            layers.append({'name': f'UHI', 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
                             if bbox:
                                 try:
@@ -1068,6 +1068,25 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                         print(f'  [GRID SEED] {_v} year {first_year} failed: {_fy_ve}')
             except Exception as _fy_err:
                 print(f'  [GRID SEED] Landsat load failed for year {first_year}: {_fy_err}')
+
+            # ── Add per-year RGB tile layers (including first year) ────────────
+            # Replace the generic 'RGB' layer added during single analysis with
+            # per-year RGB layers so the map panel shows one entry per year.
+            # Remove the existing generic 'RGB' layer first.
+            layers[:] = [l for l in layers if l.get('name') != 'RGB']
+            _composites_by_yr = _yr_grid_data.get('_composites', {})
+            bbox = geo.get('bbox')
+            for _yr in years_list:
+                _yr_comp_rgb = _composites_by_yr.get(_yr)
+                if _yr_comp_rgb is not None:
+                    try:
+                        _mid_rgb = _yr_comp_rgb.clip(study_area_main).getMapId(VIS['rgb'])
+                        layers.append({'name': f'RGB — {_yr}',
+                                       'tile_url': _mid_rgb['tile_fetcher'].url_format,
+                                       'type': 'tile', 'bbox': bbox})
+                        print(f'  ✓ RGB tile layer: {_yr}')
+                    except Exception as _rgb_err:
+                        print(f'  RGB tile {_yr} failed: {_rgb_err}')
 
             # ── Build combined overlay charts + map grids ──────────────────────
             print(f'[MULTI-YEAR] Building combined charts for {list(year_all_stats.keys())}...')
