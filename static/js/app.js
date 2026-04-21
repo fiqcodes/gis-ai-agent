@@ -750,7 +750,7 @@ function escapeHtml(s) {
 // ════════════════════════════════════════════════════════
 // ANALYSIS — POST + POLL
 // ════════════════════════════════════════════════════════
-function startAnalysis(text) {
+function startAnalysis(text, onComplete) {
   isAnalyzing = true;
   setSendBtnStop();
   appendTypingIndicator();
@@ -766,15 +766,15 @@ function startAnalysis(text) {
   })
   .then(r => r.json())
   .then(data => {
-    if (data.error) { handleError(data.error); return; }
+    if (data.error) { handleError(data.error); if (onComplete) onComplete(); return; }
     currentJobId = data.job_id;
-    startPolling(data.job_id);
+    startPolling(data.job_id, onComplete);
   })
-  .catch(err => handleError(err.toString()));
+  .catch(err => { handleError(err.toString()); if (onComplete) onComplete(); });
 }
 
-function startPolling(jobId) {
-  pollingTimer = setInterval(() => pollJob(jobId), 1500);
+function startPolling(jobId, onComplete) {
+  pollingTimer = setInterval(() => pollJob(jobId, onComplete), 1500);
 }
 
 function stopPolling() {
@@ -784,13 +784,12 @@ function stopPolling() {
   setSendBtnSend();
 }
 
-function pollJob(jobId) {
+function pollJob(jobId, onComplete) {
   fetch(`/api/job/${jobId}`)
   .then(r => r.json())
   .then(data => {
     updatePlanSteps(data.steps);
 
-    // Show geocode result on map as soon as we have it
     if (data.geo && data.geo.bbox && !window._geoShown) {
       window._geoShown = true;
       if (data.parsed && data.parsed.region) {
@@ -804,12 +803,14 @@ function pollJob(jobId) {
       removeTypingIndicator();
       hidePlanWidget();
       handleResult(data.result);
+      if (onComplete) onComplete();
     } else if (data.status === 'error') {
       stopPolling();
       window._geoShown = false;
       removeTypingIndicator();
       hidePlanWidget();
       handleError(data.error || 'Unknown error');
+      if (onComplete) onComplete();
     }
   })
   .catch(() => {});
@@ -833,41 +834,29 @@ function handleResult(result) {
     return;
   }
 
-  // ── Multi-year: one chat bubble per year ──────────────────────────────────
-  if (result.type === 'multi_year') {
-    const years = result.years || [];
-    if (years.length === 0) { appendAIMessage('<p>No yearly results returned.</p>'); return; }
+  // ── Multi-year: fire one real analysis job per year, sequentially ─────────
+  if (result.type === 'multi_year_plan') {
+    const queries = result.year_queries || [];
+    if (queries.length === 0) { appendAIMessage('<p>Could not parse year range.</p>'); return; }
 
     appendAIMessage(
       `<p style="color:var(--text2);font-size:13px">
         🛰️ <strong>Multi-year analysis</strong> for <strong>${escapeHtml(result.region)}</strong>
         (${escapeHtml(result.start_year)}–${escapeHtml(result.end_year)}) —
-        generating <strong>${years.length}</strong> reports…
+        running <strong>${queries.length}</strong> analyses sequentially…
       </p>`
     );
 
-    years.forEach((yearResult, i) => {
+    // Run each year one after the other — wait for previous to finish before starting next
+    function runNextYear(idx) {
+      if (idx >= queries.length) return;
+      const q = queries[idx];
+      // Small gap between jobs so the UI doesn't feel instant
       setTimeout(() => {
-        // Add tile layers (zoom only on first layer of first year)
-        if (yearResult.layers && yearResult.layers.length > 0) {
-          const sorted = [
-            ...yearResult.layers.filter(l =>  l.name.toLowerCase().includes('rgb') || l.name.toLowerCase().includes('true color')),
-            ...yearResult.layers.filter(l => !l.name.toLowerCase().includes('rgb') && !l.name.toLowerCase().includes('true color')),
-          ];
-          sorted.forEach((lyr, li) => {
-            if (lyr.tile_url && lyr.type === 'tile') {
-              addTileLayer(lyr.name, lyr.tile_url, lyr.bbox, i === 0 && li === 0);
-            }
-          });
-        }
-
-        const { region, start_date, end_date, variables, stats, layers, figures, var_insights, conclusion, insight } = yearResult;
-        const html = buildResultHTML(region, start_date, end_date, variables, stats, layers, figures, var_insights || {}, conclusion || insight || '');
-        appendAIMessage(html);
-
-        if (i === years.length - 1) setTimeout(() => saveCurrentChat(), 100);
-      }, i * 300);
-    });
+        startAnalysis(q.message, () => runNextYear(idx + 1));
+      }, idx === 0 ? 200 : 800);
+    }
+    runNextYear(0);
     return;
   }
 
