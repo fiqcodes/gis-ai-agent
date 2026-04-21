@@ -790,6 +790,7 @@ function pollJob(jobId, onComplete) {
   .then(data => {
     updatePlanSteps(data.steps);
 
+    // Show geocode result on map as soon as we have it
     if (data.geo && data.geo.bbox && !window._geoShown) {
       window._geoShown = true;
       if (data.parsed && data.parsed.region) {
@@ -826,6 +827,27 @@ function handleError(msg) {
 // ════════════════════════════════════════════════════════
 // RESULT RENDERING
 // ════════════════════════════════════════════════════════
+
+// ── Year divider injected before each analysis bubble in multi-year mode ─────
+let _multiYearYears = [];   // populated when multi_year_plan starts
+let _multiYearIdx   = 0;
+
+function appendYearDivider(year) {
+  const msgs = document.getElementById('messages');
+  const div  = document.createElement('div');
+  div.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 0 4px;';
+  div.innerHTML = `
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+    <span style="
+      font-size:11px;font-weight:700;letter-spacing:0.08em;
+      color:var(--text3);text-transform:uppercase;white-space:nowrap;
+    ">Analysis ${year}</span>
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+  `;
+  msgs.appendChild(div);
+  scrollToBottom();
+}
+
 function handleResult(result) {
   if (!result) { appendAIMessage('<p>No result returned.</p>'); return; }
 
@@ -834,27 +856,29 @@ function handleResult(result) {
     return;
   }
 
-  // ── Multi-year: fire one real analysis job per year, sequentially ─────────
+  // ── Multi-year: fire one real job per year, each gets a year divider ──────
   if (result.type === 'multi_year_plan') {
     const queries = result.year_queries || [];
     if (queries.length === 0) { appendAIMessage('<p>Could not parse year range.</p>'); return; }
 
+    _multiYearYears = queries.map(q => q.start_date.slice(0, 4));
+    _multiYearIdx   = 0;
+
     appendAIMessage(
       `<p style="color:var(--text2);font-size:13px">
-        🛰️ <strong>Multi-year analysis</strong> for <strong>${escapeHtml(result.region)}</strong>
+        <strong>Multi-year analysis</strong> for <strong>${escapeHtml(result.region)}</strong>
         (${escapeHtml(result.start_year)}–${escapeHtml(result.end_year)}) —
         running <strong>${queries.length}</strong> analyses sequentially…
       </p>`
     );
 
-    // Run each year one after the other — wait for previous to finish before starting next
     function runNextYear(idx) {
-      if (idx >= queries.length) return;
-      const q = queries[idx];
-      // Small gap between jobs so the UI doesn't feel instant
+      if (idx >= queries.length) { _multiYearYears = []; _multiYearIdx = 0; return; }
+      _multiYearIdx = idx;
+      appendYearDivider(_multiYearYears[idx]);
       setTimeout(() => {
-        startAnalysis(q.message, () => runNextYear(idx + 1));
-      }, idx === 0 ? 200 : 800);
+        startAnalysis(queries[idx].message, () => runNextYear(idx + 1));
+      }, idx === 0 ? 200 : 600);
     }
     runNextYear(0);
     return;
