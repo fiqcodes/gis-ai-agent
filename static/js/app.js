@@ -957,11 +957,11 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
   }
 
   // ── RGB OVERVIEW (once, at top) ───────────────────────────────────────────
-  // For LULC-only analyses the rgb_overview lives inside the per-variable block below,
-  // so skip it here to avoid rendering it twice.
+  // Skip in multi-year mode (replaced by per-year map grid).
+  // Skip for LULC-only (lives inside per-variable block to avoid double render).
   const allFigKeys = figures ? Object.keys(figures) : [];
   const isLulcOnly = allFigKeys.length === 1 && allFigKeys[0].toUpperCase() === 'LULC';
-  const firstFig = !isLulcOnly && figures && Object.values(figures).find(f => f && f.rgb_overview && f !== figures['LULC']);
+  const firstFig = !isLulcOnly && !isMultiYear && figures && Object.values(figures).find(f => f && f.rgb_overview && f !== figures['LULC']);
   if (firstFig && firstFig.rgb_overview) {
     html += `<div class="result-section-label">Study Area</div>`;
     html += `<div class="result-img-wrap">
@@ -985,8 +985,8 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
 
       // For LULC: show RGB overview first (same as non-LULC vars), then LULC map
       if (isLULC) {
-        // 1a. RGB overview (same as study area block for other vars)
-        if (fig.rgb_overview) {
+        // 1a. RGB overview — skip in multi-year (shown in map grid instead)
+        if (fig.rgb_overview && !isMultiYear) {
           html += `<div class="result-section-label">Study Area</div>`;
           html += `<div class="result-img-wrap">
             <img src="${fig.rgb_overview}" class="result-img" loading="lazy"/>
@@ -994,7 +994,8 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           </div>`;
         }
         // 1b. LULC analysis map
-        if (fig.analysis_map) {
+        // 1b. LULC analysis map — skip in multi-year (shown in map grid per year instead)
+        if (fig.analysis_map && !isMultiYear) {
           html += `<div class="result-section-label">Land Cover Map</div>`;
           html += `<div class="result-img-wrap">
             <img src="${fig.analysis_map}" class="result-img" loading="lazy"/>

@@ -397,6 +397,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 )
                 study_area_surf = study_area_main
                 landsat_col, composite = load_landsat(study_area_surf, start_date, end_date)
+                _single_composite = composite   # stable ref for multi-year grid seeding
                 count = landsat_col.size().getInfo()
                 print(f'  {count} Landsat scenes loaded')
                 lst_img = None
@@ -881,34 +882,42 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             _yr_lulc_stats = {}   # yr → lulc stats (for pie grid)
             _yr_lulc_arrs  = {}   # yr → numpy LULC thumbnail array
 
-            # Seed first-year arrays from already-computed figures
-            _bbox = geo.get('bbox')
-            if _bbox and 'composite' in dir() and composite is not None:
+            # ── Seed first-year thumbnail arrays from already-computed objects ──
+            import base64 as _b64m
+            from io import BytesIO as _BIO
+
+            # RGB array — use the stable composite ref from single-analysis block
+            _single_comp = locals().get('_single_composite')
+            if _single_comp is not None:
                 try:
-                    _rgb0 = get_thumb(composite.clip(study_area_main), VIS['rgb'], study_area_main, dim=400)
+                    _rgb0 = get_thumb(_single_comp.clip(study_area_main), VIS['rgb'], study_area_main, dim=400)
                     _yr_rgb_arrs[first_year] = _rgb0
-                    print(f'  [GRID SEED] RGB array seeded for {first_year}')
+                    print(f'  [GRID SEED] RGB seeded for {first_year}')
                 except Exception as _e0:
                     print(f'  [GRID SEED] RGB seed failed: {_e0}')
-            # Seed first-year LULC arrays
-            if 'lulc' in variables and all_stats.get('LULC'):
-                _yr_lulc_stats[first_year] = all_stats['LULC']
-                # Re-use the already-computed lulc_map_b64 thumbnail if it exists
-                # We'll store it as a base64 string instead and handle separately
-            # Seed first-year analysis arrays from figures
-            for _vl, _fig in figures.items():
+
+            # Analysis arrays — decode from already-computed base64 figures
+            for _vl, _fig in list(figures.items()):
                 if not _fig or _vl.upper() == 'LULC': continue
-                # _fig['analysis_map'] is a base64 PNG — decode back to numpy
                 if _fig.get('analysis_map'):
                     try:
-                        import base64 as _b64m
-                        from io import BytesIO as _BIO
                         _raw = _b64m.b64decode(_fig['analysis_map'].split(',')[1])
-                        _arr = np.array(PILImage.open(_BIO(_raw)))
-                        _yr_ana_arrs.setdefault(_vl, {})[first_year] = _arr
-                        print(f'  [GRID SEED] Analysis array seeded: {_vl} {first_year}')
+                        _yr_ana_arrs.setdefault(_vl, {})[first_year] = np.array(PILImage.open(_BIO(_raw)))
+                        print(f'  [GRID SEED] Analysis seeded: {_vl} {first_year}')
                     except Exception as _ae:
                         print(f'  [GRID SEED] Analysis seed failed {_vl}: {_ae}')
+
+            # LULC stats + thumbnail for first year
+            if 'lulc' in variables and all_stats.get('LULC'):
+                _yr_lulc_stats[first_year] = all_stats['LULC']
+            _lulc_fig = figures.get('LULC') or {}
+            if _lulc_fig.get('analysis_map'):
+                try:
+                    _raw_l = _b64m.b64decode(_lulc_fig['analysis_map'].split(',')[1])
+                    _yr_lulc_arrs[first_year] = np.array(PILImage.open(_BIO(_raw_l)))
+                    print(f'  [GRID SEED] LULC seeded for {first_year}')
+                except Exception as _le:
+                    print(f'  [GRID SEED] LULC seed failed: {_le}')
 
             for yr in years_list:
                 if yr == first_year:
@@ -934,6 +943,16 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             _yr_rgb_arrs[yr] = _rgb_arr
                         except Exception as _re:
                             print(f'    RGB thumb {yr} failed: {_re}')
+
+                        # Always add RGB tile layer for this year (regardless of which vars are requested)
+                        try:
+                            _mid_rgb_yr = yr_comp.clip(study_area_main).getMapId(VIS['rgb'])
+                            layers.append({'name': f'RGB — {yr}',
+                                           'tile_url': _mid_rgb_yr['tile_fetcher'].url_format,
+                                           'type': 'tile', 'bbox': bbox})
+                            print(f'    ✓ RGB — {yr} tile layer added')
+                        except Exception as _rgb_tile_err:
+                            print(f'    RGB tile {yr} failed: {_rgb_tile_err}')
 
                         for v in yr_surface:
                             try:
@@ -1096,17 +1115,6 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 except Exception as yr_err:
                     print(f'  [MULTI-YEAR] Year {yr} failed: {yr_err}')
                     import traceback as _tb_yr; _tb_yr.print_exc()
-
-            # ── Also seed first-year LULC thumbnail if available ─────────────
-            if 'lulc' in variables and figures.get('LULC', {}).get('analysis_map'):
-                try:
-                    import base64 as _b64lulc
-                    from io import BytesIO as _BIO2
-                    _raw_l = _b64lulc.b64decode(figures['LULC']['analysis_map'].split(',')[1])
-                    _yr_lulc_arrs[first_year] = np.array(PILImage.open(_BIO2(_raw_l)))
-                    print(f'  [GRID SEED] LULC array seeded for {first_year}')
-                except Exception as _le0:
-                    print(f'  [GRID SEED] LULC seed failed: {_le0}')
 
             # ── Add per-year RGB tile layers for first year (others added in loop) ──
             # The generic 'RGB' layer from single analysis covers only the first year;
