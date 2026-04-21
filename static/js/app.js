@@ -247,6 +247,7 @@ function addImageOverlay(name, base64Img, bbox) {
     layer  : overlay,
     type   : 'raster',
     visible: true,
+    bbox   : bbox,
   });
 
   renderLayersList();
@@ -331,8 +332,14 @@ function toggleLayerVisibility(id) {
 
 function zoomToLayer(id) {
   const item = mapLayers.find(l => l.id === id);
-  if (!item || !item.layer.getBounds) return;
-  try { map.fitBounds(item.layer.getBounds(), { padding: [40, 40] }); } catch(e){}
+  if (!item) return;
+  // Tile layers don't have getBounds() — use stored bbox instead
+  if (item.bbox) {
+    const [w, s, e, n] = item.bbox;
+    map.fitBounds([[s, w], [n, e]], { padding: [40, 40] });
+  } else if (item.layer.getBounds) {
+    try { map.fitBounds(item.layer.getBounds(), { padding: [40, 40] }); } catch(e) {}
+  }
 }
 
 function removeLayerById(id) {
@@ -827,7 +834,7 @@ function handleResult(result) {
   }
 
   // Analysis result
-  const { region, start_date, end_date, variables, stats, layers, geo, insight, figures, var_insights, conclusion, multiyear_figures, is_multiyear, years } = result;
+  const { region, start_date, end_date, variables, stats, layers, geo, insight, figures, var_insights, conclusion } = result;
 
   // Add new GEE tile layers on top of existing ones — do NOT clear previous layers.
   // Users can toggle or remove individual layers from the layers panel.
@@ -835,8 +842,8 @@ function handleResult(result) {
   if (layers && layers.length > 0) {
     console.log('Loading', layers.length, 'tile layers onto map');
     const sorted = [
-      ...layers.filter(l =>  l.name.toLowerCase().includes('rgb')),
-      ...layers.filter(l => !l.name.toLowerCase().includes('rgb')),
+      ...layers.filter(l =>  l.name.toLowerCase().includes('rgb') ||  l.name.toLowerCase().includes('true color')),
+      ...layers.filter(l => !l.name.toLowerCase().includes('rgb') && !l.name.toLowerCase().includes('true color')),
     ];
     // Track existing tile count before adding so we only zoom on the first new layer
     const existingTileCount = mapLayers.filter(l => l.type === 'tile').length;
@@ -879,7 +886,7 @@ function handleResult(result) {
   }
 
   // 2. Build chat message
-  let html = buildResultHTML(region, start_date, end_date, variables, stats, layers, figures, var_insights || {}, conclusion || insight || '', multiyear_figures || {}, years || []);
+  let html = buildResultHTML(region, start_date, end_date, variables, stats, layers, figures, var_insights || {}, conclusion || insight || '');
   appendAIMessage(html);
 
   // Auto-save this chat to history after result is rendered
@@ -913,7 +920,7 @@ const VAR_DESC_MAP = {
   'LULC'   : 'Land Use / Land Cover classification (LULC)',
 };
 
-function buildResultHTML(region, startDate, endDate, variables, stats, layers, figures, varInsights, conclusion, multiyearFigures, yearsList) {
+function buildResultHTML(region, startDate, endDate, variables, stats, layers, figures, varInsights, conclusion) {
   const dateStr   = `${startDate} → ${endDate}`;
   const startYear = startDate.slice(0, 4);
   const endYear   = endDate.slice(0, 4);
@@ -957,11 +964,11 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
   }
 
   // ── RGB OVERVIEW (once, at top) ───────────────────────────────────────────
-  // Skip in multi-year mode (replaced by per-year map grid).
-  // Skip for LULC-only (lives inside per-variable block to avoid double render).
+  // For LULC-only analyses the rgb_overview lives inside the per-variable block below,
+  // so skip it here to avoid rendering it twice.
   const allFigKeys = figures ? Object.keys(figures) : [];
   const isLulcOnly = allFigKeys.length === 1 && allFigKeys[0].toUpperCase() === 'LULC';
-  const firstFig = !isLulcOnly && !isMultiYear && figures && Object.values(figures).find(f => f && f.rgb_overview && f !== figures['LULC']);
+  const firstFig = !isLulcOnly && figures && Object.values(figures).find(f => f && f.rgb_overview && f !== figures['LULC']);
   if (firstFig && firstFig.rgb_overview) {
     html += `<div class="result-section-label">Study Area</div>`;
     html += `<div class="result-img-wrap">
@@ -974,9 +981,6 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
   if (figures && Object.keys(figures).length > 0) {
     for (const [varLabel, fig] of Object.entries(figures)) {
       if (!fig) continue;
-      // In multi-year mode, skip per-year figure entries (e.g. 'LST — 2023', 'LULC — 2024')
-      // They are rendered in the combined map grid in the multi-year section below.
-      if (isMultiYear && /—\s*\d{4}$/.test(varLabel)) continue;
       const varStats   = stats && stats[varLabel];
       const varInsight = varInsights && varInsights[varLabel];
       const isLULC     = varLabel.toUpperCase() === 'LULC';
@@ -985,8 +989,8 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
 
       // For LULC: show RGB overview first (same as non-LULC vars), then LULC map
       if (isLULC) {
-        // 1a. RGB overview — skip in multi-year (shown in map grid instead)
-        if (fig.rgb_overview && !isMultiYear) {
+        // 1a. RGB overview (same as study area block for other vars)
+        if (fig.rgb_overview) {
           html += `<div class="result-section-label">Study Area</div>`;
           html += `<div class="result-img-wrap">
             <img src="${fig.rgb_overview}" class="result-img" loading="lazy"/>
@@ -994,8 +998,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           </div>`;
         }
         // 1b. LULC analysis map
-        // 1b. LULC analysis map — skip in multi-year (shown in map grid per year instead)
-        if (fig.analysis_map && !isMultiYear) {
+        if (fig.analysis_map) {
           html += `<div class="result-section-label">Land Cover Map</div>`;
           html += `<div class="result-img-wrap">
             <img src="${fig.analysis_map}" class="result-img" loading="lazy"/>
@@ -1006,8 +1009,8 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
         if (varStats) {
           html += buildSingleStatHTML(varLabel, varStats);
         }
-        // 3. Charts: pie chart — skip in multi-year (shown as combined grid below instead)
-        if (fig.charts && fig.charts.length > 0 && !isMultiYear) {
+        // 3. Charts: only pie chart (bar chart removed)
+        if (fig.charts && fig.charts.length > 0) {
           const lulcPie = fig.charts.find(c => c[0] === 'lulc_pie');
           if (lulcPie) {
             html += `<div class="result-section-label" style="margin-top:16px">Area Distribution</div>`;
@@ -1103,53 +1106,6 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
 
       html += `</div>`; // end .var-section
     }
-  }
-
-  // ── MULTI-YEAR COMBINED CHARTS ────────────────────────────────────────────
-  if (multiyearFigures && Object.keys(multiyearFigures).length > 0 && yearsList && yearsList.length > 1) {
-    html += `<div class="var-section">`;
-    html += `<div class="result-section-label">Multi-Year Comparison — ${yearsList.join(' · ')}</div>`;
-    for (const [varLabel, myFig] of Object.entries(multiyearFigures)) {
-      if (!myFig || !myFig.charts || myFig.charts.length === 0) continue;
-      html += `<div style="margin-top:14px">`;
-      html += `<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);margin-bottom:6px">${escapeHtml(varLabel)}</div>`;
-
-      const mapGrid  = myFig.charts.find(c => c[0] === 'multiyear_map_grid');
-      const trend    = myFig.charts.find(c => c[0] === 'multiyear_trend');
-      const dist     = myFig.charts.find(c => c[0] === 'multiyear_dist');
-      const cls      = myFig.charts.find(c => c[0] === 'multiyear_class');
-      const lulcB    = myFig.charts.find(c => c[0] === 'multiyear_bar');
-      const lulcPieG = myFig.charts.find(c => c[0] === 'lulc_pie_grid');
-
-      // Map grid: RGB + analysis map side-by-side per year (shown first, before charts)
-      if (mapGrid) {
-        html += `<div class="result-section-label" style="margin-top:10px">Maps by Year</div>`;
-        html += `<div class="result-img-wrap"><img src="${mapGrid[1]}" class="result-img" loading="lazy"/></div>`;
-      }
-      // LULC combined pie grid
-      if (lulcPieG) {
-        html += `<div class="result-section-label" style="margin-top:10px">Area Distribution by Year</div>`;
-        html += `<div class="result-img-wrap"><img src="${lulcPieG[1]}" class="result-img" loading="lazy"/></div>`;
-      }
-      if (trend) {
-        html += `<div class="result-section-label" style="margin-top:10px">Trend</div>`;
-        html += `<div class="result-img-wrap"><img src="${trend[1]}" class="result-img" loading="lazy"/></div>`;
-      }
-      if (dist) {
-        html += `<div class="result-section-label" style="margin-top:10px">Distribution Comparison</div>`;
-        html += `<div class="result-img-wrap"><img src="${dist[1]}" class="result-img" loading="lazy"/></div>`;
-      }
-      if (cls) {
-        html += `<div class="result-section-label" style="margin-top:10px">Class Composition Comparison</div>`;
-        html += `<div class="result-img-wrap"><img src="${cls[1]}" class="result-img" loading="lazy"/></div>`;
-      }
-      if (lulcB) {
-        html += `<div class="result-section-label" style="margin-top:10px">Land Cover Change</div>`;
-        html += `<div class="result-img-wrap"><img src="${lulcB[1]}" class="result-img" loading="lazy"/></div>`;
-      }
-      html += `</div>`;
-    }
-    html += `</div>`;
   }
 
   // ── CONCLUSION ────────────────────────────────────────────────────────────
