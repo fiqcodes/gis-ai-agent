@@ -833,6 +833,52 @@ function handleResult(result) {
     return;
   }
 
+  // ── Multi-year: render one chat bubble per year, sequentially ────────────
+  if (result.type === 'multi_year') {
+    const years = result.years || [];
+    if (years.length === 0) { appendAIMessage('<p>No yearly results returned.</p>'); return; }
+
+    // Show a brief header message first
+    appendAIMessage(
+      `<p style="color:var(--text2);font-size:13px">
+        🛰️ <strong>Multi-year analysis</strong> for <strong>${escapeHtml(result.region)}</strong>
+        (${escapeHtml(result.start_year)}–${escapeHtml(result.end_year)}) —
+        generating <strong>${years.length}</strong> reports…
+      </p>`
+    );
+
+    // Render each year with a staggered delay so they appear sequentially
+    years.forEach((yearResult, i) => {
+      setTimeout(() => {
+        // Add tile layers for this year — do NOT zoom (zoom only on first year)
+        if (yearResult.layers && yearResult.layers.length > 0) {
+          const sorted = [
+            ...yearResult.layers.filter(l =>  l.name.toLowerCase().includes('rgb') || l.name.toLowerCase().includes('true color')),
+            ...yearResult.layers.filter(l => !l.name.toLowerCase().includes('rgb') && !l.name.toLowerCase().includes('true color')),
+          ];
+          sorted.forEach((lyr, li) => {
+            if (lyr.tile_url && lyr.type === 'tile') {
+              const shouldZoom = (i === 0 && li === 0);  // only zoom for very first layer
+              addTileLayer(lyr.name, lyr.tile_url, lyr.bbox, shouldZoom);
+            }
+          });
+        }
+
+        // Build and append chat bubble for this year
+        const { region, start_date, end_date, variables, stats, layers, figures, var_insights, conclusion, insight } = yearResult;
+        const html = buildResultHTML(region, start_date, end_date, variables, stats, layers, figures, var_insights || {}, conclusion || insight || '');
+        appendAIMessage(html);
+
+        // Auto-save after last year
+        if (i === years.length - 1) {
+          setTimeout(() => saveCurrentChat(), 100);
+        }
+      }, i * 300); // 300ms stagger between bubbles
+    });
+
+    return;
+  }
+
   // Analysis result
   const { region, start_date, end_date, variables, stats, layers, geo, insight, figures, var_insights, conclusion } = result;
 

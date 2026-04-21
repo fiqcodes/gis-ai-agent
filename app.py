@@ -160,6 +160,233 @@ def geocode_region(region_name: str) -> dict:
 # BACKGROUND ANALYSIS WORKER
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _run_single_year_analysis(
+    region_name, start_date, end_date, variables, variables_with_rgb,
+    study_area_main, geo, roi_geojson,
+    SURFACE_INDEX_MAP, ATMO_INDEX_MAP, VIS,
+    resolve_region, fetch_web_context,
+):
+    """Run the full GEE analysis for a single year and return a result dict.
+    Called once per year when multi-year mode is detected.
+    Returns a dict compatible with the standard 'analysis' result format."""
+    import ee
+    import numpy as np
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+
+    surface_keys = list(SURFACE_INDEX_MAP.keys()) + ['lst', 'uhi', 'rgb']
+    atmo_keys    = list(ATMO_INDEX_MAP.keys()) + ['ffpi']
+    lulc_vars    = ['lulc'] if 'lulc' in variables else []
+    surface_vars = [v for v in variables_with_rgb if v in surface_keys]
+    atmo_vars    = [v for v in variables if v in atmo_keys]
+
+    all_stats = {}
+    layers    = []
+    figures   = {}
+    bbox      = geo.get('bbox')
+    rgb_overview_b64 = None
+
+    try:
+        from gis_functions import (
+            load_landsat, compute_lst, compute_uhi,
+            get_stats, get_thumb, make_rgb_overview,
+            make_analysis_map, make_stats_charts, fig_to_base64,
+        )
+
+        # ── Surface vars ─────────────────────────────────────────────────────
+        if surface_vars:
+            try:
+                landsat_col, composite = load_landsat(study_area_main, start_date, end_date)
+                count = landsat_col.size().getInfo()
+                print(f'    {count} Landsat scenes')
+                lst_img = None
+
+                if bbox and composite:
+                    try:
+                        rgb_overview_b64 = make_rgb_overview(composite, study_area_main, region_name, bbox)
+                    except Exception: pass
+
+                for v in surface_vars:
+                    try:
+                        if v == 'rgb':
+                            map_id   = composite.clip(study_area_main).getMapId(VIS['rgb'])
+                            layers.append({'name': 'True Color (RGB)', 'tile_url': map_id['tile_fetcher'].url_format,
+                                           'type': 'tile', 'bbox': bbox})
+                        elif v == 'lst':
+                            lst_img, _ = compute_lst(composite, study_area_main)
+                            s = get_stats(lst_img, 'LST', study_area_main, scale=90)
+                            s['monthly'] = {}
+                            all_stats['LST'] = s
+                            map_id = lst_img.clip(study_area_main).getMapId(VIS['lst'])
+                            layers.append({'name': 'LST (°C)', 'tile_url': map_id['tile_fetcher'].url_format,
+                                           'type': 'tile', 'bbox': bbox})
+                            if bbox:
+                                arr = get_thumb(lst_img.clip(study_area_main), VIS['lst'], study_area_main, dim=512)
+                                figures['LST'] = {'analysis_map': make_analysis_map(arr, VIS['lst'], 'LST (°C)', region_name, bbox),
+                                                  'charts': make_stats_charts(all_stats, 'lst', 'LST'),
+                                                  'rgb_overview': rgb_overview_b64}
+                        elif v == 'uhi':
+                            if lst_img is None:
+                                lst_img, _ = compute_lst(composite, study_area_main)
+                            uhi_img, lst_mean, lst_std = compute_uhi(lst_img, study_area_main)
+                            all_stats['UHI'] = {'mean': lst_mean, 'std': lst_std, 'lst_mean': lst_mean, 'lst_std': lst_std}
+                            map_id = uhi_img.clip(study_area_main).getMapId(VIS['uhi'])
+                            layers.append({'name': f'UHI (mean={lst_mean:.1f}°C)', 'tile_url': map_id['tile_fetcher'].url_format,
+                                           'type': 'tile', 'bbox': bbox})
+                        elif v in SURFACE_INDEX_MAP:
+                            label, func, vis_key, scale = SURFACE_INDEX_MAP[v]
+                            img = func(composite)
+                            s = get_stats(img, label, study_area_main, scale=scale)
+                            all_stats[label] = s
+                            map_id = img.clip(study_area_main).getMapId(VIS[vis_key])
+                            layers.append({'name': label, 'tile_url': map_id['tile_fetcher'].url_format,
+                                           'type': 'tile', 'bbox': bbox})
+                            if bbox:
+                                arr = get_thumb(img.clip(study_area_main), VIS[vis_key], study_area_main, dim=512)
+                                figures[label] = {'analysis_map': make_analysis_map(arr, VIS[vis_key], label, region_name, bbox),
+                                                  'charts': make_stats_charts(all_stats, v, label),
+                                                  'rgb_overview': rgb_overview_b64}
+                    except Exception as ve:
+                        print(f'    [{v}] failed: {ve}')
+            except Exception as se:
+                print(f'    Surface error: {se}')
+
+        # ── Atmospheric vars ─────────────────────────────────────────────────
+        if atmo_vars:
+            try:
+                from gis_functions import ATMO_INDEX_MAP as _ATMO, compute_ffpi
+                atmo_first = True
+                for v in atmo_vars:
+                    try:
+                        if v == 'ffpi':
+                            ffpi_img, _ = compute_ffpi(study_area_main, start_date, end_date)
+                            s = get_stats(ffpi_img, 'FFPI', study_area_main, scale=3500)
+                            all_stats['FFPI'] = s
+                            map_id = ffpi_img.clip(study_area_main).getMapId(VIS['ffpi'])
+                            layers.append({'name': 'FFPI Score', 'tile_url': map_id['tile_fetcher'].url_format,
+                                           'type': 'tile', 'bbox': bbox})
+                        elif v in _ATMO:
+                            label, func, vis_key, unit = _ATMO[v]
+                            img, col = func(study_area_main, start_date, end_date)
+                            if col.size().getInfo() > 0:
+                                band = img.bandNames().getInfo()[0]
+                                s = get_stats(img, band, study_area_main, scale=3500)
+                                all_stats[label] = s
+                                map_id = img.clip(study_area_main).getMapId(VIS[vis_key])
+                                layers.append({'name': f'{label} ({unit})', 'tile_url': map_id['tile_fetcher'].url_format,
+                                               'type': 'tile', 'bbox': bbox})
+                                if bbox:
+                                    arr = get_thumb(img.clip(study_area_main), VIS[vis_key], study_area_main, dim=512)
+                                    figures[label] = {'analysis_map': make_analysis_map(arr, VIS[vis_key], f'{label} ({unit})', region_name, bbox),
+                                                      'charts': make_stats_charts(all_stats, v, label),
+                                                      'rgb_overview': rgb_overview_b64 if atmo_first else None}
+                                    atmo_first = False
+                    except Exception as ve:
+                        print(f'    [{v}] atmo failed: {ve}')
+            except Exception as ae:
+                print(f'    Atmo error: {ae}')
+
+        # ── LULC ─────────────────────────────────────────────────────────────
+        if lulc_vars:
+            try:
+                from gis_functions import compute_lulc, make_lulc_charts
+                lulc_result = compute_lulc(study_area_main, start_date, end_date, region_name)
+                if lulc_result['success']:
+                    all_stats['LULC'] = lulc_result['stats']
+                    lulc_vis     = lulc_result['vis_params']
+                    lulc_clipped = lulc_result['lulc_img'].clip(study_area_main)
+                    if 'sld_style' in lulc_vis:
+                        map_id = lulc_clipped.sldStyle(lulc_vis['sld_style']).getMapId({})
+                    else:
+                        map_id = lulc_clipped.getMapId(lulc_vis)
+                    layers.append({'name': f'Land Cover — {start_date[:4]}',
+                                   'tile_url': map_id['tile_fetcher'].url_format,
+                                   'type': 'tile', 'bbox': bbox,
+                                   'lulc_stats': lulc_result['stats']})
+
+                    # Static LULC map thumbnail
+                    lulc_map_b64 = None
+                    if bbox:
+                        try:
+                            if 'sld_style' in lulc_vis:
+                                arr = get_thumb(lulc_clipped.sldStyle(lulc_vis['sld_style']), {}, study_area_main, dim=512)
+                            else:
+                                arr = get_thumb(lulc_clipped, lulc_vis, study_area_main, dim=512)
+                            classes_data = lulc_result['stats'].get('classes', {})
+                            w, s_bb, e, n_bb = bbox
+                            fig, ax = plt.subplots(figsize=(7, 6))
+                            ax.imshow(arr, extent=[w, e, s_bb, n_bb], aspect='auto', origin='upper')
+                            patches = [mpatches.Patch(color=info['color'],
+                                       label=f"{cls} ({info['percentage']:.1f}%)")
+                                       for cls, info in classes_data.items()]
+                            ax.legend(handles=patches, loc='lower right', fontsize=7,
+                                      framealpha=0.85, edgecolor='#ccc',
+                                      title='Land Cover', title_fontsize=8)
+                            ax.set_title(f'Land Cover — {region_name} ({start_date[:4]})',
+                                         fontsize=11, fontweight='bold', pad=10)
+                            for spine in ax.spines.values():
+                                spine.set_edgecolor('#cccccc'); spine.set_linewidth(0.8)
+                            ax.text(0.01, 0.01, '© Landsat / Google Earth Engine',
+                                    transform=ax.transAxes, fontsize=7, color='white',
+                                    bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.4))
+                            plt.tight_layout()
+                            lulc_map_b64 = fig_to_base64(fig)
+                        except Exception as lme:
+                            print(f'    LULC thumbnail failed: {lme}')
+
+                    # RGB overview for LULC
+                    lulc_rgb = rgb_overview_b64
+                    if lulc_rgb is None and bbox:
+                        try:
+                            from gis_functions import make_rgb_overview as _mro
+                            _, lulc_composite = load_landsat(study_area_main, start_date, end_date)
+                            lulc_rgb = _mro(lulc_composite, study_area_main, region_name, bbox)
+                        except Exception: pass
+
+                    lulc_charts = make_lulc_charts(lulc_result['stats'])
+                    figures['LULC'] = {'analysis_map': lulc_map_b64, 'charts': lulc_charts,
+                                       'rgb_overview': lulc_rgb}
+                    print(f'    ✓ LULC done ({start_date[:4]})')
+            except Exception as le:
+                print(f'    LULC error: {le}')
+
+    except Exception as ex:
+        print(f'    Single-year analysis error: {ex}')
+
+    # ── Per-variable insights + conclusion ────────────────────────────────────
+    var_insights = {}
+    try:
+        for var_label in [v for v in all_stats if 'LULC' not in v.upper()]:
+            insight_text = generate_var_insight(var_label, all_stats, region_name, start_date, end_date)
+            if insight_text:
+                var_insights[var_label] = insight_text
+    except Exception: pass
+
+    conclusion = ''
+    try:
+        web_ctx = fetch_web_context(region_name, start_date, end_date, variables)
+        conclusion = generate_conclusion(region_name, start_date, end_date, all_stats, variables, web_ctx or '')
+    except Exception: pass
+
+    return {
+        'type'        : 'analysis',
+        'region'      : region_name,
+        'start_date'  : start_date,
+        'end_date'    : end_date,
+        'variables'   : variables,
+        'stats'       : all_stats,
+        'layers'      : layers,
+        'figures'     : figures,
+        'geo'         : geo,
+        'insight'     : conclusion,
+        'var_insights': var_insights,
+        'conclusion'  : conclusion,
+        'web_context' : '',
+    }
+
+
 def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
     """Run the full LangGraph agent in a background thread."""
     job = jobs[job_id]
@@ -250,6 +477,26 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             'intent': intent,
         }
 
+        # ── Multi-year detection ──────────────────────────────────────────────
+        # If start and end span more than one calendar year, split into per-year jobs
+        def _year_range(sd, ed):
+            """Return list of (start, end) tuples, one per year between sd and ed."""
+            try:
+                sy = int(sd[:4]); ey = int(ed[:4])
+                if ey > sy:
+                    years = []
+                    for yr in range(sy, ey + 1):
+                        y_start = f'{yr}-01-01'
+                        y_end   = f'{yr}-12-31'
+                        years.append((y_start, y_end))
+                    return years
+            except Exception:
+                pass
+            return None
+
+        year_ranges = _year_range(start_date, end_date)
+        is_multi_year = year_ranges is not None and len(year_ranges) > 1
+
         # Handle QA intent
         if intent == 'question':
             update_step(2, 'running', 50)
@@ -301,6 +548,38 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         import time as _time
         pre_analysis_time = _time.time()
         print(f'  Pre-analysis snapshot at t={pre_analysis_time:.0f}')
+
+        # ── Multi-year: run full analysis per year, collect results ──────────
+        if is_multi_year:
+            print(f'\n[MULTI-YEAR] Detected {len(year_ranges)} years: {[y[0][:4] for y in year_ranges]}')
+            yearly_results = []
+            for yr_idx, (yr_start, yr_end) in enumerate(year_ranges):
+                pct_base = int(yr_idx / len(year_ranges) * 90)
+                update_step(3, 'running', pct_base + 5)
+                print(f'\n  ── Year {yr_start[:4]} ──────────────────────────────')
+                yr_result = _run_single_year_analysis(
+                    region_name, yr_start, yr_end, variables,
+                    variables_with_rgb, study_area_main, geo,
+                    roi_geojson, SURFACE_INDEX_MAP, ATMO_INDEX_MAP, VIS,
+                    resolve_region, fetch_web_context,
+                )
+                yearly_results.append(yr_result)
+
+            update_step(3, 'done', 100)
+            update_step(4, 'done', 100)
+            update_step(5, 'done', 100)
+
+            job['status'] = 'complete'
+            job['result'] = {
+                'type'       : 'multi_year',
+                'region'     : region_name,
+                'start_year' : year_ranges[0][0][:4],
+                'end_year'   : year_ranges[-1][0][:4],
+                'variables'  : variables,
+                'years'      : yearly_results,
+                'geo'        : geo,
+            }
+            return
 
         # ── Step 4: Run GEE analysis ──────────────────────────────────────────
         update_step(3, 'running', 10)
