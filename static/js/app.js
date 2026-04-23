@@ -754,7 +754,7 @@ function startAnalysis(text, onComplete) {
   isAnalyzing = true;
   setSendBtnStop();
   appendTypingIndicator();
-  showPlanWidget();
+  resetPlanWidget();
 
   const body = { message: text };
   if (activeROI) body.roi = activeROI.geojson;
@@ -828,20 +828,15 @@ function handleError(msg) {
 // RESULT RENDERING
 // ════════════════════════════════════════════════════════
 
-// ── Year divider injected before each analysis bubble in multi-year mode ─────
-let _multiYearYears = [];   // populated when multi_year_plan starts
-let _multiYearIdx   = 0;
-
 function appendYearDivider(year) {
   const msgs = document.getElementById('messages');
   const div  = document.createElement('div');
   div.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 0 4px;';
   div.innerHTML = `
     <div style="flex:1;height:1px;background:var(--border)"></div>
-    <span style="
-      font-size:11px;font-weight:700;letter-spacing:0.08em;
-      color:var(--text3);text-transform:uppercase;white-space:nowrap;
-    ">Analysis ${year}</span>
+    <span style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--text3);text-transform:uppercase;white-space:nowrap;">
+      Analysis ${year}
+    </span>
     <div style="flex:1;height:1px;background:var(--border)"></div>
   `;
   msgs.appendChild(div);
@@ -856,13 +851,10 @@ function handleResult(result) {
     return;
   }
 
-  // ── Multi-year: fire one real job per year, each gets a year divider ──────
+  // ── Multi-year: fire one real job per year, each with full plan widget ────
   if (result.type === 'multi_year_plan') {
     const queries = result.year_queries || [];
     if (queries.length === 0) { appendAIMessage('<p>Could not parse year range.</p>'); return; }
-
-    _multiYearYears = queries.map(q => q.start_date.slice(0, 4));
-    _multiYearIdx   = 0;
 
     appendAIMessage(
       `<p style="color:var(--text2);font-size:13px">
@@ -873,9 +865,8 @@ function handleResult(result) {
     );
 
     function runNextYear(idx) {
-      if (idx >= queries.length) { _multiYearYears = []; _multiYearIdx = 0; return; }
-      _multiYearIdx = idx;
-      appendYearDivider(_multiYearYears[idx]);
+      if (idx >= queries.length) return;
+      appendYearDivider(queries[idx].start_date.slice(0, 4));
       setTimeout(() => {
         startAnalysis(queries[idx].message, () => runNextYear(idx + 1));
       }, idx === 0 ? 200 : 600);
@@ -1728,14 +1719,37 @@ function showPlanWidget() {
   planExpanded = true;
 }
 
+let _planHideTimer = null;
+
 function hidePlanWidget() {
-  setTimeout(() => {
+  _planHideTimer = setTimeout(() => {
     const widget = document.getElementById('planWidget');
     if (widget) {
       document.getElementById('planTitle').textContent = 'Plan · Complete';
-      setTimeout(() => { widget.style.display = 'none'; }, 2000);
+      _planHideTimer = setTimeout(() => { widget.style.display = 'none'; }, 2000);
     }
   }, 500);
+}
+
+function resetPlanWidget() {
+  // Cancel any pending hide timers so the widget stays visible
+  if (_planHideTimer) { clearTimeout(_planHideTimer); _planHideTimer = null; }
+  const widget = document.getElementById('planWidget');
+  if (!widget) return;
+  widget.style.display = 'block';
+  planExpanded = true;
+  document.getElementById('planTitle').textContent = 'Plan · Running';
+  // Reset all steps to pending state
+  const container = document.getElementById('planSteps');
+  if (container) {
+    container.querySelectorAll('.plan-step').forEach(el => {
+      el.className = 'plan-step step-pending';
+      const iconWrap = el.querySelector('.step-icon-wrap');
+      if (iconWrap) { iconWrap.className = 'step-icon-wrap step-icon-pending'; }
+      const ring = el.querySelector('.step-ring');
+      if (ring) ring.remove();
+    });
+  }
 }
 
 function togglePlan() {
