@@ -748,6 +748,8 @@ html, body {
   position: absolute;
   top: 60px; left: 8px;
   width: 240px;
+  min-width: 180px;
+  max-width: 480px;
   background: rgba(17,17,19,0.97);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border2);
@@ -755,6 +757,23 @@ html, body {
   z-index: 410;
   box-shadow: var(--shadow-lg);
   animation: fadeSlideIn 0.2s ease;
+  /* allow JS to resize */
+  resize: none;
+  overflow: visible;
+}
+
+/* Drag handle on the right edge */
+.layers-resize-handle {
+  position: absolute;
+  top: 0; right: -4px;
+  width: 8px; height: 100%;
+  cursor: ew-resize;
+  z-index: 411;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.layers-resize-handle:hover,
+.layers-resize-handle.dragging {
+  background: rgba(229,57,53,0.25);
 }
 
 .layers-header {
@@ -815,6 +834,7 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .layer-color-swatch {

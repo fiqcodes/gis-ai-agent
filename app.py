@@ -160,6 +160,16 @@ def geocode_region(region_name: str) -> dict:
 # BACKGROUND ANALYSIS WORKER
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _layer_label(type_label: str, region: str, start_date: str, end_date: str) -> str:
+    """Format a map layer name as 'Type Region (Year)' or 'Type Region (2023–2025)'."""
+    start_year = start_date[:4] if start_date else ''
+    end_year   = end_date[:4]   if end_date   else ''
+    year_str   = start_year if start_year == end_year else f'{start_year}–{end_year}'
+    # Capitalize first word of region for display
+    region_display = region.title() if region else 'Unknown'
+    return f'{type_label} {region_display} ({year_str})'
+
+
 def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
     """Run the full LangGraph agent in a background thread."""
     job = jobs[job_id]
@@ -396,7 +406,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             map_id   = composite.clip(study_area_surf).getMapId(VIS['rgb'])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({
-                                'name'    : 'True Color (RGB)',
+                                'name'    : _layer_label('True Color', region_name, start_date, end_date),
                                 'tile_url': tile_url,
                                 'type'    : 'tile',
                                 'bbox'    : bbox,
@@ -444,7 +454,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             all_stats['LST'] = s
                             map_id   = lst_img.clip(study_area_surf).getMapId(VIS['lst'])
                             tile_url = map_id['tile_fetcher'].url_format
-                            layers.append({'name': 'LST (°C)', 'tile_url': tile_url,
+                            layers.append({'name': _layer_label('LST', region_name, start_date, end_date), 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
                             if bbox:
                                 arr          = get_thumb(lst_img.clip(study_area_surf), VIS['lst'], study_area_surf, dim=512)
@@ -524,7 +534,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             }
                             map_id   = uhi_img.clip(study_area_surf).getMapId(VIS['uhi'])
                             tile_url = map_id['tile_fetcher'].url_format
-                            layers.append({'name': f'UHI (mean={lst_mean:.1f}\u00b0C)', 'tile_url': tile_url,
+                            layers.append({'name': _layer_label('UHI', region_name, start_date, end_date), 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
                             if bbox:
                                 try:
@@ -630,7 +640,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             all_stats[label] = s
                             map_id   = img.clip(study_area_surf).getMapId(VIS[vis_key])
                             tile_url = map_id['tile_fetcher'].url_format
-                            layers.append({'name': label, 'tile_url': tile_url,
+                            layers.append({'name': _layer_label(label, region_name, start_date, end_date), 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
                             # Static analysis map + charts
                             if bbox:
@@ -682,7 +692,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             all_stats['FFPI'] = s
                             map_id   = ffpi_img.clip(study_area_atmo).getMapId(VIS['ffpi'])
                             tile_url = map_id['tile_fetcher'].url_format
-                            layers.append({'name': 'FFPI Score', 'tile_url': tile_url,
+                            layers.append({'name': _layer_label('FFPI', region_name, start_date, end_date), 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
                             if bbox:
                                 arr = get_thumb(ffpi_img.clip(study_area_atmo), VIS['ffpi'], study_area_atmo, dim=512)
@@ -703,7 +713,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 all_stats[label] = s
                                 map_id   = img.clip(study_area_atmo).getMapId(VIS[vis_key])
                                 tile_url = map_id['tile_fetcher'].url_format
-                                layers.append({'name': f'{label} ({unit})', 'tile_url': tile_url,
+                                layers.append({'name': _layer_label(label, region_name, start_date, end_date), 'tile_url': tile_url,
                                                'type': 'tile', 'bbox': bbox})
                                 if bbox:
                                     arr = get_thumb(img.clip(study_area_atmo), VIS[vis_key], study_area_atmo, dim=512)
@@ -736,7 +746,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     else:
                         map_id = lulc_clipped.getMapId(lulc_vis)
                     layers.append({
-                        'name'      : 'Land Cover Classification',
+                        'name'      : _layer_label('Land Cover', region_name, start_date, end_date),
                         'tile_url'  : map_id['tile_fetcher'].url_format,
                         'type'      : 'tile',
                         'bbox'      : geo.get('bbox'),

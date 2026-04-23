@@ -431,6 +431,70 @@ function toggleLayersPanel() {
   }
 }
 
+// ── Layers panel drag-to-resize ──────────────────────────────────────────────
+(function initLayersPanelResize() {
+  function setup() {
+    const handle = document.getElementById('layersResizeHandle');
+    const panel  = document.getElementById('layersPanel');
+    if (!handle || !panel) return;
+
+    let startX, startW;
+
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      startX = e.clientX;
+      startW = panel.offsetWidth;
+      handle.classList.add('dragging');
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'ew-resize';
+
+      function onMove(e) {
+        const delta = e.clientX - startX;
+        const newW  = Math.min(480, Math.max(180, startW + delta));
+        panel.style.width = newW + 'px';
+      }
+      function onUp() {
+        handle.classList.remove('dragging');
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    // Touch support
+    handle.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      startX = e.touches[0].clientX;
+      startW = panel.offsetWidth;
+      handle.classList.add('dragging');
+
+      function onMove(e) {
+        const delta = e.touches[0].clientX - startX;
+        const newW  = Math.min(480, Math.max(180, startW + delta));
+        panel.style.width = newW + 'px';
+      }
+      function onEnd() {
+        handle.classList.remove('dragging');
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onEnd);
+      }
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onEnd);
+    }, { passive: false });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setup);
+  } else {
+    setup();
+  }
+})();
+
+
+
 function toggleMapPanel() {
   const mp  = document.getElementById('mapPanel');
   const btn = document.getElementById('collapseMapBtn');
