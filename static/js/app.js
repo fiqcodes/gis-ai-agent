@@ -461,7 +461,7 @@ function toggleLayersPanel() {
   else setup();
 })();
 
-
+function toggleMapPanel() {
   const mp  = document.getElementById('mapPanel');
   const btn = document.getElementById('collapseMapBtn');
   mp.classList.toggle('collapsed');
