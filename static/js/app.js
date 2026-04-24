@@ -431,7 +431,37 @@ function toggleLayersPanel() {
   }
 }
 
-function toggleMapPanel() {
+// ── Layers panel drag-to-resize ──────────────────────────────────────────────
+(function initLayersPanelResize() {
+  function setup() {
+    const handle = document.getElementById('layersResizeHandle');
+    const panel  = document.getElementById('layersPanel');
+    if (!handle || !panel) return;
+    let startX, startW;
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      startX = e.clientX; startW = panel.offsetWidth;
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'ew-resize';
+      function onMove(e) {
+        const newW = Math.min(480, Math.max(180, startW + (e.clientX - startX)));
+        panel.style.width = newW + 'px';
+      }
+      function onUp() {
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup);
+  else setup();
+})();
+
+
   const mp  = document.getElementById('mapPanel');
   const btn = document.getElementById('collapseMapBtn');
   mp.classList.toggle('collapsed');

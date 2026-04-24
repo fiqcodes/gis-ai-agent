@@ -12,9 +12,9 @@
   --text:      #e2e4e9;
   --text2:     #8f929f;
   --text3:     #484b58;
-  --accent:    #ff0000;
-  --accent2:   #ff3333;
-  --accent-dim:rgba(255,0,0,0.10);
+  --accent:    #e2e4e9;
+  --accent2:   #b0b3bf;
+  --accent-dim:rgba(255,255,255,0.06);
   --red:       #ff5252;
   --yellow:    #f5a623;
   --green:     #4ade80;
@@ -237,7 +237,7 @@ html, body {
 .msg-bubble p:last-child { margin-bottom: 0; }
 .msg-bubble ul { padding-left: 20px; margin-bottom: 10px; }
 .msg-bubble li { margin-bottom: 5px; }
-.msg-bubble strong { color: var(--accent2); font-weight: 600; }
+.msg-bubble strong { color: var(--text); font-weight: 600; }
 .msg-bubble.user strong { color: var(--text); }
 .msg-bubble code {
   font-family: var(--font-mono);
@@ -246,7 +246,7 @@ html, body {
   border: 1px solid var(--border2);
   border-radius: 4px;
   padding: 1px 5px;
-  color: var(--accent2);
+  color: var(--text2);
 }
 .msg-bubble.user code {
   background: rgba(255,255,255,0.1);
@@ -692,14 +692,15 @@ html, body {
 }
 
 .badge {
-  background: var(--accent);
-  color: #fff;
+  background: var(--bg4);
+  color: var(--text2);
   border-radius: 10px;
   padding: 1px 5px;
   font-size: 10px;
   font-weight: 700;
   min-width: 16px;
   text-align: center;
+  border: 1px solid var(--border2);
 }
 
 .send-btn {
@@ -744,7 +745,7 @@ html, body {
 .qa-cmd {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--accent2);
+  color: var(--text2);
   min-width: 60px;
 }
 .qa-desc { font-size: 12px; color: var(--text3); }
@@ -811,6 +812,8 @@ html, body {
   position: absolute;
   top: 60px; left: 8px;
   width: 240px;
+  min-width: 180px;
+  max-width: 480px;
   background: rgba(17,17,19,0.97);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border2);
@@ -818,6 +821,16 @@ html, body {
   z-index: 410;
   box-shadow: var(--shadow-lg);
   animation: fadeSlideIn 0.2s ease;
+  overflow: visible;
+}
+
+/* Invisible drag zone on right edge */
+.layers-resize-handle {
+  position: absolute;
+  top: 0; right: -5px;
+  width: 10px; height: 100%;
+  cursor: ew-resize;
+  z-index: 411;
 }
 
 .layers-header {
@@ -865,7 +878,7 @@ html, body {
 
 .layer-eye {
   border: none; background: transparent;
-  color: var(--accent); cursor: pointer;
+  color: var(--text2); cursor: pointer;
   display: flex; align-items: center;
   padding: 0;
 }

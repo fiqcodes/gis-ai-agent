@@ -322,6 +322,7 @@
 
   <!-- Map Layers panel -->
   <div class="layers-panel" id="layersPanel" style="display:none">
+    <div class="layers-resize-handle" id="layersResizeHandle"></div>
     <div class="layers-header">
       <span>Map Layers</span>
       <button onclick="toggleLayersPanel()">
@@ -387,7 +388,7 @@
     </button>
     <!-- Basemap switcher -->
     <div class="basemap-switcher" id="basemapSwitcher">
-      <button class="mt-btn basemap-btn" title="Switch basemap" onclick="toggleBasemapMenu()" id="basemapBtn" style="display:none">
+      <button class="mt-btn basemap-btn" title="Switch basemap" onclick="toggleBasemapMenu()" id="basemapBtn">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"/>
           <line x1="2" y1="12" x2="22" y2="12"/>
