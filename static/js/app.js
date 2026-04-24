@@ -577,7 +577,9 @@ function appendUserMessage(text) {
   const msgs = document.getElementById('messages');
   const div  = document.createElement('div');
   div.className = 'msg-row user';
-  div.innerHTML = `<div class="msg-bubble user">${escapeHtml(text)}</div>`;
+  // Color @mentions amber like the reference UI
+  const highlighted = escapeHtml(text).replace(/@(\w+)/g, '<span class="roi-mention">@$1</span>');
+  div.innerHTML = `<div class="msg-bubble user">${highlighted}</div>`;
   msgs.appendChild(div);
   scrollToBottom();
 }
@@ -1900,7 +1902,7 @@ function updateAssetsBadge() {
     // chatPanel.offsetWidth reads the true CSS-rendered width including calc()
     const chatW = chatPanel.offsetWidth;
     // Only override if it's valid (non-zero), else fall back to formula
-    setLayout(chatW > 0 ? chatW : Math.round(window.innerWidth * 0.60) - NAV_W);
+    setLayout(chatW > 0 ? chatW : Math.round(window.innerWidth * 0.55) - NAV_W);
   }
 
   resizer.addEventListener('mousedown', (e) => {

@@ -36,7 +36,7 @@ html, body {
   font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
   overflow: hidden;
 }
 
@@ -94,7 +94,7 @@ html, body {
   position: fixed;
   left: var(--nav-w);
   top: 0; bottom: 0;
-  width: calc(60% - var(--nav-w));
+  width: calc(55% - var(--nav-w));
   background: var(--bg);
   border-right: 1px solid var(--border);
   display: flex;
@@ -105,7 +105,7 @@ html, body {
 
 .map-panel {
   position: fixed;
-  left: 60%;
+  left: 55%;
   top: 0; right: 0; bottom: 0;
   background: var(--bg);
   z-index: 50;
@@ -167,7 +167,7 @@ html, body {
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 28px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -207,7 +207,7 @@ html, body {
   border: none;
   border-radius: 0;
   padding: 0;
-  line-height: 1.7;
+  line-height: 1.65;
   color: var(--text);
   font-size: 13.5px;
   box-shadow: none;
@@ -215,15 +215,21 @@ html, body {
 
 /* User bubble stays as pill */
 .msg-bubble.user {
-  max-width: 72%;
+  max-width: 68%;
   background: var(--bg3);
   border: 1px solid var(--border2);
-  border-radius: 18px 18px 4px 18px;
-  padding: 10px 16px;
+  border-radius: 20px 20px 4px 20px;
+  padding: 11px 16px;
   color: var(--text);
   font-size: 13.5px;
   box-shadow: none;
-  line-height: 1.55;
+  line-height: 1.6;
+}
+
+/* @mention highlight — amber like reference */
+.roi-mention {
+  color: #e9a84c;
+  font-weight: 500;
 }
 
 .msg-bubble.ai {
@@ -409,7 +415,7 @@ html, body {
   background: var(--accent-dim);
   border-color: var(--accent);
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(255,0,0,0.12);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
 }
 .map-open-card svg { flex-shrink: 0; }
 .map-open-card .card-sub {
@@ -442,7 +448,7 @@ html, body {
    PLAN WIDGET
 ════════════════════════════════════════════════════════ */
 .plan-widget {
-  margin: 0 28px 16px;
+  margin: 0 24px 16px;
   background: var(--bg2);
   border: 1px solid var(--border2);
   border-radius: var(--radius);
@@ -454,8 +460,10 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 9px 13px;
+  cursor: pointer;
 }
+.plan-header:hover { background: var(--bg3); }
 
 .plan-title {
   font-size: 13px;
@@ -1112,7 +1120,7 @@ html, body {
 .panel-resizer:hover .resizer-handle,
 .panel-resizer.dragging .resizer-handle {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(255,0,0,0.12), var(--shadow);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.06), var(--shadow);
   color: var(--accent);
 }
 
@@ -1227,15 +1235,13 @@ html, body {
 
 /* Per-map AI insight block — plain box matching stats table, no icon */
 .var-insight-block {
-  background: var(--bg3);
-  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 11px 13px;
   margin: 10px 0 14px 0;
 }
 .var-insight-text {
   font-size: 13px;
-  line-height: 1.65;
+  line-height: 1.7;
   color: var(--text2);
 }
 
@@ -1285,25 +1291,25 @@ html, body {
 
 /* Conclusion block */
 .conclusion-block {
-  margin: 24px 0 16px 0;
-  border: 1px solid rgba(255,0,0,0.25);
+  margin: 20px 0 16px 0;
+  border: 1px solid var(--border2);
   border-radius: 10px;
   overflow: hidden;
+  background: var(--bg2);
 }
 .conclusion-header {
   display: flex;
   align-items: center;
   gap: 7px;
-  background: linear-gradient(90deg, rgba(255,0,0,0.12), transparent);
   padding: 10px 14px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--accent);
-  border-bottom: 1px solid rgba(255,0,0,0.15);
+  color: var(--text2);
+  border-bottom: 1px solid var(--border);
 }
 .conclusion-text {
   padding: 13px 15px;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.75;
   color: var(--text2);
 }
@@ -1510,7 +1516,7 @@ html, body {
 }
 .history-item:hover .history-delete-btn { opacity: 1; }
 .history-delete-btn:hover {
-  background: rgba(255,0,0,0.15);
+  background: var(--bg4);
   color: var(--red);
 }
 
@@ -1776,7 +1782,7 @@ html, body {
   display: inline-block;
   background: var(--accent-dim);
   color: var(--accent);
-  border: 1px solid rgba(255,0,0,0.2);
+  border: 1px solid var(--border2);
   border-radius: var(--radius-sm);
   padding: 5px 10px;
   font-size: 11.5px;
@@ -1834,11 +1840,11 @@ html, body {
   white-space: nowrap; flex-shrink: 0; display: inline-block;
 }
 .kp-tag-vegetation  { background: rgba(34,139,34,0.18); color: #4ade80; }
-.kp-tag-urban       { background: rgba(255,0,0,0.15);   color: #ff6666; }
+.kp-tag-urban       { background: var(--bg4);   color: #ff6666; }
 .kp-tag-water       { background: rgba(0,100,255,0.15); color: #60a5fa; }
 .kp-tag-thermal     { background: rgba(245,168,0,0.15); color: #f5a800; }
 .kp-tag-atmospheric { background: rgba(160,80,255,0.15);color: #c084fc; }
-.kp-tag-landcover   { background: rgba(255,0,0,0.12);   color: var(--accent); }
+.kp-tag-landcover   { background: var(--bg3);   color: var(--text2); }
 
 /* ── Formula paper style ───────────────────────────────── */
 .kpd-formula-paper-section { }
