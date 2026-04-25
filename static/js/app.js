@@ -1250,7 +1250,6 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
       </div>
     </div>`;
   }
-  }
 
   // ── ATTRIBUTIONS ─────────────────────────────────────────────────────────
   const methodStr = isMultiYear
