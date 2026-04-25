@@ -1179,7 +1179,8 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
   // ── CONCLUSION ────────────────────────────────────────────────────────────
   if (conclusion) {
     // Extract a 2-line preview from the conclusion text (strip markdown)
-    const previewText = conclusion.replace(/\*\*/g, '').replace(/\*/g, '').slice(0, 200) + '…';
+    const rawPreview = conclusion.replace(/\*\*/g, '').replace(/\*/g, '').replace(/\n+/g, ' ').trim();
+    const previewText = rawPreview; // full text, no truncation
 
     // Auto-highlight key terms in conclusion for easier scanning
     function highlightConclusion(text) {
@@ -1209,6 +1210,10 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
       return result;
     }
     const highlightedConclusion = highlightConclusion(conclusion);
+
+    // Pick a random theme per card run
+    const cardThemes = ['blue','green','red','amber'];
+    const cardTheme = cardThemes[Math.floor(Math.random() * cardThemes.length)];
 
     // Build metric chips
     let chips = '';
@@ -1256,7 +1261,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
     const titleMap = { LULC: 'Land Cover Summary', NDVI: 'Vegetation Health Summary', LST: 'Surface Temperature Summary', NO2: 'Air Quality Summary', UHI: 'Urban Heat Island Summary' };
     const cardTitle = titleMap[varLabel] || `${varLabel} Summary`;
 
-    html += `<div class="concl-card" id="conclCard_${Date.now()}">
+    html += `<div class="concl-card concl-theme-${cardTheme}" id="conclCard_${Date.now()}">
       <div class="concl-header" onclick="this.closest('.concl-card').classList.toggle('expanded')">
         <div class="concl-header-left">
           <div class="concl-header-title">${cardTitle}</div>
