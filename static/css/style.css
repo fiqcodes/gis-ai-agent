@@ -1256,6 +1256,38 @@ html, body {
   font-weight: 600;
 }
 
+/* ── LULC narrative prose + bullets ──────────────────────────────────── */
+.lulc-narrative {
+  margin: 12px 0 14px;
+}
+.lulc-narrative-intro {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+.lulc-narrative-intro strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.lulc-narrative-bullets {
+  margin: 0;
+  padding: 0 0 0 18px;
+  list-style: disc;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.lulc-narrative-bullets li {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.lulc-narrative-bullets li strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .var-insight-block { display: none; } /* deprecated — kept for safety */
 
 /* Monthly highlights strip */
