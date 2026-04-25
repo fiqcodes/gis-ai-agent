@@ -1044,7 +1044,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
   const isLulcOnly = allFigKeys.length === 1 && allFigKeys[0].toUpperCase() === 'LULC';
   const firstFig = !isLulcOnly && figures && Object.values(figures).find(f => f && f.rgb_overview && f !== figures['LULC']);
   if (firstFig && firstFig.rgb_overview) {
-    html += `<div class="result-section-label">Study Area</div>`;
+    
     html += `<div class="result-img-wrap">
       <img src="${firstFig.rgb_overview}" class="result-img" loading="lazy"/>
       <div class="result-img-caption">Study Area Overview (${escapeHtml(region)}) — True Color RGB</div>
@@ -1065,7 +1065,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
       if (isLULC) {
         // 1a. RGB overview (same as study area block for other vars)
         if (fig.rgb_overview) {
-          html += `<div class="result-section-label">Study Area</div>`;
+          
           html += `<div class="result-img-wrap">
             <img src="${fig.rgb_overview}" class="result-img" loading="lazy"/>
             <div class="result-img-caption">Study Area Overview (${escapeHtml(region)}) — True Color RGB</div>
@@ -1073,7 +1073,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
         }
         // 1b. LULC analysis map
         if (fig.analysis_map) {
-          html += `<div class="result-section-label">Land Cover Map</div>`;
+          
           html += `<div class="result-img-wrap">
             <img src="${fig.analysis_map}" class="result-img" loading="lazy"/>
             <div class="result-img-caption">Land Cover Classification — ${escapeHtml(region)} · ${dateStr}</div>
@@ -1087,7 +1087,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
         if (fig.charts && fig.charts.length > 0) {
           const lulcPie = fig.charts.find(c => c[0] === 'lulc_pie');
           if (lulcPie) {
-            html += `<div class="result-section-label" style="margin-top:16px">Area Distribution</div>`;
+            
             html += `<div class="result-img-wrap">
               <img src="${lulcPie[1]}" class="result-img" loading="lazy"/>
             </div>`;
@@ -1099,9 +1099,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
         }
         // 5. AI insight
         if (varInsight) {
-          html += `<div class="var-insight-block">
-            <div class="var-insight-text">${escapeHtml(varInsight)}</div>
-          </div>`;
+          html += `<p class="ai-insight-text">${parseMarkdown(varInsight)}</p>`;
         }
 
       } else {
@@ -1109,7 +1107,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
 
         // 1. Analysis Map
         if (fig.analysis_map) {
-          html += `<div class="result-section-label">${escapeHtml(varLabel)} Map</div>`;
+          
           html += `<div class="result-img-wrap">
             <img src="${fig.analysis_map}" class="result-img" loading="lazy"/>
             <div class="result-img-caption">${escapeHtml(varLabel)} — ${escapeHtml(region)} · ${dateStr}</div>
@@ -1123,9 +1121,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
 
         // 3. Map-level AI insight
         if (varInsight) {
-          html += `<div class="var-insight-block">
-            <div class="var-insight-text">${escapeHtml(varInsight)}</div>
-          </div>`;
+          html += `<p class="ai-insight-text">${parseMarkdown(varInsight)}</p>`;
         }
 
         // 4. Charts: monthly first (full width + highlights), then dist+class side-by-side
@@ -1138,7 +1134,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
 
           // Monthly trend chart
           if (monthly) {
-            html += `<div class="result-section-label" style="margin-top:16px">Monthly Trend</div>`;
+            
             html += `<div class="result-img-wrap">
               <img src="${monthly[1]}" class="result-img" loading="lazy"/>
             </div>`;
@@ -1149,15 +1145,13 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
 
           // Distribution + Class bar — always stack vertically (side-by-side clips in narrow panel)
           if (hist) {
-            html += `<div class="result-section-label" style="margin-top:16px">Distribution &amp; Class Composition</div>`;
-            html += `<div class="result-img-wrap">
+                        html += `<div class="result-img-wrap">
               <img src="${hist[1]}" class="result-img" loading="lazy"/>
             </div>`;
           }
           if (classBar) {
             if (!hist) {
-              html += `<div class="result-section-label" style="margin-top:16px">Distribution &amp; Class Composition</div>`;
-            }
+                          }
             html += `<div class="result-img-wrap" style="margin-top:12px">
               <img src="${classBar[1]}" class="result-img" loading="lazy"/>
             </div>`;
@@ -1184,16 +1178,8 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
 
   // ── CONCLUSION ────────────────────────────────────────────────────────────
   if (conclusion) {
-    html += `<div class="conclusion-block">
-      <div class="conclusion-header">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <path d="M12 16v-4M12 8h.01"/>
-        </svg>
-        Conclusion
-      </div>
-      <div class="conclusion-text">${escapeHtml(conclusion)}</div>
-    </div>`;
+    html += `<p class="ai-insight-text"><strong>Conclusion</strong></p>
+      <p class="ai-insight-text">${parseMarkdown(conclusion)}</p>`;
   }
 
   // ── ATTRIBUTIONS ─────────────────────────────────────────────────────────

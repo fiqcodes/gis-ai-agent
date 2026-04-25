@@ -1241,16 +1241,19 @@ html, body {
 }
 
 /* Per-map AI insight block — plain box matching stats table, no icon */
-.var-insight-block {
-  border-radius: 8px;
-  padding: 11px 13px;
-  margin: 10px 0 14px 0;
-}
-.var-insight-text {
-  font-size: 13px;
+/* Plain AI insight text — no box, flows like normal chat output */
+.ai-insight-text {
+  font-size: 13.5px;
   line-height: 1.7;
-  color: var(--text2);
+  color: var(--text);
+  margin: 6px 0 14px;
 }
+.ai-insight-text strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.var-insight-block { display: none; } /* deprecated — kept for safety */
 
 /* Monthly highlights strip */
 .monthly-highlights {
