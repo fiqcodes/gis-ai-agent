@@ -1287,6 +1287,16 @@ html, body {
   color: var(--text);
   font-weight: 600;
 }
+.lulc-pie-narrative {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text);
+  margin: 10px 0 14px;
+}
+.lulc-pie-narrative strong {
+  color: var(--text);
+  font-weight: 600;
+}
 
 .var-insight-block { display: none; } /* deprecated — kept for safety */
 

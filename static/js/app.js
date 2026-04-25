@@ -1083,21 +1083,24 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
         if (varStats) {
           html += buildSingleStatHTML(varLabel, varStats);
         }
-        // 3. Charts: only pie chart (bar chart removed)
+        // 3. Bullet breakdown — right below the table
+        if (varStats && varStats.classes) {
+          html += buildLulcExplanation(varStats);
+        }
+        // 4. Pie chart
         if (fig.charts && fig.charts.length > 0) {
           const lulcPie = fig.charts.find(c => c[0] === 'lulc_pie');
           if (lulcPie) {
-            
             html += `<div class="result-img-wrap">
               <img src="${lulcPie[1]}" class="result-img" loading="lazy"/>
             </div>`;
           }
         }
-        // 4. LULC text explanation (auto-computed from class stats)
+        // 5. Pie prose narrative — right below the pie chart
         if (varStats && varStats.classes) {
-          html += buildLulcExplanation(varStats);
+          html += buildLulcPieNarrative(varStats);
         }
-        // 5. AI insight
+        // 6. AI insight
         if (varInsight) {
           html += `<p class="ai-insight-text">${parseMarkdown(varInsight)}</p>`;
         }
@@ -1672,77 +1675,84 @@ function buildDistClassExplanation(varLabel, s) {
   return `<p class="ai-insight-text">${text}</p>`;
 }
 
-// ── LULC class explanation (auto-computed from class stats) ──────────────────
+// ── LULC shared helpers ───────────────────────────────────────────────────────
+const _LULC_DESCRIPTORS = {
+  'built':     'impervious surfaces including roads, buildings, and infrastructure',
+  'urban':     'impervious surfaces including roads, buildings, and infrastructure',
+  'tree':      'woody vegetation including forest patches, parks, and tree cover',
+  'forest':    'closed-canopy forest cover with significant biomass and biodiversity value',
+  'rangeland': 'open grassland, shrubland, and sparse herbaceous vegetation',
+  'grass':     'open grassland and herbaceous cover',
+  'water':     'rivers, lakes, reservoirs, coastal water, and wetland surfaces',
+  'cropland':  'cultivated agricultural fields and irrigated farmland',
+  'crop':      'cultivated agricultural fields and irrigated farmland',
+  'bare':      'exposed soil, sand, or sparsely vegetated land',
+  'soil':      'exposed or degraded soil with minimal vegetation cover',
+  'snow':      'snow and ice-covered surfaces',
+  'cloud':     'cloud-masked or unclassified pixels',
+};
+
+// Block 1: bullet breakdown — shown right below the table
 function buildLulcExplanation(s) {
   if (!s || !s.classes) return '';
-
-  const classes  = s.classes;
-  const totalHa  = s.total_ha || 0;
-  const nClasses = s.n_classes || Object.keys(classes).length;
-
-  // Sort classes by percentage descending
-  const sorted = Object.entries(classes)
-    .sort((a, b) => b[1].percentage - a[1].percentage);
-
+  const sorted = Object.entries(s.classes).sort((a, b) => b[1].percentage - a[1].percentage);
   if (sorted.length === 0) return '';
 
-  const [topName, topInfo] = sorted[0];
-  const [secName, secInfo] = sorted[1] || [null, null];
-  const topPct = topInfo.percentage.toFixed(1);
-
-  // ── Prose intro ────────────────────────────────────────────────────────────
-  let intro = `The study area covers a total of <strong>${totalHa.toLocaleString()} ha</strong> across <strong>${nClasses} land cover classes</strong>. `;
-  intro += `<strong>${topName}</strong> is the dominant class at <strong>${topPct}%</strong>`;
-  if (secName && secInfo) {
-    intro += `, with <strong>${secName}</strong> as the next largest at <strong>${secInfo.percentage.toFixed(1)}%</strong>`;
-  }
-  intro += `.`;
-
-  // Contextual note based on dominant class
-  const topKey = topName.toLowerCase();
-  let contextNote = '';
-  if (topKey.includes('built') || topKey.includes('urban') || topKey.includes('impervious')) {
-    contextNote = `The high proportion of built-up surface reflects a heavily urbanized landscape, associated with reduced permeability, elevated surface temperatures, and limited green space availability.`;
-  } else if (topKey.includes('tree') || topKey.includes('forest') || topKey.includes('vegetation')) {
-    contextNote = `The prevalence of tree or forest cover indicates a landscape with significant carbon storage and biodiversity value, though fragmentation from surrounding land uses warrants ongoing monitoring.`;
-  } else if (topKey.includes('water')) {
-    contextNote = `The dominance of water bodies reflects the aquatic character of this region, with implications for flood risk, aquatic biodiversity, and local microclimate regulation.`;
-  } else if (topKey.includes('crop') || topKey.includes('agric') || topKey.includes('farm')) {
-    contextNote = `Agricultural land is the primary use, highlighting the region's role in food production and the importance of monitoring soil health and irrigation patterns.`;
-  } else if (topKey.includes('bare') || topKey.includes('soil')) {
-    contextNote = `Bare or sparsely vegetated surfaces dominate, indicating degraded land, active construction, or arid conditions that may drive erosion and surface heating.`;
-  }
-
-  // ── Per-class bullet points ────────────────────────────────────────────────
-  const classDescriptors = {
-    'built':      'impervious surfaces including roads, buildings, and infrastructure',
-    'urban':      'impervious surfaces including roads, buildings, and infrastructure',
-    'tree':       'woody vegetation including forest patches, parks, and tree cover',
-    'forest':     'closed-canopy forest cover with significant biomass and biodiversity value',
-    'rangeland':  'open grassland, shrubland, and sparse herbaceous vegetation',
-    'grass':      'open grassland and herbaceous cover',
-    'water':      'rivers, lakes, reservoirs, coastal water, and wetland surfaces',
-    'cropland':   'cultivated agricultural fields and irrigated farmland',
-    'crop':       'cultivated agricultural fields and irrigated farmland',
-    'bare':       'exposed soil, sand, or sparsely vegetated land',
-    'soil':       'exposed or degraded soil with minimal vegetation cover',
-    'snow':       'snow and ice-covered surfaces',
-    'cloud':      'cloud-masked or unclassified pixels',
-  };
+  const totalHa  = s.total_ha || 0;
+  const nClasses = s.n_classes || sorted.length;
 
   const bullets = sorted.map(([name, info]) => {
     const pct = info.percentage.toFixed(1);
     const ha  = (info.hectares || 0).toLocaleString();
-    const key = Object.keys(classDescriptors).find(k => name.toLowerCase().includes(k));
-    const desc = key ? ` — ${classDescriptors[key]}` : '';
+    const key = Object.keys(_LULC_DESCRIPTORS).find(k => name.toLowerCase().includes(k));
+    const desc = key ? ` — ${_LULC_DESCRIPTORS[key]}` : '';
     return `<li><strong>${name}</strong>${desc}: <strong>${pct}%</strong> (${ha} ha)</li>`;
   }).join('');
 
-  return `
-    <div class="lulc-narrative">
-      <p class="lulc-narrative-intro">${intro}${contextNote ? ' ' + contextNote : ''}</p>
-      <ul class="lulc-narrative-bullets">${bullets}</ul>
-    </div>`;
+  return `<div class="lulc-narrative lulc-narrative--table">
+    <ul class="lulc-narrative-bullets">${bullets}</ul>
+  </div>`;
+}
+
+// Block 2: prose narrative — shown right below the pie chart
+function buildLulcPieNarrative(s) {
+  if (!s || !s.classes) return '';
+  const sorted = Object.entries(s.classes).sort((a, b) => b[1].percentage - a[1].percentage);
+  if (sorted.length === 0) return '';
+
+  const totalHa        = s.total_ha || 0;
+  const nClasses       = s.n_classes || sorted.length;
+  const [topName, topInfo]       = sorted[0];
+  const [secName, secInfo]       = sorted[1] || [null, null];
+  const [thirdName, thirdInfo]   = sorted[2] || [null, null];
+  const topPct = topInfo.percentage.toFixed(1);
+  const topKey = topName.toLowerCase();
+
+  // Opening sentence — what the pie shows
+  let text = `The distribution chart confirms that <strong>${topName}</strong> overwhelmingly dominates the landscape at <strong>${topPct}%</strong> of the total <strong>${totalHa.toLocaleString()} ha</strong>`;
+  if (secName && secInfo) {
+    text += `, leaving only <strong>${(100 - topInfo.percentage).toFixed(1)}%</strong> shared across the remaining ${nClasses - 1} class${nClasses - 1 > 1 ? 'es' : ''}`;
+    text += ` — led by <strong>${secName}</strong> (${secInfo.percentage.toFixed(1)}%)`;
+    if (thirdName && thirdInfo) text += ` and <strong>${thirdName}</strong> (${thirdInfo.percentage.toFixed(1)}%)`;
+  }
+  text += `. `;
+
+  // Contextual implication
+  if (topKey.includes('built') || topKey.includes('urban') || topKey.includes('impervious')) {
+    text += `The near-complete dominance of built-up cover leaves little room for natural land cover, posing long-term risks to urban resilience, stormwater management, and biodiversity. Greening strategies and targeted revegetation of residual open spaces would be critical priorities.`;
+  } else if (topKey.includes('tree') || topKey.includes('forest') || topKey.includes('vegetation')) {
+    text += `The large share of vegetated surface indicates a landscape with substantial ecological value, though the minority classes highlight pressure points where deforestation or conversion may be occurring.`;
+  } else if (topKey.includes('water')) {
+    text += `The high water fraction reflects the aquatic nature of this area; even minor land-use changes in the remaining classes could significantly impact water quality, flooding dynamics, and coastal integrity.`;
+  } else if (topKey.includes('crop') || topKey.includes('agric') || topKey.includes('farm')) {
+    text += `The agricultural dominance visible in the chart underscores the region's productive capacity, while the minority classes may represent natural buffer areas whose preservation supports ecosystem services and soil health.`;
+  } else if (topKey.includes('bare') || topKey.includes('soil')) {
+    text += `The substantial area of bare or degraded land suggests a landscape under stress, where recovery through vegetation restoration or land rehabilitation programs would yield significant environmental benefits.`;
+  } else {
+    text += `The relatively even distribution across classes reflects a heterogeneous landscape with diverse land uses, each contributing differently to local ecology, hydrology, and urban form.`;
+  }
+
+  return `<p class="lulc-pie-narrative">${text}</p>`;
 }
 
 function renderChartsInBubble(bubble, stats, variables) {
