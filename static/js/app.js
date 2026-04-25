@@ -963,6 +963,13 @@ function handleResult(result) {
   let html = buildResultHTML(region, start_date, end_date, variables, stats, layers, figures, var_insights || {}, conclusion || insight || '');
   appendAIMessage(html);
 
+  // 3. Render Plotly charts — find the last AI bubble (just appended) and render into its divs
+  setTimeout(() => {
+    const bubbles = document.querySelectorAll('.msg-bubble.ai');
+    const lastBubble = bubbles[bubbles.length - 1];
+    if (lastBubble) renderAllPlotlyCharts(stats, figures, lastBubble);
+  }, 150);
+
   // Auto-save this chat to history after result is rendered
   setTimeout(() => saveCurrentChat(), 100);
 }
@@ -1001,6 +1008,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
   const sameYear  = startYear === endYear;
   const yearRange = sameYear ? startYear : `${startYear}–${endYear}`;
   const isMultiYear = startYear !== endYear;
+  const msgId     = Date.now().toString(36) + Math.random().toString(36).slice(2,5);
 
   const atmoVars = ['no2','co','so2','ch4','o3','aerosol','gpp','burned','ffpi'];
   const isAtmo  = (variables || []).some(v => atmoVars.includes(v.toLowerCase()));
@@ -1087,12 +1095,13 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
         if (varStats && varStats.classes) {
           html += buildLulcExplanation(varStats);
         }
-        // 4. Pie chart
+        // 4. Pie chart — Plotly interactive
         if (fig.charts && fig.charts.length > 0) {
           const lulcPie = fig.charts.find(c => c[0] === 'lulc_pie');
           if (lulcPie) {
+            const pieId = `plotly_lulc_pie_${msgId}`;
             html += `<div class="result-img-wrap">
-              <img src="${lulcPie[1]}" class="result-img" loading="lazy"/>
+              <div id="${pieId}" class="plotly-chart-wrap"></div>
             </div>`;
           }
         }
@@ -1135,35 +1144,38 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           const classBar = charts.find(c => c[0] === 'class_bar');
           console.log('[charts] varLabel:', varLabel, '| total:', charts.length, '| types:', charts.map(c=>c[0]), '| classBar:', !!classBar);
 
-          // Monthly trend chart
+          // Monthly trend chart — Plotly interactive
           if (monthly) {
-            
+            const chartId = `plotly_monthly_${sanitizeId(varLabel)}_${msgId}`;
             html += `<div class="result-img-wrap">
-              <img src="${monthly[1]}" class="result-img" loading="lazy"/>
+              <div id="${chartId}" class="plotly-chart-wrap"></div>
             </div>`;
             if (varStats && varStats.monthly && Object.keys(varStats.monthly).length > 0) {
               html += buildMonthlyHighlights(varLabel, varStats.monthly);
             }
           }
 
-          // Distribution + Class bar — always stack vertically (side-by-side clips in narrow panel)
+          // Distribution histogram — Plotly interactive
           if (hist) {
-                        html += `<div class="result-img-wrap">
-              <img src="${hist[1]}" class="result-img" loading="lazy"/>
+            const chartId = `plotly_hist_${sanitizeId(varLabel)}_${msgId}`;
+            html += `<div class="result-img-wrap">
+              <div id="${chartId}" class="plotly-chart-wrap"></div>
             </div>`;
           }
+
+          // Class bar chart — Plotly interactive
           if (classBar) {
-            if (!hist) {
-                          }
+            const chartId = `plotly_classbar_${sanitizeId(varLabel)}_${msgId}`;
             html += `<div class="result-img-wrap" style="margin-top:12px">
-              <img src="${classBar[1]}" class="result-img" loading="lazy"/>
+              <div id="${chartId}" class="plotly-chart-wrap"></div>
             </div>`;
           }
+
           if ((hist || classBar) && varStats) {
             html += buildDistClassExplanation(varLabel, varStats);
           }
 
-          // Any other chart types
+          // Any other chart types (e.g. lulc_pie already handled above, ffpi_class etc.)
           const shown = new Set([monthly, hist, classBar].filter(Boolean).map(c => c[0]));
           for (const [type, b64] of charts) {
             if (!shown.has(type)) {
@@ -1859,6 +1871,263 @@ function renderChartsInBubble(bubble, stats, variables) {
       }
     }
   }, 200); // 200ms delay ensures bubble is in DOM
+}
+
+// =============================================================================
+// PLOTLY CHART RENDERING — replaces matplotlib base64 images
+// Colors, class boundaries, and labels match gis_functions.py exactly.
+// =============================================================================
+
+function _plotlyWhiteLayout(title, height = 320) {
+  return {
+    title: { text: title, font: { size: 13, color: '#222', family: 'DM Sans, sans-serif', weight: 700 } },
+    height,
+    margin: { l: 55, r: 30, t: 45, b: 55 },
+    paper_bgcolor: '#ffffff',
+    plot_bgcolor : '#ffffff',
+    font: { color: '#333', family: 'DM Sans, sans-serif', size: 11 },
+    xaxis: { gridcolor: 'rgba(0,0,0,0.08)', tickcolor: '#999', linecolor: '#ccc', zerolinecolor: '#ccc' },
+    yaxis: { gridcolor: 'rgba(0,0,0,0.08)', tickcolor: '#999', linecolor: '#ccc', zerolinecolor: '#ccc' },
+    showlegend: false,
+  };
+}
+
+function _palColor(palette, vmin, vmax, value) {
+  // Interpolate a hex color from a palette array at a given value
+  const t = Math.max(0, Math.min(1, (value - vmin) / ((vmax - vmin) || 1)));
+  const n = palette.length - 1;
+  const lo = Math.floor(t * n), hi = Math.min(lo + 1, n);
+  const f  = t * n - lo;
+  const hex2rgb = h => [
+    parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)
+  ];
+  const [r1,g1,b1] = hex2rgb(palette[lo]);
+  const [r2,g2,b2] = hex2rgb(palette[hi]);
+  const r = Math.round(r1 + (r2-r1)*f);
+  const g = Math.round(g1 + (g2-g1)*f);
+  const b = Math.round(b1 + (b2-b1)*f);
+  return `rgb(${r},${g},${b})`;
+}
+
+// GEE/gis_functions VIS palettes — mirrors gis_functions.py VIS dict exactly
+const _VIS_PAL = {
+  ndvi:    { min:-1, max:1, pal:['#0000ff','#ffffff','#008000'] },
+  evi:     { min:-1, max:1, pal:['#a52a2a','#ffffff','#006400'] },
+  savi:    { min:-1, max:1, pal:['#a52a2a','#ffffff','#008000'] },
+  ndwi:    { min:-1, max:1, pal:['#a52a2a','#ffffff','#0000ff'] },
+  mndwi:   { min:-1, max:1, pal:['#a52a2a','#ffffff','#00ffff'] },
+  ndbi:    { min:-1, max:1, pal:['#0000ff','#ffffff','#ff0000'] },
+  ui:      { min:-1, max:1, pal:['#008000','#ffffff','#800080'] },
+  nbi:     { min:0,  max:0.5, pal:['#ffffff','#ffa500','#8b0000'] },
+  bsi:     { min:-1, max:1, pal:['#0000ff','#ffffff','#a52a2a'] },
+  ndsi:    { min:-1, max:1, pal:['#a52a2a','#ffffff','#e0ffff'] },
+  no2:     { min:0, max:0.0002, pal:['#000033','#0000ff','#8000ff','#00ffff','#008000','#ffff00','#ff0000'] },
+  co:      { min:0.02, max:0.08, pal:['#000033','#0000ff','#8000ff','#00ffff','#008000','#ffff00','#ff0000'] },
+  so2:     { min:0, max:0.001, pal:['#0000ff','#008000','#ffff00','#ffa500','#ff0000','#8b0000'] },
+  ch4:     { min:1750, max:1950, pal:['#0000ff','#00ffff','#008000','#ffff00','#ffa500','#ff0000'] },
+  o3:      { min:200, max:380, pal:['#800080','#0000ff','#00ffff','#008000','#ffff00','#ff0000'] },
+  aerosol: { min:-1, max:3, pal:['#0000ff','#ffffff','#ffff00','#ffa500','#ff0000'] },
+  ffpi:    { min:0, max:1, pal:['#313695','#74add1','#fdae61','#d73027'] },
+};
+
+// Per-variable class definitions — mirrors make_stats_charts() in gis_functions.py exactly
+const _CLASS_DEFS = {
+  NDVI:    { bounds:[-1,0.1,0.3,0.6,1],    labels:['Bare\n(<0.1)','Stressed\n(0.1–0.3)','Moderate\n(0.3–0.6)','Healthy\n(>0.6)'],           xlabel:'NDVI class',           visKey:'ndvi' },
+  EVI:     { bounds:[-1,0.1,0.3,0.5,1],    labels:['Sparse\n(<0.1)','Low\n(0.1–0.3)','Moderate\n(0.3–0.5)','Dense\n(>0.5)'],               xlabel:'Vegetation class',     visKey:'evi'  },
+  SAVI:    { bounds:[-1,0.1,0.3,0.5,1],    labels:['Sparse\n(<0.1)','Low\n(0.1–0.3)','Moderate\n(0.3–0.5)','Dense\n(>0.5)'],               xlabel:'Vegetation class',     visKey:'savi' },
+  NDBI:    { bounds:[-1,-0.1,0.0,0.1,1],   labels:['Non-built\n(<–0.1)','Low built\n(–0.1–0)','Moderate\n(0–0.1)','High built\n(>0.1)'],   xlabel:'Built-up class',       visKey:'ndbi' },
+  NDWI:    { bounds:[-1,-0.3,0.0,0.3,1],   labels:['Dry\n(<–0.3)','Transition\n(–0.3–0)','Moist\n(0–0.3)','Water\n(>0.3)'],               xlabel:'Water class',          visKey:'ndwi' },
+  MNDWI:   { bounds:[-1,-0.3,0.0,0.3,1],   labels:['Dry\n(<–0.3)','Transition\n(–0.3–0)','Moist\n(0–0.3)','Water\n(>0.3)'],               xlabel:'Water class',          visKey:'mndwi'},
+  BSI:     { bounds:[-1,-0.1,0.1,1],       labels:['Vegetated\n(<–0.1)','Mixed\n(–0.1–0.1)','Bare soil\n(>0.1)'],                          xlabel:'Bare soil class',      visKey:'bsi'  },
+  UI:      { bounds:[-1,-0.1,0.1,1],       labels:['Vegetation\n(<–0.1)','Transition\n(–0.1–0.1)','Urban\n(>0.1)'],                        xlabel:'Urban class',          visKey:'ui'   },
+  NDSI:    { bounds:[-1,0.0,0.4,1],        labels:['No snow\n(<0)','Possible\n(0–0.4)','Snow\n(>0.4)'],                                    xlabel:'Snow class',           visKey:'ndsi' },
+  NBI:     { bounds:[0,0.1,0.25,0.5],      labels:['Low\n(<0.1)','Moderate\n(0.1–0.25)','High\n(>0.25)'],                                  xlabel:'Built-up class',       visKey:'nbi'  },
+  LST:     { bounds:[0,30,35,40,45,100],   labels:['Cool\n(<30°C)','Moderate\n(30–35°C)','Warm\n(35–40°C)','Hot\n(40–45°C)','Extreme\n(>45°C)'], xlabel:'Temperature class', colors:['#0502b8','#269db1','#3be285','#f5a800','#ff500d'] },
+  UHI:     { bounds:[-10,-2,-0.5,0.5,2,10], labels:['Strong Cool\n(z<−2)','Cool Island\n(−2–−0.5)','Near Average\n(−0.5–0.5)','Warm Zone\n(0.5–2)','Heat Island\n(z>2)'], xlabel:'UHI z-score class', colors:['#313695','#74add1','#fed976','#fd8d3c','#b10026'] },
+  NO2:     { bounds:[0,8e-5,1.5e-4,2.5e-4,0.0002], labels:['Clean\n(<8×10⁻⁵)','Moderate\n(8–15×10⁻⁵)','High\n(15–25×10⁻⁵)','Severe\n(>25×10⁻⁵)'], xlabel:'NO₂ concentration class', visKey:'no2' },
+  CO:      { bounds:[0.02,0.035,0.055,0.07,0.08],  labels:['Low\n(<0.035)','Moderate\n(0.035–0.055)','High\n(0.055–0.07)','Severe\n(>0.07)'],      xlabel:'CO column density class', visKey:'co'  },
+  SO2:     { bounds:[0,1e-4,5e-4,1e-3,0.001],      labels:['Clean\n(<1×10⁻⁴)','Moderate\n(1–5×10⁻⁴)','High\n(5×10⁻⁴–10⁻³)','Severe\n(>10⁻³)'], xlabel:'SO₂ column density class',visKey:'so2' },
+  CH4:     { bounds:[1750,1850,1900,1950,2000],     labels:['Background\n(<1850)','Elevated\n(1850–1900)','High\n(1900–1950)','Very high\n(>1950)'], xlabel:'CH₄ mixing ratio (ppb)',  visKey:'ch4' },
+  O3:      { bounds:[200,220,280,340,380],          labels:['Very low\n(<220 DU)','Low\n(220–280 DU)','Normal\n(280–340 DU)','High\n(>340 DU)'],    xlabel:'O₃ column class',         visKey:'o3'  },
+  AEROSOL: { bounds:[-1,0,1,2,3],                  labels:['Clean\n(<0)','Low\n(0–1)','Moderate\n(1–2)','High\n(>2)'],                             xlabel:'Aerosol index class',     visKey:'aerosol' },
+  FFPI:    { bounds:[0,0.3,0.6,0.8,1],             labels:['Clean\n(0–0.3)','Moderate\n(0.3–0.6)','Polluted\n(0.6–0.8)','Severe\n(>0.8)'],        xlabel:'Pollution class',         visKey:'ffpi' },
+};
+
+function _sampleNormal(mean, std, n=50000, lo=-Infinity, hi=Infinity) {
+  // Box-Muller sampling, seeded deterministically via mean+std
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    let u, v, s;
+    do { u = Math.random()*2-1; v = Math.random()*2-1; s = u*u+v*v; } while (s>=1||s===0);
+    const z = u * Math.sqrt(-2*Math.log(s)/s);
+    out.push(Math.min(hi, Math.max(lo, mean + std * z)));
+  }
+  return out;
+}
+
+function renderAllPlotlyCharts(stats, figures, bubble) {
+  if (!stats || !figures) return;
+  const scope = bubble || document;
+
+  for (const [varLabel, fig] of Object.entries(figures)) {
+    if (!fig || !fig.charts || fig.charts.length === 0) continue;
+    const vUp    = varLabel.toUpperCase();
+    const s      = stats[varLabel];
+    const charts = fig.charts;
+
+    const monthly  = charts.find(c => c[0] === 'monthly_trend');
+    const hist     = charts.find(c => c[0] === 'histogram');
+    const classBar = charts.find(c => c[0] === 'class_bar');
+
+    const safeId = sanitizeId(varLabel);
+    const isLST  = vUp.includes('LST') || vUp.includes('UHI');
+
+    // ── 1. Monthly trend ───────────────────────────────────────────────────
+    if (monthly && s && s.monthly) {
+      const el = scope.querySelector(`[id^="plotly_monthly_${safeId}_"]`);
+      if (el && Object.keys(s.monthly).length >= 2) {
+        const months   = Object.keys(s.monthly).sort();
+        const vals     = months.map(m => s.monthly[m]);
+        const shortM   = months.map(m => m.slice(5));
+        const baseline = Math.min(...vals) - Math.abs(Math.min(...vals)) * 0.05;
+        const yLabel   = isLST ? `${vUp} (°C)` : vUp;
+        Plotly.newPlot(el, [
+          { x:shortM, y:vals, type:'scatter', mode:'lines+markers',
+            line:{ color:'#2196F3', width:2 },
+            marker:{ color:'#2196F3', size:6, symbol:'circle', line:{ color:'white', width:1.5 } },
+            fill:'tonexty', fillcolor:'rgba(33,150,243,0.12)', name:vUp },
+          { x:shortM, y:vals.map(()=>baseline), type:'scatter', mode:'lines',
+            line:{ color:'transparent' }, showlegend:false, hoverinfo:'skip' },
+        ], {
+          ..._plotlyWhiteLayout(`${vUp} Monthly Mean`, 310),
+          xaxis:{ ..._plotlyWhiteLayout('').xaxis, title:{ text:'Month', font:{size:9} }, tickfont:{size:8} },
+          yaxis:{ ..._plotlyWhiteLayout('').yaxis, title:{ text:yLabel, font:{size:9} }, tickfont:{size:8} },
+        }, { displayModeBar:false, responsive:true });
+      }
+    }
+
+    // ── 2. Distribution histogram ──────────────────────────────────────────
+    if (hist && s && s.mean != null) {
+      const el = scope.querySelector(`[id^="plotly_hist_${safeId}_"]`);
+      if (el) {
+        const mean  = s.mean, std = Math.max(s.std || 0.1, 0.001);
+        const lo    = s.min ?? mean - 4*std;
+        const hi    = s.max ?? mean + 4*std;
+        const nBins = 40;
+        const binW  = (hi - lo) / nBins || 0.01;
+        const counts = new Array(nBins).fill(0);
+        const binX   = Array.from({length:nBins}, (_,i) => lo + (i+0.5)*binW);
+
+        const samples = _sampleNormal(mean, std, 20000, lo, hi);
+        for (const v of samples) {
+          const b = Math.min(nBins-1, Math.max(0, Math.floor((v-lo)/binW)));
+          counts[b]++;
+        }
+
+        const shapes = [], annotations = [];
+        if (s.p10 != null) {
+          shapes.push({ type:'line', x0:s.p10, x1:s.p10, y0:0, y1:1, yref:'paper', line:{ color:'#E07B39', width:1.5, dash:'dash' } });
+          annotations.push({ x:s.p10, y:0.97, yref:'paper', text:'P10', showarrow:false, font:{color:'#E07B39',size:8}, xanchor:'center' });
+        }
+        if (s.p90 != null) {
+          shapes.push({ type:'line', x0:s.p90, x1:s.p90, y0:0, y1:1, yref:'paper', line:{ color:'#E07B39', width:1.5, dash:'dash' } });
+          annotations.push({ x:s.p90, y:0.97, yref:'paper', text:'P90', showarrow:false, font:{color:'#E07B39',size:8}, xanchor:'center' });
+        }
+        if (s.mean != null) {
+          shapes.push({ type:'line', x0:mean, x1:mean, y0:0, y1:1, yref:'paper', line:{ color:'#C0392B', width:1.5, dash:'solid' } });
+        }
+
+        const xLabel = isLST ? `${vUp} (°C)` : vUp;
+        Plotly.newPlot(el, [{
+          x:binX, y:counts, type:'bar',
+          marker:{ color:'rgba(91,155,213,0.85)', line:{ color:'white', width:0.4 } },
+          width: binW * 0.95, name:vUp,
+        }], {
+          ..._plotlyWhiteLayout(`${vUp} distribution`, 310),
+          xaxis:{ ..._plotlyWhiteLayout('').xaxis, title:{ text:xLabel, font:{size:9} }, tickfont:{size:8} },
+          yaxis:{ ..._plotlyWhiteLayout('').yaxis, title:{ text:'Pixel count', font:{size:9} }, tickfont:{size:8} },
+          shapes, annotations, bargap:0.05,
+        }, { displayModeBar:false, responsive:true });
+      }
+    }
+
+    // ── 3. Class bar chart ─────────────────────────────────────────────────
+    if (classBar && s && s.mean != null) {
+      const el = scope.querySelector(`[id^="plotly_classbar_${safeId}_"]`);
+      if (el) {
+        const defEntry = Object.entries(_CLASS_DEFS).find(([k]) => vUp.includes(k));
+        const def = defEntry?.[1];
+        if (def) {
+          const mean    = s.mean, std = Math.max(s.std || 0.1, 0.001);
+          const sLo     = s.min ?? mean - 5*std;
+          const sHi     = s.max ?? mean + 5*std;
+          const samples = _sampleNormal(mean, std, 20000, sLo, sHi);
+          const nC      = def.bounds.length - 1;
+
+          const classPcts = [], classColors = [], classLabels = [];
+          for (let i = 0; i < nC; i++) {
+            const lo2 = def.bounds[i], hi2 = def.bounds[i+1];
+            const pct = (samples.filter(v => v >= lo2 && v < hi2).length / samples.length) * 100;
+            if (pct < 0.5) continue;
+            classPcts.push(parseFloat(pct.toFixed(1)));
+            classLabels.push(def.labels[i].replace(/\n/g, ' '));
+            if (def.colors) {
+              classColors.push(def.colors[i] || '#aaa');
+            } else {
+              const vis = _VIS_PAL[def.visKey];
+              classColors.push(vis ? _palColor(vis.pal, vis.min, vis.max, (lo2+hi2)/2) : '#5B9BD5');
+            }
+          }
+
+          if (classPcts.length > 0) {
+            Plotly.newPlot(el, [{
+              type:'bar', x:classLabels, y:classPcts,
+              marker:{ color:classColors, line:{ color:'white', width:0.5 } },
+              text: classPcts.map(p => `${p.toFixed(1)}%`),
+              textposition:'outside',
+              textfont:{ color:'#333', size:9 },
+              width: 0.5,
+            }], {
+              ..._plotlyWhiteLayout(`${vUp} class composition`, 310),
+              yaxis:{ ..._plotlyWhiteLayout('').yaxis, title:{ text:'Area share (%)', font:{size:9} }, range:[0, Math.max(...classPcts)*1.3], tickfont:{size:8} },
+              xaxis:{ ..._plotlyWhiteLayout('').xaxis, title:{ text:def.xlabel, font:{size:9} }, tickfont:{size:8} },
+            }, { displayModeBar:false, responsive:true });
+          }
+        }
+      }
+    }
+
+    // ── 4. LULC pie chart ─────────────────────────────────────────────────
+    if (vUp === 'LULC' && s && s.classes) {
+      const el = scope.querySelector(`[id^="plotly_lulc_pie_"]`);
+      if (el) {
+        const names  = Object.keys(s.classes);
+        const pcts   = names.map(n => s.classes[n].percentage);
+        const has    = names.map(n => s.classes[n].hectares || 0);
+        const colors = names.map(n => s.classes[n].color || '#aaa');
+        const total  = s.total_ha || 0;
+
+        Plotly.newPlot(el, [{
+          type      : 'pie',
+          labels    : names.map((n,i) => `${n} (${(has[i]||0).toLocaleString()} ha)`),
+          values    : pcts,
+          marker    : { colors, line: { color: 'white', width: 1.5 } },
+          textinfo  : 'percent',
+          textfont  : { color: 'white', size: 11, family: 'DM Sans' },
+          insidetextorientation: 'radial',
+          startangle: 140,
+          direction : 'clockwise',
+          pull      : pcts.map((_,i) => i === 0 ? 0.04 : 0),
+          hovertemplate: '%{label}<br>%{percent:.1%}<extra></extra>',
+        }], {
+          ..._plotlyWhiteLayout(`Land Cover Distribution<br><sup>Total: ${total.toLocaleString()} ha</sup>`, 420),
+          showlegend  : true,
+          legend      : { orientation:'h', x:0.5, xanchor:'center', y:-0.12, font:{size:9}, bgcolor:'rgba(0,0,0,0)' },
+          margin      : { l:20, r:20, t:55, b:80 },
+        }, { displayModeBar:false, responsive:true });
+      }
+    }
+  }
 }
 
 function plotlyLayout(title, height = 200) {

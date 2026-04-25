@@ -1256,6 +1256,15 @@ html, body {
   font-weight: 600;
 }
 
+/* ── Plotly interactive chart container ───────────────────────────── */
+.plotly-chart-wrap {
+  width: 100%;
+  min-height: 310px;
+  background: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
 /* ── LULC narrative prose + bullets ──────────────────────────────────── */
 .lulc-narrative {
   margin: 12px 0 14px;
