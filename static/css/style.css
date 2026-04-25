@@ -1265,6 +1265,24 @@ html, body {
   overflow: hidden;
 }
 
+.class-breakdown-bullets {
+  margin: 6px 0 14px;
+  padding: 0 0 0 18px;
+  list-style: disc;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.class-breakdown-bullets li {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.class-breakdown-bullets li strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* ── LULC narrative prose + bullets ──────────────────────────────────── */
 .lulc-narrative {
   margin: 12px 0 14px;
