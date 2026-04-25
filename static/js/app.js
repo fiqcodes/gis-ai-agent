@@ -1180,22 +1180,8 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
   if (conclusion) {
     // Extract a 2-line preview from the conclusion text (strip markdown)
     // Build a short punchy preview: first sentence + recommendation sentence if found
-    function buildPreview(text) {
-      const clean = text.replace(/\*\*/g, '').replace(/\*/g, '').replace(/\n+/g, ' ').trim();
-      const sentences = clean.match(/[^.!?]+[.!?]+/g) || [clean];
-      // Line 1: first sentence, hard-capped at 120 chars
-      const first = sentences[0].trim();
-      const line1 = first.length > 120 ? first.slice(0, 117).trimEnd() + '…' : first;
-      // Line 2: first sentence that has a recommendation/conclusion keyword
-      const recSentence = sentences.find((s, i) => i > 0 && /\b(recommend|therefore|prioritize|mitigate|critical|urgent)\b/i.test(s));
-      let line2 = '';
-      if (recSentence) {
-        const r = recSentence.trim();
-        line2 = r.length > 120 ? r.slice(0, 117).trimEnd() + '…' : r;
-      }
-      return line2 ? line1 + ' ' + line2 : line1;
-    }
-    const previewText = buildPreview(conclusion);
+    // Preview = full conclusion text, no truncation
+    const previewText = conclusion.replace(/\*\*/g, '').replace(/\*/g, '').replace(/\n+/g, ' ').trim();
 
     // Auto-highlight key terms in conclusion for easier scanning
     function highlightConclusion(text) {
