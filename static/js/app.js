@@ -1208,7 +1208,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
       let result = text;
       keyTerms.forEach(term => {
         const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const re = new RegExp(\`(?<!\\*\\*)\\b(\${escaped})\\b(?!\\*\\*)\`, 'gi');
+        const re = new RegExp(`(?<!\\*\\*)\\b(${escaped})\\b(?!\\*\\*)`, 'gi');
         result = result.replace(re, '**$1**');
       });
       return result;
