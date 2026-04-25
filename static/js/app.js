@@ -1178,37 +1178,78 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
 
   // ── CONCLUSION ────────────────────────────────────────────────────────────
   if (conclusion) {
-    // Build key metric chips from stats
+    // Extract a 2-line preview from the conclusion text (strip markdown)
+    const previewText = conclusion.replace(/\*\*/g, '').replace(/\*/g, '').slice(0, 160) + '…';
+
+    // Build metric chips
     let chips = '';
+    let findingItems = '';
     if (stats) {
       for (const [varName, s] of Object.entries(stats)) {
         if (!s) continue;
         const vUp = varName.toUpperCase();
         if (vUp === 'LULC' && s.classes) {
           const sorted = Object.entries(s.classes).sort((a,b) => b[1].percentage - a[1].percentage);
-          if (sorted[0]) chips += `<div class="concl-chip"><div class="concl-chip-label">Dominant Class</div><div class="concl-chip-value">${sorted[0][0]}</div></div>`;
-          if (sorted[0]) chips += `<div class="concl-chip"><div class="concl-chip-label">Coverage</div><div class="concl-chip-value">${sorted[0][1].percentage.toFixed(1)}%</div></div>`;
+          if (sorted[0]) {
+            chips += `<div class="concl-chip"><div class="concl-chip-label">Dominant Class</div><div class="concl-chip-value">${sorted[0][0]}</div></div>`;
+            chips += `<div class="concl-chip"><div class="concl-chip-label">Coverage</div><div class="concl-chip-value">${sorted[0][1].percentage.toFixed(1)}%</div></div>`;
+          }
           if (s.total_ha) chips += `<div class="concl-chip"><div class="concl-chip-label">Total Area</div><div class="concl-chip-value">${s.total_ha.toLocaleString()} ha</div></div>`;
           if (s.n_classes) chips += `<div class="concl-chip"><div class="concl-chip-label">Classes</div><div class="concl-chip-value">${s.n_classes}</div></div>`;
-        } else if ((vUp === 'NDVI' || vUp === 'EVI' || vUp === 'SAVI') && s.mean != null) {
+          // Findings from LULC classes
+          sorted.forEach(([name, info]) => {
+            findingItems += `<div class="concl-finding-item"><strong>${name}</strong> covers <strong>${info.percentage.toFixed(1)}%</strong> of the area (${(info.hectares||0).toLocaleString()} ha)</div>`;
+          });
+        } else if (['NDVI','EVI','SAVI'].includes(vUp) && s.mean != null) {
           chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value">${s.mean.toFixed(3)}</div></div>`;
           if (s.pct_healthy != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Healthy</div><div class="concl-chip-value">${s.pct_healthy.toFixed(1)}%</div></div>`;
           if (s.pct_stressed != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Stressed</div><div class="concl-chip-value">${s.pct_stressed.toFixed(1)}%</div></div>`;
+          if (s.pct_stressed != null) findingItems += `<div class="concl-finding-item"><strong>${s.pct_stressed.toFixed(1)}%</strong> of the ROI is vegetation-stressed</div>`;
+          if (s.pct_healthy != null) findingItems += `<div class="concl-finding-item"><strong>${s.pct_healthy.toFixed(1)}%</strong> of the ROI is in healthy/vigorous condition</div>`;
+          if (s.mean != null) findingItems += `<div class="concl-finding-item">Mean ${vUp} across the ROI: <strong>${s.mean.toFixed(3)}</strong></div>`;
         } else if (vUp === 'LST' && s.mean != null) {
           chips += `<div class="concl-chip"><div class="concl-chip-label">Mean LST</div><div class="concl-chip-value">${s.mean.toFixed(1)}°C</div></div>`;
           if (s.max != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Max LST</div><div class="concl-chip-value">${s.max.toFixed(1)}°C</div></div>`;
           if (s.pct_hot != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Hot Zone</div><div class="concl-chip-value">${s.pct_hot.toFixed(1)}%</div></div>`;
+          if (s.mean != null) findingItems += `<div class="concl-finding-item">Mean surface temperature: <strong>${s.mean.toFixed(1)}°C</strong></div>`;
+          if (s.max != null) findingItems += `<div class="concl-finding-item">Peak temperature recorded: <strong>${s.max.toFixed(1)}°C</strong></div>`;
+          if (s.pct_hot != null) findingItems += `<div class="concl-finding-item"><strong>${s.pct_hot.toFixed(1)}%</strong> of area classified as heat zone</div>`;
         } else if (s.mean != null) {
           chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value">${s.mean.toFixed(4)}</div></div>`;
+          findingItems += `<div class="concl-finding-item">Mean ${vUp}: <strong>${s.mean.toFixed(4)}</strong></div>`;
         }
       }
     }
 
-    html += `<div class="concl-card">
-      <div class="concl-card-title">Summary</div>
-      ${chips ? `<div class="concl-chips-row">${chips}</div>` : ''}
-      <div class="concl-card-text">${parseMarkdown(conclusion)}</div>
+    const varLabel = (variables && variables[0]) ? (variables[0].toUpperCase()) : 'Analysis';
+    const titleMap = { LULC: 'Land Cover Summary', NDVI: 'Vegetation Health Summary', LST: 'Surface Temperature Summary', NO2: 'Air Quality Summary', UHI: 'Urban Heat Island Summary' };
+    const cardTitle = titleMap[varLabel] || `${varLabel} Summary`;
+
+    html += `<div class="concl-card" id="conclCard_${Date.now()}">
+      <div class="concl-header" onclick="this.closest('.concl-card').classList.toggle('expanded')">
+        <div class="concl-header-left">
+          <div class="concl-header-title">${cardTitle}</div>
+          <div class="concl-header-preview">${escapeHtml(previewText)}</div>
+        </div>
+        <svg class="concl-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </div>
+      <div class="concl-body">
+        ${chips ? `
+        <div class="concl-chips-section">
+          <div class="concl-chips-label">Key Metrics</div>
+          <div class="concl-chips-row">${chips}</div>
+        </div>` : ''}
+        ${findingItems ? `
+        <div class="concl-findings-section">
+          <div class="concl-section-label">Findings</div>
+          <div class="concl-findings-list">${findingItems}</div>
+        </div>` : ''}
+        <div class="concl-card-text">${parseMarkdown(conclusion)}</div>
+      </div>
     </div>`;
+  }
   }
 
   // ── ATTRIBUTIONS ─────────────────────────────────────────────────────────

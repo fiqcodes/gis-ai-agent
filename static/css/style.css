@@ -1,31 +1,34 @@
 /* ============================================================
-   GIS Agent WebApp — Dark Theme (Obsidian Black)
+   GIS Agent WebApp — Dark Theme
    ============================================================ */
 
 :root {
-  --bg:        #1a1a1f;
-  --bg2:       #22222a;
-  --bg3:       #2a2a34;
-  --bg4:       #32323e;
-  --border:    rgba(255,255,255,0.07);
-  --border2:   rgba(255,255,255,0.11);
-  --text:      #e2e4e9;
-  --text2:     #8f929f;
-  --text3:     #484b58;
-  --accent:    #e2e4e9;
+  --bg:        #2c2c2e;
+  --bg2:       #363638;
+  --bg3:       #3a3a3c;
+  --bg4:       #48484a;
+  --border:    rgba(255,255,255,0.08);
+  --border2:   rgba(255,255,255,0.13);
+  --text:      #e5e5ea;
+  --text2:     #98989f;
+  --text3:     #5a5a60;
+  --accent:    #e5e5ea;
   --accent2:   #b0b3bf;
   --accent-dim:rgba(255,255,255,0.06);
-  --red:       #ff5252;
+  --red:       #ff453a;
   --yellow:    #f5a623;
-  --green:     #4ade80;
+  --green:     #30d158;
   --cyan:      #00d4ff;
   --cyan-dim:  rgba(0,212,255,0.12);
+  --amber:     #c8842a;
+  --amber-bg:  rgba(120,70,10,0.35);
+  --amber-border: rgba(180,110,20,0.4);
   --font-body: 'DM Sans', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
   --radius:    12px;
   --radius-sm: 8px;
-  --shadow:    0 2px 16px rgba(0,0,0,0.5);
-  --shadow-lg: 0 8px 32px rgba(0,0,0,0.7);
+  --shadow:    0 2px 16px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
   --nav-w:     52px;
 }
 
@@ -216,8 +219,8 @@ html, body {
 /* User bubble stays as pill */
 .msg-bubble.user {
   max-width: 68%;
-  background: var(--bg3);
-  border: 1px solid var(--border2);
+  background: #3c3c3e;
+  border: 1px solid rgba(255,255,255,0.1);
   border-radius: 20px 20px 4px 20px;
   padding: 11px 16px;
   color: var(--text);
@@ -1287,7 +1290,7 @@ html, body {
 .mh-peak .mh-value { color: #22c55e; }
 .mh-low  .mh-value { color: #f59e0b; }
 
-/* ── Conclusion summary card ─────────────────────────────────────────── */
+/* ── Conclusion summary card — collapsible ────────────────────────────── */
 .concl-card {
   margin: 20px 0 16px;
   background: var(--bg2);
@@ -1295,34 +1298,80 @@ html, body {
   border-radius: var(--radius);
   overflow: hidden;
 }
-.concl-card-title {
-  font-size: 12px;
+
+/* Collapsed header — always visible */
+.concl-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
+  gap: 12px;
+}
+.concl-header:hover { background: rgba(255,255,255,0.03); }
+.concl-header-left { flex: 1; min-width: 0; }
+.concl-header-title {
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.concl-header-preview {
+  font-size: 12.5px;
+  color: var(--text2);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.concl-chevron {
+  flex-shrink: 0;
+  color: var(--text3);
+  margin-top: 2px;
+  transition: transform 0.2s;
+}
+.concl-card.expanded .concl-chevron { transform: rotate(180deg); }
+
+/* Expanded body */
+.concl-body {
+  display: none;
+  border-top: 1px solid var(--border);
+}
+.concl-card.expanded .concl-body { display: block; }
+
+/* Metric chips row */
+.concl-chips-section {
+  padding: 14px 16px 12px;
+}
+.concl-chips-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text3);
-  padding: 12px 16px 8px;
+  margin-bottom: 10px;
 }
 .concl-chips-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 0 16px 12px;
 }
 .concl-chip {
   background: var(--bg3);
   border: 1px solid var(--border2);
   border-radius: 8px;
-  padding: 8px 14px;
+  padding: 9px 14px;
   min-width: 90px;
 }
 .concl-chip-label {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   color: var(--text3);
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
 .concl-chip-value {
   font-size: 15px;
@@ -1330,10 +1379,62 @@ html, body {
   color: var(--text);
   font-family: var(--font-mono);
 }
+
+/* Findings list */
+.concl-findings-section {
+  padding: 0 16px 14px;
+}
+.concl-section-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+.concl-findings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.concl-finding-item {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 13px;
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+.concl-finding-item strong { color: var(--text); font-weight: 600; }
+
+/* Amber highlight block — caveats / notes */
+.concl-amber-block {
+  margin: 0 16px 14px;
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-border);
+  border-radius: 8px;
+  padding: 11px 14px;
+}
+.concl-amber-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--amber);
+  margin-bottom: 6px;
+}
+.concl-amber-text {
+  font-size: 13px;
+  color: rgba(229, 229, 234, 0.7);
+  line-height: 1.55;
+}
+
+/* Full conclusion text */
 .concl-card-text {
   padding: 12px 16px 16px;
   font-size: 13.5px;
-  line-height: 1.7;
+  line-height: 1.75;
   color: var(--text2);
   border-top: 1px solid var(--border);
 }
