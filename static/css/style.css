@@ -1379,6 +1379,19 @@ html, body {
   color: var(--text);
   font-family: var(--font-mono);
 }
+/* Color variants for chip values */
+.concl-chip-value.cv-cyan   { color: #00d4ff; }
+.concl-chip-value.cv-green  { color: #30d158; }
+.concl-chip-value.cv-amber  { color: #f5a623; }
+.concl-chip-value.cv-purple { color: #bf5af2; }
+.concl-chip-value.cv-pink   { color: #ff375f; }
+
+/* Colored strongs inside finding items */
+.concl-finding-item strong.fv-cyan   { color: #00d4ff; }
+.concl-finding-item strong.fv-green  { color: #30d158; }
+.concl-finding-item strong.fv-amber  { color: #f5a623; }
+.concl-finding-item strong.fv-purple { color: #bf5af2; }
+.concl-finding-item strong.fv-pink   { color: #ff375f; }
 
 /* Findings list */
 .concl-findings-section {

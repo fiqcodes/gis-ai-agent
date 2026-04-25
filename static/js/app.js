@@ -1191,32 +1191,34 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
         if (vUp === 'LULC' && s.classes) {
           const sorted = Object.entries(s.classes).sort((a,b) => b[1].percentage - a[1].percentage);
           if (sorted[0]) {
-            chips += `<div class="concl-chip"><div class="concl-chip-label">Dominant Class</div><div class="concl-chip-value">${sorted[0][0]}</div></div>`;
-            chips += `<div class="concl-chip"><div class="concl-chip-label">Coverage</div><div class="concl-chip-value">${sorted[0][1].percentage.toFixed(1)}%</div></div>`;
+            chips += `<div class="concl-chip"><div class="concl-chip-label">Dominant Class</div><div class="concl-chip-value cv-amber">${sorted[0][0]}</div></div>`;
+            chips += `<div class="concl-chip"><div class="concl-chip-label">Coverage</div><div class="concl-chip-value cv-cyan">${sorted[0][1].percentage.toFixed(1)}%</div></div>`;
           }
-          if (s.total_ha) chips += `<div class="concl-chip"><div class="concl-chip-label">Total Area</div><div class="concl-chip-value">${s.total_ha.toLocaleString()} ha</div></div>`;
-          if (s.n_classes) chips += `<div class="concl-chip"><div class="concl-chip-label">Classes</div><div class="concl-chip-value">${s.n_classes}</div></div>`;
-          // Findings from LULC classes
-          sorted.forEach(([name, info]) => {
-            findingItems += `<div class="concl-finding-item"><strong>${name}</strong> covers <strong>${info.percentage.toFixed(1)}%</strong> of the area (${(info.hectares||0).toLocaleString()} ha)</div>`;
+          if (s.total_ha) chips += `<div class="concl-chip"><div class="concl-chip-label">Total Area</div><div class="concl-chip-value cv-purple">${s.total_ha.toLocaleString()} ha</div></div>`;
+          if (s.n_classes) chips += `<div class="concl-chip"><div class="concl-chip-label">Classes</div><div class="concl-chip-value cv-green">${s.n_classes}</div></div>`;
+          // Color cycle for finding items
+          const fColors = ['cv-amber','cv-cyan','cv-purple','cv-green'];
+          sorted.forEach(([name, info], idx) => {
+            const fc = fColors[idx % fColors.length];
+            findingItems += `<div class="concl-finding-item"><strong>${name}</strong> covers <strong class="f${fc.slice(1)}">${info.percentage.toFixed(1)}%</strong> of the area (${(info.hectares||0).toLocaleString()} ha)</div>`;
           });
         } else if (['NDVI','EVI','SAVI'].includes(vUp) && s.mean != null) {
-          chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value">${s.mean.toFixed(3)}</div></div>`;
-          if (s.pct_healthy != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Healthy</div><div class="concl-chip-value">${s.pct_healthy.toFixed(1)}%</div></div>`;
-          if (s.pct_stressed != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Stressed</div><div class="concl-chip-value">${s.pct_stressed.toFixed(1)}%</div></div>`;
-          if (s.pct_stressed != null) findingItems += `<div class="concl-finding-item"><strong>${s.pct_stressed.toFixed(1)}%</strong> of the ROI is vegetation-stressed</div>`;
-          if (s.pct_healthy != null) findingItems += `<div class="concl-finding-item"><strong>${s.pct_healthy.toFixed(1)}%</strong> of the ROI is in healthy/vigorous condition</div>`;
-          if (s.mean != null) findingItems += `<div class="concl-finding-item">Mean ${vUp} across the ROI: <strong>${s.mean.toFixed(3)}</strong></div>`;
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value cv-cyan">${s.mean.toFixed(3)}</div></div>`;
+          if (s.pct_healthy != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Healthy</div><div class="concl-chip-value cv-green">${s.pct_healthy.toFixed(1)}%</div></div>`;
+          if (s.pct_stressed != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Stressed</div><div class="concl-chip-value cv-pink">${s.pct_stressed.toFixed(1)}%</div></div>`;
+          if (s.pct_stressed != null) findingItems += `<div class="concl-finding-item"><strong class="fv-pink">${s.pct_stressed.toFixed(1)}%</strong> of the ROI is vegetation-stressed</div>`;
+          if (s.pct_healthy != null) findingItems += `<div class="concl-finding-item"><strong class="fv-green">${s.pct_healthy.toFixed(1)}%</strong> of the ROI is in healthy/vigorous condition</div>`;
+          if (s.mean != null) findingItems += `<div class="concl-finding-item">Mean ${vUp} across the ROI: <strong class="fv-cyan">${s.mean.toFixed(3)}</strong></div>`;
         } else if (vUp === 'LST' && s.mean != null) {
-          chips += `<div class="concl-chip"><div class="concl-chip-label">Mean LST</div><div class="concl-chip-value">${s.mean.toFixed(1)}°C</div></div>`;
-          if (s.max != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Max LST</div><div class="concl-chip-value">${s.max.toFixed(1)}°C</div></div>`;
-          if (s.pct_hot != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Hot Zone</div><div class="concl-chip-value">${s.pct_hot.toFixed(1)}%</div></div>`;
-          if (s.mean != null) findingItems += `<div class="concl-finding-item">Mean surface temperature: <strong>${s.mean.toFixed(1)}°C</strong></div>`;
-          if (s.max != null) findingItems += `<div class="concl-finding-item">Peak temperature recorded: <strong>${s.max.toFixed(1)}°C</strong></div>`;
-          if (s.pct_hot != null) findingItems += `<div class="concl-finding-item"><strong>${s.pct_hot.toFixed(1)}%</strong> of area classified as heat zone</div>`;
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Mean LST</div><div class="concl-chip-value cv-amber">${s.mean.toFixed(1)}°C</div></div>`;
+          if (s.max != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Max LST</div><div class="concl-chip-value cv-pink">${s.max.toFixed(1)}°C</div></div>`;
+          if (s.pct_hot != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Hot Zone</div><div class="concl-chip-value cv-purple">${s.pct_hot.toFixed(1)}%</div></div>`;
+          if (s.mean != null) findingItems += `<div class="concl-finding-item">Mean surface temperature: <strong class="fv-amber">${s.mean.toFixed(1)}°C</strong></div>`;
+          if (s.max != null) findingItems += `<div class="concl-finding-item">Peak temperature recorded: <strong class="fv-pink">${s.max.toFixed(1)}°C</strong></div>`;
+          if (s.pct_hot != null) findingItems += `<div class="concl-finding-item"><strong class="fv-purple">${s.pct_hot.toFixed(1)}%</strong> of area classified as heat zone</div>`;
         } else if (s.mean != null) {
-          chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value">${s.mean.toFixed(4)}</div></div>`;
-          findingItems += `<div class="concl-finding-item">Mean ${vUp}: <strong>${s.mean.toFixed(4)}</strong></div>`;
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value cv-cyan">${s.mean.toFixed(4)}</div></div>`;
+          findingItems += `<div class="concl-finding-item">Mean ${vUp}: <strong class="fv-cyan">${s.mean.toFixed(4)}</strong></div>`;
         }
       }
     }
