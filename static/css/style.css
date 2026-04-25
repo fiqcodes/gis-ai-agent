@@ -1315,6 +1315,16 @@ html, body {
 .monthly-narrative {
   margin: 10px 0 14px 0;
 }
+.mh-intro {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+.mh-intro strong {
+  color: var(--text);
+  font-weight: 600;
+}
 .mh-bullets {
   margin: 0;
   padding: 0 0 0 18px;

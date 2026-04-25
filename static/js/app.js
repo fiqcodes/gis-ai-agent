@@ -1506,6 +1506,18 @@ function buildMonthlyHighlights(varLabel, monthly) {
     avgContext    = `a period mean of <strong>${fmt(avg)}</strong>`;
   }
 
+  // Intro sentence — one line summarising the chart before the bullets
+  let introSentence = '';
+  if (isLSTvar) {
+    introSentence = `The chart below traces monthly mean surface temperatures across the period, with values ranging from <strong>${fmt(minEntry[1])}</strong> to <strong>${fmt(maxEntry[1])}</strong> and an overall average of <strong>${fmt(avg)}</strong>.`;
+  } else if (isNDVI) {
+    introSentence = `The monthly mean ${vUp} chart below tracks vegetation greenness through the period, spanning <strong>${fmt(minEntry[1])}</strong> to <strong>${fmt(maxEntry[1])}</strong> around a period average of <strong>${fmt(avg)}</strong>.`;
+  } else if (isAtmo) {
+    introSentence = `Monthly ${vUp} concentrations fluctuated between <strong>${fmt(minEntry[1])}</strong> and <strong>${fmt(maxEntry[1])}</strong> over the period, with a mean of <strong>${fmt(avg)}</strong>.`;
+  } else {
+    introSentence = `Monthly ${vUp} values ranged from <strong>${fmt(minEntry[1])}</strong> to <strong>${fmt(maxEntry[1])}</strong>, averaging <strong>${fmt(avg)}</strong> across the period.`;
+  }
+
   // Build bullet list items
   const bullets = [
     `<strong>${fmtMonth(maxEntry[0])}</strong> recorded the ${peakContext} at <strong>${fmt(maxEntry[1])}</strong>.`,
@@ -1515,6 +1527,7 @@ function buildMonthlyHighlights(varLabel, monthly) {
   ].map(b => `<li>${b}</li>`).join('');
 
   return `<div class="monthly-narrative">
+    <p class="mh-intro">${introSentence}</p>
     <ul class="mh-bullets">${bullets}</ul>
   </div>`;
 }
@@ -1681,6 +1694,54 @@ function buildDistClassExplanation(varLabel, s) {
       const hot1σ  = (s.mean + s.lst_std).toFixed(2);
       const cool1σ = (s.mean - s.lst_std).toFixed(2);
       text += ` On the UHI z-score map, pixels above <strong>+1σ (${hot1σ}°C)</strong> are heat island zones; pixels below <strong>−1σ (${cool1σ}°C)</strong> are cool islands (parks, water bodies).`;
+    }
+  }
+
+  // ── Class composition paragraph (estimated Ha from class defs + total area) ──
+  const def = Object.entries(_CLASS_DEFS).find(([k]) => varLabel.toUpperCase().includes(k))?.[1];
+  const totalHa = s.total_ha || null;
+
+  if (def && s.mean != null && s.std != null) {
+    const mean    = s.mean, std = Math.max(s.std, 0.001);
+    const sLo     = s.min ?? mean - 5*std, sHi = s.max ?? mean + 5*std;
+    const nC      = def.bounds.length - 1;
+
+    // Compute % per class from normal distribution approximation
+    const classPcts = [], classLabels = [];
+    for (let i = 0; i < nC; i++) {
+      const lo2 = def.bounds[i], hi2 = def.bounds[i+1];
+      // Normalise via erf approximation
+      const phi = x => 0.5 * (1 + Math.sign(x) * Math.sqrt(1 - Math.exp(-Math.PI * x * x / 2)));
+      const p = phi((hi2 - mean) / std) - phi((lo2 - mean) / std);
+      const pct = Math.max(0, Math.min(100, p * 100));
+      if (pct < 0.5) continue;
+      classPcts.push(pct);
+      classLabels.push(def.labels[i].replace(/\n/g,' '));
+    }
+
+    if (classPcts.length > 0) {
+      const isLSTloc = varLabel.toUpperCase().includes('LST') || varLabel.toUpperCase() === 'UHI';
+      const unit     = isLSTloc ? '°C' : '';
+      const dominant = classLabels[classPcts.indexOf(Math.max(...classPcts))];
+      let classText  = `Looking at the class composition, <strong>${dominant}</strong> is the dominant condition, accounting for roughly <strong>${Math.round(Math.max(...classPcts))}%</strong> of the area`;
+      if (totalHa) {
+        const domHa = Math.round(totalHa * Math.max(...classPcts) / 100);
+        classText += ` (approximately <strong>${domHa.toLocaleString()} ha</strong>)`;
+      }
+      classText += '. ';
+
+      // Per-class ha/pct breakdown
+      const parts = classLabels.map((lbl, i) => {
+        const pct = classPcts[i].toFixed(1);
+        if (totalHa) {
+          const ha = Math.round(totalHa * classPcts[i] / 100).toLocaleString();
+          return `${lbl}: ~${pct}% (~${ha} ha)`;
+        }
+        return `${lbl}: ~${pct}%`;
+      });
+      classText += `The full breakdown across classes is: ${parts.join('; ')}.`;
+
+      text += ` ${classText}`;
     }
   }
 
