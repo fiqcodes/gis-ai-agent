@@ -1232,19 +1232,43 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
             findingItems += `<div class="concl-finding-item"><strong>${name}</strong> covers <strong class="f${fc.slice(1)}">${info.percentage.toFixed(1)}%</strong> of the area (${(info.hectares||0).toLocaleString()} ha)</div>`;
           });
         } else if (['NDVI','EVI','SAVI'].includes(vUp) && s.mean != null) {
+          // ── Vegetation health class derived from mean value ──────────────────
+          let vegClass, vegColor;
+          const m = s.mean;
+          if      (m < 0.1)  { vegClass = 'Bare / Non-veg'; vegColor = 'cv-pink';   }
+          else if (m < 0.2)  { vegClass = 'Sparse';         vegColor = 'cv-amber';  }
+          else if (m < 0.4)  { vegClass = 'Moderate';       vegColor = 'cv-cyan';   }
+          else if (m < 0.6)  { vegClass = 'Healthy';        vegColor = 'cv-green';  }
+          else               { vegClass = 'Dense / Vigorous';vegColor = 'cv-purple'; }
+          // ── 4 chips ─────────────────────────────────────────────────────────
           chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value cv-cyan">${s.mean.toFixed(3)}</div></div>`;
-          if (s.pct_healthy != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Healthy</div><div class="concl-chip-value cv-green">${s.pct_healthy.toFixed(1)}%</div></div>`;
-          if (s.pct_stressed != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Stressed</div><div class="concl-chip-value cv-pink">${s.pct_stressed.toFixed(1)}%</div></div>`;
-          if (s.pct_stressed != null) findingItems += `<div class="concl-finding-item"><strong class="fv-pink">${s.pct_stressed.toFixed(1)}%</strong> of the ROI is vegetation-stressed</div>`;
-          if (s.pct_healthy != null) findingItems += `<div class="concl-finding-item"><strong class="fv-green">${s.pct_healthy.toFixed(1)}%</strong> of the ROI is in healthy/vigorous condition</div>`;
-          if (s.mean != null) findingItems += `<div class="concl-finding-item">Mean ${vUp} across the ROI: <strong class="fv-cyan">${s.mean.toFixed(3)}</strong></div>`;
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Veg Class</div><div class="concl-chip-value ${vegColor}">${vegClass}</div></div>`;
+          if (s.p10 != null) chips += `<div class="concl-chip"><div class="concl-chip-label">P10 (Low)</div><div class="concl-chip-value cv-amber">${s.p10.toFixed(3)}</div></div>`;
+          if (s.p90 != null) chips += `<div class="concl-chip"><div class="concl-chip-label">P90 (Peak)</div><div class="concl-chip-value cv-green">${s.p90.toFixed(3)}</div></div>`;
+          // ── 4 findings ───────────────────────────────────────────────────────
+          findingItems += `<div class="concl-finding-item">Mean ${vUp} across the ROI: <strong class="fv-cyan">${s.mean.toFixed(3)}</strong></div>`;
+          findingItems += `<div class="concl-finding-item">Vegetation condition classified as <strong class="f${vegColor.slice(1)}">${vegClass}</strong></div>`;
+          if (s.p10 != null && s.p90 != null) findingItems += `<div class="concl-finding-item">Spatial range: P10 = <strong class="fv-amber">${s.p10.toFixed(3)}</strong> → P90 = <strong class="fv-green">${s.p90.toFixed(3)}</strong></div>`;
+          if (s.std != null) findingItems += `<div class="concl-finding-item">Std deviation of <strong class="fv-cyan">${s.std.toFixed(3)}</strong> indicates ${s.std > 0.15 ? 'high spatial variability in vegetation cover' : 'relatively uniform vegetation distribution'}</div>`;
         } else if (vUp === 'LST' && s.mean != null) {
+          // ── Thermal class derived from mean LST ──────────────────────────────
+          let thermalClass, thermalColor;
+          const lt = s.mean;
+          if      (lt < 30) { thermalClass = 'Cool (<30°C)';      thermalColor = 'cv-cyan';   }
+          else if (lt < 35) { thermalClass = 'Moderate (30–35°C)';thermalColor = 'cv-green';  }
+          else if (lt < 40) { thermalClass = 'Warm (35–40°C)';    thermalColor = 'cv-amber';  }
+          else if (lt < 45) { thermalClass = 'Hot (40–45°C)';     thermalColor = 'cv-purple'; }
+          else              { thermalClass = 'Extreme (>45°C)';    thermalColor = 'cv-pink';   }
+          // ── 4 chips ─────────────────────────────────────────────────────────
           chips += `<div class="concl-chip"><div class="concl-chip-label">Mean LST</div><div class="concl-chip-value cv-amber">${s.mean.toFixed(1)}°C</div></div>`;
-          if (s.max != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Max LST</div><div class="concl-chip-value cv-pink">${s.max.toFixed(1)}°C</div></div>`;
-          if (s.pct_hot != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Hot Zone</div><div class="concl-chip-value cv-purple">${s.pct_hot.toFixed(1)}%</div></div>`;
-          if (s.mean != null) findingItems += `<div class="concl-finding-item">Mean surface temperature: <strong class="fv-amber">${s.mean.toFixed(1)}°C</strong></div>`;
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Max LST</div><div class="concl-chip-value cv-pink">${s.max != null ? s.max.toFixed(1) + '°C' : '—'}</div></div>`;
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Min LST</div><div class="concl-chip-value cv-cyan">${s.min != null ? s.min.toFixed(1) + '°C' : '—'}</div></div>`;
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Thermal Class</div><div class="concl-chip-value ${thermalColor}">${thermalClass}</div></div>`;
+          // ── 4 findings ───────────────────────────────────────────────────────
+          findingItems += `<div class="concl-finding-item">Mean surface temperature: <strong class="fv-amber">${s.mean.toFixed(1)}°C</strong></div>`;
           if (s.max != null) findingItems += `<div class="concl-finding-item">Peak temperature recorded: <strong class="fv-pink">${s.max.toFixed(1)}°C</strong></div>`;
-          if (s.pct_hot != null) findingItems += `<div class="concl-finding-item"><strong class="fv-purple">${s.pct_hot.toFixed(1)}%</strong> of area classified as heat zone</div>`;
+          if (s.min != null) findingItems += `<div class="concl-finding-item">Coolest zone recorded: <strong class="fv-cyan">${s.min.toFixed(1)}°C</strong>${s.p10 != null ? ` (P10: ${s.p10.toFixed(1)}°C)` : ''}</div>`;
+          if (s.p10 != null && s.p90 != null) findingItems += `<div class="concl-finding-item">Thermal spread: P10 = <strong class="fv-cyan">${s.p10.toFixed(1)}°C</strong> → P90 = <strong class="fv-pink">${s.p90.toFixed(1)}°C</strong></div>`;
         } else if (s.mean != null) {
           chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value cv-cyan">${s.mean.toFixed(4)}</div></div>`;
           findingItems += `<div class="concl-finding-item">Mean ${vUp}: <strong class="fv-cyan">${s.mean.toFixed(4)}</strong></div>`;
