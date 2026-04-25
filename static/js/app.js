@@ -1179,7 +1179,36 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
   // ── CONCLUSION ────────────────────────────────────────────────────────────
   if (conclusion) {
     // Extract a 2-line preview from the conclusion text (strip markdown)
-    const previewText = conclusion.replace(/\*\*/g, '').replace(/\*/g, '').slice(0, 160) + '…';
+    const previewText = conclusion.replace(/\*\*/g, '').replace(/\*/g, '').slice(0, 200) + '…';
+
+    // Auto-highlight key terms in conclusion for easier scanning
+    function highlightConclusion(text) {
+      // Key domain terms to bold if not already bolded
+      const keyTerms = [
+        // Land cover / LULC
+        'Built Area','Urban Area','Vegetation','Trees','Rangeland','Water','Cropland','Bare Land',
+        // Heat / LST
+        'heat stress','heat zone','Urban Heat Island','surface temperature','thermal stress',
+        // Vegetation indices
+        'NDVI','EVI','SAVI','healthy vegetation','stressed vegetation','vegetation stress',
+        // Air quality
+        'NO2','CO','air quality','nitrogen dioxide','carbon monoxide','pollution',
+        // General analytical terms
+        'dominant','significant','critical','urgent','severe','moderate','low','high',
+        'increasing','decreasing','declining','expanding','urbanization','deforestation',
+        // Recommendations
+        'recommend','prioritize','mitigate','action','immediately','sustainable',
+      ];
+      let result = text;
+      keyTerms.forEach(term => {
+        // Only bold if not already inside ** **
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp(`(?<!\\*\\*)\\b(${escaped})\\b(?!\\*\\*)`, 'gi');
+        result = result.replace(re, '**$1**');
+      });
+      return result;
+    }
+    const highlightedConclusion = highlightConclusion(conclusion);
 
     // Build metric chips
     let chips = '';
@@ -1248,7 +1277,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           <div class="concl-section-label">Findings</div>
           <div class="concl-findings-list">${findingItems}</div>
         </div>` : ''}
-        <div class="concl-card-text">${parseMarkdown(conclusion)}</div>
+        <div class="concl-card-text">${parseMarkdown(highlightedConclusion)}</div>
       </div>
     </div>`;
   }

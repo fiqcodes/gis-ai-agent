@@ -1457,7 +1457,13 @@ html, body {
   color: var(--text2);
   border-top: 1px solid var(--border);
 }
-.concl-card-text strong { color: var(--text); font-weight: 600; }
+.concl-card-text strong {
+  color: #e5e5ea;
+  font-weight: 700;
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
 .concl-card-text p { margin-bottom: 8px; }
 .concl-card-text p:last-child { margin-bottom: 0; }
 
