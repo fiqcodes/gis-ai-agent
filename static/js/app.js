@@ -1412,7 +1412,7 @@ function buildSingleStatHTML(varLabel, s) {
   return html;
 }
 
-// ── Monthly highlights auto-computed from monthly stats ───────────────────────
+// ── Monthly highlights — natural prose + bullet points ────────────────────────
 function buildMonthlyHighlights(varLabel, monthly) {
   if (!monthly || Object.keys(monthly).length < 2) return '';
 
@@ -1426,47 +1426,81 @@ function buildMonthlyHighlights(varLabel, monthly) {
   const maxEntry = entries.reduce((a,b) => b[1] > a[1] ? b : a);
   const minEntry = entries.reduce((a,b) => b[1] < a[1] ? b : a);
   const avg      = values.reduce((s,v) => s + v, 0) / values.length;
-  const range    = maxEntry[1] - minEntry[1];
 
   const fmtMonth = key => {
     const [yr, mo] = key.split('-');
     return `${MONTH_NAMES[mo] || mo} ${yr}`;
   };
-  const isLSTvar  = varLabel.toUpperCase().includes('LST') || varLabel.toUpperCase().includes('UHI');
-  const fmt4      = v => isLSTvar ? `${v.toFixed(2)}°C` : v.toFixed(4);
+
+  const vUp       = varLabel.toUpperCase();
+  const isLSTvar  = vUp.includes('LST') || vUp.includes('UHI');
+  const isAtmo    = ['NO2','CO','SO2','CH4','AEROSOL','O3','GPP','BURNED','FFPI'].includes(vUp);
+  const isNDVI    = ['NDVI','EVI','SAVI'].includes(vUp);
+  const fmt       = v => isLSTvar ? `${v.toFixed(2)}°C` : v.toFixed(4);
   const threshold = isLSTvar ? 0.5 : 0.002;
 
   // Trend direction
   const half     = Math.floor(values.length / 2);
   const avgFirst = values.slice(0, half).reduce((s,v) => s+v, 0) / half;
   const avgLast  = values.slice(half).reduce((s,v) => s+v, 0) / (values.length - half);
-  const trend    = avgLast > avgFirst + threshold ? '↑ increasing'
-                 : avgLast < avgFirst - threshold ? '↓ decreasing' : '→ stable';
-  const rangeStr = isLSTvar
-    ? `${(maxEntry[1] - minEntry[1]).toFixed(2)}°C`
-    : (maxEntry[1] - minEntry[1]).toFixed(4);
+  const trendDir = avgLast > avgFirst + threshold ? 'increasing'
+                 : avgLast < avgFirst - threshold ? 'decreasing' : 'stable';
+  const trendArrow = trendDir === 'increasing' ? '↑' : trendDir === 'decreasing' ? '↓' : '→';
 
-  return `<div class="monthly-highlights">
-    <div class="mh-item mh-peak">
-      <span class="mh-label">Peak</span>
-      <span class="mh-value">${fmtMonth(maxEntry[0])} — ${fmt4(maxEntry[1])}</span>
-    </div>
-    <div class="mh-item mh-low">
-      <span class="mh-label">Lowest</span>
-      <span class="mh-value">${fmtMonth(minEntry[0])} — ${fmt4(minEntry[1])}</span>
-    </div>
-    <div class="mh-item">
-      <span class="mh-label">Period avg</span>
-      <span class="mh-value">${fmt4(avg)}</span>
-    </div>
-    <div class="mh-item">
-      <span class="mh-label">Range</span>
-      <span class="mh-value">${rangeStr}</span>
-    </div>
-    <div class="mh-item">
-      <span class="mh-label">Trend</span>
-      <span class="mh-value">${trend}</span>
-    </div>
+  // Variability qualifier
+  const spread = maxEntry[1] - minEntry[1];
+  const relSpread = spread / (Math.abs(avg) || 1);
+  const variabilityNote = relSpread > 0.2 ? 'high seasonal variability'
+                        : relSpread > 0.06 ? 'moderate seasonal variability'
+                        : 'relatively stable values throughout the period';
+
+  // Context-aware descriptors
+  let peakContext = '', lowContext = '', trendContext = '', avgContext = '';
+
+  if (isLSTvar) {
+    peakContext   = 'highest surface heating';
+    lowContext    = 'coolest thermal conditions';
+    trendContext  = trendDir === 'increasing'
+      ? 'warming trend across the period, consistent with dry-season intensification'
+      : trendDir === 'decreasing'
+      ? 'cooling trend across the period, likely linked to increased cloud cover or rainfall'
+      : 'thermal stability across the period';
+    avgContext    = `a period mean of <strong>${fmt(avg)}</strong>`;
+  } else if (isNDVI) {
+    peakContext   = 'peak greenness / highest vegetation density';
+    lowContext    = 'lowest vegetation activity';
+    trendContext  = trendDir === 'increasing'
+      ? 'greening trend across the period, suggesting vegetation recovery or seasonal growth'
+      : trendDir === 'decreasing'
+      ? 'declining vegetation trend, potentially driven by dry conditions or land-use change'
+      : 'stable vegetation cover with no significant seasonal drift';
+    avgContext    = `a period mean of <strong>${fmt(avg)}</strong>`;
+  } else if (isAtmo) {
+    peakContext   = `peak ${vUp} concentration`;
+    lowContext    = `lowest ${vUp} concentration`;
+    trendContext  = trendDir === 'increasing'
+      ? `increasing ${vUp} levels across the period, indicating rising emission or accumulation`
+      : trendDir === 'decreasing'
+      ? `decreasing ${vUp} levels, suggesting improving conditions or dispersal`
+      : `stable ${vUp} concentrations with no significant directional change`;
+    avgContext    = `a period mean of <strong>${fmt(avg)}</strong>`;
+  } else {
+    peakContext   = 'highest recorded value';
+    lowContext    = 'lowest recorded value';
+    trendContext  = `a ${trendDir} trend across the period`;
+    avgContext    = `a period mean of <strong>${fmt(avg)}</strong>`;
+  }
+
+  // Build bullet list items
+  const bullets = [
+    `<strong>${fmtMonth(maxEntry[0])}</strong> recorded the ${peakContext} at <strong>${fmt(maxEntry[1])}</strong>.`,
+    `<strong>${fmtMonth(minEntry[0])}</strong> saw the ${lowContext} at <strong>${fmt(minEntry[1])}</strong>.`,
+    `The monthly time series shows ${variabilityNote}, with ${avgContext} over the full period.`,
+    `Overall, the data shows ${trendArrow} <strong>${trendContext}</strong>.`,
+  ].map(b => `<li>${b}</li>`).join('');
+
+  return `<div class="monthly-narrative">
+    <ul class="mh-bullets">${bullets}</ul>
   </div>`;
 }
 

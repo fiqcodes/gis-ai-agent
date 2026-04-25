@@ -1259,36 +1259,28 @@ html, body {
 .var-insight-block { display: none; } /* deprecated — kept for safety */
 
 /* Monthly highlights strip */
-.monthly-highlights {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.monthly-highlights { display: none; } /* legacy — replaced by monthly-narrative */
+
+.monthly-narrative {
   margin: 10px 0 14px 0;
 }
-.mh-item {
-  flex: 1 1 120px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 8px 11px;
+.mh-bullets {
+  margin: 0;
+  padding: 0 0 0 18px;
+  list-style: disc;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
 }
-.mh-label {
-  font-size: 10.5px;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 500;
+.mh-bullets li {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text2);
 }
-.mh-value {
-  font-size: 12.5px;
+.mh-bullets li strong {
   color: var(--text);
-  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
 }
-.mh-peak .mh-value { color: #22c55e; }
-.mh-low  .mh-value { color: #f59e0b; }
 
 /* ── Conclusion summary card — collapsible ────────────────────────────── */
 .concl-card {
