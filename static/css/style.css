@@ -281,10 +281,13 @@ html, body {
 
 /* Result image */
 .result-img-wrap {
-  margin: 6px 0 10px;
+  margin: 8px 0 12px 0;
   border-radius: var(--radius-sm);
   overflow: hidden;
   border: 1px solid var(--border);
+  max-width: 72%;
+  display: inline-block;
+  width: 72%;
 }
 .result-img {
   width: 100%;
@@ -304,6 +307,7 @@ html, body {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin: 6px 0 10px;
+  max-width: 85%;
 }
 .result-chart-cell {
   border-radius: var(--radius-sm);
@@ -387,12 +391,14 @@ html, body {
 
 /* Chart container in message */
 .chart-container {
-  width: 100%;
-  margin: 12px 0;
+  max-width: 72%;
+  width: 72%;
+  margin: 10px 0;
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--bg3);
   border: 1px solid var(--border);
+  display: inline-block;
 }
 
 /* Map open card */
@@ -1144,8 +1150,8 @@ html, body {
 
 /* Container for each variable's block */
 .var-section {
-  margin: 20px 0 28px 0;
-  padding-bottom: 24px;
+  margin: 14px 0 20px 0;
+  padding-bottom: 18px;
   border-bottom: 1px solid var(--border);
 }
 .var-section:last-of-type {
@@ -1158,6 +1164,7 @@ html, body {
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--border);
+  max-width: 72%;
 }
 .stats-table {
   width: 100%;
