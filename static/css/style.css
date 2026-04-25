@@ -1365,10 +1365,10 @@ html, body {
 .concl-chip-value.cv-pink { color: inherit; }
 
 /* ════════════════════════════════════════════════
-   SCORECARD THEME SYSTEM — 4 random themes
-   .concl-theme-{blue|green|red|amber}
-   chips-section  = metrics color
-   findings-section = same hue, slightly warmer
+   SCORECARD DUAL-THEME SYSTEM
+   data-chips-theme   = Key Metrics section color
+   data-findings-theme = Findings section color
+   Always different — picked independently in JS
 ════════════════════════════════════════════════ */
 
 /* ── shared structure ── */
@@ -1413,105 +1413,57 @@ html, body {
   border-style: solid;
 }
 
-/* ── BLUE theme ── */
-.concl-theme-blue .concl-chips-section {
-  background: rgba(10,132,255,0.06);
-  border-bottom-color: rgba(10,132,255,0.15);
-}
-.concl-theme-blue .concl-chips-label,
-.concl-theme-blue .concl-chip-label { color: rgba(77,163,255,0.6); }
-.concl-theme-blue .concl-chip {
-  background: rgba(10,132,255,0.12);
-  border-color: rgba(10,132,255,0.28);
-  color: #4da3ff;
-}
-.concl-theme-blue .concl-findings-section {
-  background: rgba(10,132,255,0.04);
-  border-bottom-color: rgba(10,132,255,0.12);
-}
-.concl-theme-blue .concl-section-label { color: rgba(77,163,255,0.6); }
-.concl-theme-blue .concl-finding-item {
-  background: rgba(10,132,255,0.08);
-  border-color: rgba(10,132,255,0.2);
-  color: rgba(147,197,255,0.88);
-}
-.concl-theme-blue .concl-finding-item strong,
-.concl-theme-blue .concl-finding-item strong[class] { color: #6bb8ff; font-weight: 700; }
+/* ── CHIPS: BLUE ── */
+[data-chips-theme="blue"] .concl-chips-section { background: rgba(10,132,255,0.06); border-bottom-color: rgba(10,132,255,0.15); }
+[data-chips-theme="blue"] .concl-chips-label,
+[data-chips-theme="blue"] .concl-chip-label { color: rgba(77,163,255,0.6); }
+[data-chips-theme="blue"] .concl-chip { background: rgba(10,132,255,0.12); border-color: rgba(10,132,255,0.28); color: #4da3ff; }
 
-/* ── GREEN theme ── */
-.concl-theme-green .concl-chips-section {
-  background: rgba(48,209,88,0.05);
-  border-bottom-color: rgba(48,209,88,0.14);
-}
-.concl-theme-green .concl-chips-label,
-.concl-theme-green .concl-chip-label { color: rgba(48,209,88,0.6); }
-.concl-theme-green .concl-chip {
-  background: rgba(48,209,88,0.10);
-  border-color: rgba(48,209,88,0.26);
-  color: #34c759;
-}
-.concl-theme-green .concl-findings-section {
-  background: rgba(48,209,88,0.04);
-  border-bottom-color: rgba(48,209,88,0.12);
-}
-.concl-theme-green .concl-section-label { color: rgba(48,209,88,0.6); }
-.concl-theme-green .concl-finding-item {
-  background: rgba(48,209,88,0.07);
-  border-color: rgba(48,209,88,0.18);
-  color: rgba(140,220,160,0.88);
-}
-.concl-theme-green .concl-finding-item strong,
-.concl-theme-green .concl-finding-item strong[class] { color: #4cd964; font-weight: 700; }
+/* ── CHIPS: GREEN ── */
+[data-chips-theme="green"] .concl-chips-section { background: rgba(48,209,88,0.05); border-bottom-color: rgba(48,209,88,0.14); }
+[data-chips-theme="green"] .concl-chips-label,
+[data-chips-theme="green"] .concl-chip-label { color: rgba(48,209,88,0.6); }
+[data-chips-theme="green"] .concl-chip { background: rgba(48,209,88,0.10); border-color: rgba(48,209,88,0.26); color: #34c759; }
 
-/* ── RED theme ── */
-.concl-theme-red .concl-chips-section {
-  background: rgba(255,59,48,0.05);
-  border-bottom-color: rgba(255,59,48,0.14);
-}
-.concl-theme-red .concl-chips-label,
-.concl-theme-red .concl-chip-label { color: rgba(255,100,90,0.65); }
-.concl-theme-red .concl-chip {
-  background: rgba(255,59,48,0.10);
-  border-color: rgba(255,59,48,0.26);
-  color: #ff6961;
-}
-.concl-theme-red .concl-findings-section {
-  background: rgba(255,59,48,0.04);
-  border-bottom-color: rgba(255,59,48,0.12);
-}
-.concl-theme-red .concl-section-label { color: rgba(255,100,90,0.65); }
-.concl-theme-red .concl-finding-item {
-  background: rgba(255,59,48,0.07);
-  border-color: rgba(255,59,48,0.18);
-  color: rgba(255,170,160,0.88);
-}
-.concl-theme-red .concl-finding-item strong,
-.concl-theme-red .concl-finding-item strong[class] { color: #ff7b72; font-weight: 700; }
+/* ── CHIPS: RED ── */
+[data-chips-theme="red"] .concl-chips-section { background: rgba(255,59,48,0.05); border-bottom-color: rgba(255,59,48,0.14); }
+[data-chips-theme="red"] .concl-chips-label,
+[data-chips-theme="red"] .concl-chip-label { color: rgba(255,100,90,0.65); }
+[data-chips-theme="red"] .concl-chip { background: rgba(255,59,48,0.10); border-color: rgba(255,59,48,0.26); color: #ff6961; }
 
-/* ── AMBER theme ── */
-.concl-theme-amber .concl-chips-section {
-  background: rgba(245,166,35,0.05);
-  border-bottom-color: rgba(245,166,35,0.14);
-}
-.concl-theme-amber .concl-chips-label,
-.concl-theme-amber .concl-chip-label { color: rgba(245,166,35,0.6); }
-.concl-theme-amber .concl-chip {
-  background: rgba(245,166,35,0.10);
-  border-color: rgba(245,166,35,0.26);
-  color: #f5a623;
-}
-.concl-theme-amber .concl-findings-section {
-  background: rgba(245,166,35,0.04);
-  border-bottom-color: rgba(245,166,35,0.12);
-}
-.concl-theme-amber .concl-section-label { color: rgba(245,166,35,0.6); }
-.concl-theme-amber .concl-finding-item {
-  background: rgba(245,166,35,0.08);
-  border-color: rgba(245,166,35,0.2);
-  color: rgba(229,190,120,0.9);
-}
-.concl-theme-amber .concl-finding-item strong,
-.concl-theme-amber .concl-finding-item strong[class] { color: #f5c842; font-weight: 700; }
+/* ── CHIPS: AMBER ── */
+[data-chips-theme="amber"] .concl-chips-section { background: rgba(245,166,35,0.05); border-bottom-color: rgba(245,166,35,0.14); }
+[data-chips-theme="amber"] .concl-chips-label,
+[data-chips-theme="amber"] .concl-chip-label { color: rgba(245,166,35,0.6); }
+[data-chips-theme="amber"] .concl-chip { background: rgba(245,166,35,0.10); border-color: rgba(245,166,35,0.26); color: #f5a623; }
+
+/* ── FINDINGS: BLUE ── */
+[data-findings-theme="blue"] .concl-findings-section { background: rgba(10,132,255,0.04); border-bottom-color: rgba(10,132,255,0.12); }
+[data-findings-theme="blue"] .concl-section-label { color: rgba(77,163,255,0.6); }
+[data-findings-theme="blue"] .concl-finding-item { background: rgba(10,132,255,0.08); border-color: rgba(10,132,255,0.2); color: rgba(147,197,255,0.88); }
+[data-findings-theme="blue"] .concl-finding-item strong,
+[data-findings-theme="blue"] .concl-finding-item strong[class] { color: #6bb8ff; font-weight: 700; }
+
+/* ── FINDINGS: GREEN ── */
+[data-findings-theme="green"] .concl-findings-section { background: rgba(48,209,88,0.04); border-bottom-color: rgba(48,209,88,0.12); }
+[data-findings-theme="green"] .concl-section-label { color: rgba(48,209,88,0.6); }
+[data-findings-theme="green"] .concl-finding-item { background: rgba(48,209,88,0.07); border-color: rgba(48,209,88,0.18); color: rgba(140,220,160,0.88); }
+[data-findings-theme="green"] .concl-finding-item strong,
+[data-findings-theme="green"] .concl-finding-item strong[class] { color: #4cd964; font-weight: 700; }
+
+/* ── FINDINGS: RED ── */
+[data-findings-theme="red"] .concl-findings-section { background: rgba(255,59,48,0.04); border-bottom-color: rgba(255,59,48,0.12); }
+[data-findings-theme="red"] .concl-section-label { color: rgba(255,100,90,0.65); }
+[data-findings-theme="red"] .concl-finding-item { background: rgba(255,59,48,0.07); border-color: rgba(255,59,48,0.18); color: rgba(255,170,160,0.88); }
+[data-findings-theme="red"] .concl-finding-item strong,
+[data-findings-theme="red"] .concl-finding-item strong[class] { color: #ff7b72; font-weight: 700; }
+
+/* ── FINDINGS: AMBER ── */
+[data-findings-theme="amber"] .concl-findings-section { background: rgba(245,166,35,0.04); border-bottom-color: rgba(245,166,35,0.12); }
+[data-findings-theme="amber"] .concl-section-label { color: rgba(245,166,35,0.6); }
+[data-findings-theme="amber"] .concl-finding-item { background: rgba(245,166,35,0.08); border-color: rgba(245,166,35,0.2); color: rgba(229,190,120,0.9); }
+[data-findings-theme="amber"] .concl-finding-item strong,
+[data-findings-theme="amber"] .concl-finding-item strong[class] { color: #f5c842; font-weight: 700; }
 
 /* Amber highlight block — caveats / notes */
 .concl-amber-block {

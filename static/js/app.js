@@ -1179,41 +1179,47 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
   // ── CONCLUSION ────────────────────────────────────────────────────────────
   if (conclusion) {
     // Extract a 2-line preview from the conclusion text (strip markdown)
-    const rawPreview = conclusion.replace(/\*\*/g, '').replace(/\*/g, '').replace(/\n+/g, ' ').trim();
-    const previewText = rawPreview; // full text, no truncation
+    // Build a short punchy preview: first sentence + recommendation sentence if found
+    function buildPreview(text) {
+      const clean = text.replace(/\*\*/g, '').replace(/\*/g, '').replace(/\n+/g, ' ').trim();
+      const sentences = clean.match(/[^.!?]+[.!?]+/g) || [clean];
+      // Always grab the first sentence
+      let preview = sentences[0].trim();
+      // Find a recommendation/conclusion sentence to add as second line
+      const recSentence = sentences.find((s, i) => i > 0 && /\b(recommend|therefore|prioritize|mitigate|critical|action|urgent)\b/i.test(s));
+      if (recSentence && (preview + ' ' + recSentence.trim()).length < 280) {
+        preview += ' ' + recSentence.trim();
+      }
+      return preview;
+    }
+    const previewText = buildPreview(conclusion);
 
     // Auto-highlight key terms in conclusion for easier scanning
     function highlightConclusion(text) {
-      // Key domain terms to bold if not already bolded
       const keyTerms = [
-        // Land cover / LULC
         'Built Area','Urban Area','Vegetation','Trees','Rangeland','Water','Cropland','Bare Land',
-        // Heat / LST
         'heat stress','heat zone','Urban Heat Island','surface temperature','thermal stress',
-        // Vegetation indices
         'NDVI','EVI','SAVI','healthy vegetation','stressed vegetation','vegetation stress',
-        // Air quality
         'NO2','CO','air quality','nitrogen dioxide','carbon monoxide','pollution',
-        // General analytical terms
-        'dominant','significant','critical','urgent','severe','moderate','low','high',
+        'dominant','significant','critical','urgent','severe','moderate',
         'increasing','decreasing','declining','expanding','urbanization','deforestation',
-        // Recommendations
-        'recommend','prioritize','mitigate','action','immediately','sustainable',
+        'recommend','prioritize','mitigate','immediately','sustainable',
       ];
       let result = text;
       keyTerms.forEach(term => {
-        // Only bold if not already inside ** **
         const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const re = new RegExp(`(?<!\\*\\*)\\b(${escaped})\\b(?!\\*\\*)`, 'gi');
+        const re = new RegExp(\`(?<!\\*\\*)\\b(\${escaped})\\b(?!\\*\\*)\`, 'gi');
         result = result.replace(re, '**$1**');
       });
       return result;
     }
     const highlightedConclusion = highlightConclusion(conclusion);
 
-    // Pick a random theme per card run
-    const cardThemes = ['blue','green','red','amber'];
-    const cardTheme = cardThemes[Math.floor(Math.random() * cardThemes.length)];
+    // Pick 2 DIFFERENT themes — one for chips, one for findings
+    const allThemes = ['blue','green','red','amber'];
+    const chipsThemeIdx = Math.floor(Math.random() * allThemes.length);
+    const chipsTheme = allThemes[chipsThemeIdx];
+    const findingsTheme = allThemes[(chipsThemeIdx + 1 + Math.floor(Math.random() * 3)) % allThemes.length];
 
     // Build metric chips
     let chips = '';
@@ -1261,7 +1267,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
     const titleMap = { LULC: 'Land Cover Summary', NDVI: 'Vegetation Health Summary', LST: 'Surface Temperature Summary', NO2: 'Air Quality Summary', UHI: 'Urban Heat Island Summary' };
     const cardTitle = titleMap[varLabel] || `${varLabel} Summary`;
 
-    html += `<div class="concl-card concl-theme-${cardTheme}" id="conclCard_${Date.now()}">
+    html += `<div class="concl-card" id="conclCard_${Date.now()}" data-chips-theme="${chipsTheme}" data-findings-theme="${findingsTheme}">
       <div class="concl-header" onclick="this.closest('.concl-card').classList.toggle('expanded')">
         <div class="concl-header-left">
           <div class="concl-header-title">${cardTitle}</div>
