@@ -1342,15 +1342,12 @@ html, body {
 .concl-card.expanded .concl-body { display: block; }
 
 /* Metric chips row */
-.concl-chips-section {
-  padding: 14px 16px 12px;
-}
 .concl-chips-label {
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--text3);
+  color: rgba(77, 163, 255, 0.65);
   margin-bottom: 10px;
 }
 .concl-chips-row {
@@ -1358,51 +1355,54 @@ html, body {
   flex-wrap: wrap;
   gap: 8px;
 }
+.concl-chip-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: inherit;
+}
+/* Chip values inherit theme color — no per-value overrides */
+.concl-chip-value.cv-cyan,
+.concl-chip-value.cv-green,
+.concl-chip-value.cv-amber,
+.concl-chip-value.cv-purple,
+.concl-chip-value.cv-pink { color: inherit; }
+
+/* ── Theme: Key Metrics → Blue ── */
+.concl-chips-section {
+  padding: 14px 16px 12px;
+  background: rgba(10, 132, 255, 0.06);
+  border-bottom: 1px solid rgba(10, 132, 255, 0.15);
+}
 .concl-chip {
-  background: var(--bg3);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
+  background: rgba(10, 132, 255, 0.12);
+  border: 1px solid rgba(10, 132, 255, 0.28);
+  border-radius: 10px;
   padding: 9px 14px;
   min-width: 90px;
+  color: #4da3ff;
 }
 .concl-chip-label {
   font-size: 9.5px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--text3);
+  color: rgba(77, 163, 255, 0.65);
   margin-bottom: 4px;
 }
-.concl-chip-value {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-  font-family: var(--font-mono);
-}
-/* Color variants for chip values */
-.concl-chip-value.cv-cyan   { color: #00d4ff; }
-.concl-chip-value.cv-green  { color: #30d158; }
-.concl-chip-value.cv-amber  { color: #f5a623; }
-.concl-chip-value.cv-purple { color: #bf5af2; }
-.concl-chip-value.cv-pink   { color: #ff375f; }
 
-/* Colored strongs inside finding items */
-.concl-finding-item strong.fv-cyan   { color: #00d4ff; }
-.concl-finding-item strong.fv-green  { color: #30d158; }
-.concl-finding-item strong.fv-amber  { color: #f5a623; }
-.concl-finding-item strong.fv-purple { color: #bf5af2; }
-.concl-finding-item strong.fv-pink   { color: #ff375f; }
-
-/* Findings list */
+/* ── Theme: Findings → Amber ── */
 .concl-findings-section {
-  padding: 0 16px 14px;
+  padding: 14px 16px;
+  background: rgba(245, 166, 35, 0.05);
+  border-bottom: 1px solid rgba(245, 166, 35, 0.12);
 }
 .concl-section-label {
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--text3);
+  color: rgba(245, 166, 35, 0.6);
   margin-bottom: 8px;
 }
 .concl-findings-list {
@@ -1411,15 +1411,21 @@ html, body {
   gap: 6px;
 }
 .concl-finding-item {
-  background: var(--bg3);
-  border: 1px solid var(--border);
+  background: rgba(245, 166, 35, 0.08);
+  border: 1px solid rgba(245, 166, 35, 0.2);
   border-radius: 8px;
   padding: 9px 13px;
   font-size: 13px;
-  color: var(--text2);
+  color: rgba(229, 190, 120, 0.9);
   line-height: 1.5;
 }
-.concl-finding-item strong { color: var(--text); font-weight: 600; }
+.concl-finding-item strong { color: #f5c842; font-weight: 700; }
+/* Strip all per-value color overrides — amber theme takes over */
+.concl-finding-item strong.fv-cyan,
+.concl-finding-item strong.fv-green,
+.concl-finding-item strong.fv-amber,
+.concl-finding-item strong.fv-purple,
+.concl-finding-item strong.fv-pink { color: #f5c842; }
 
 /* Amber highlight block — caveats / notes */
 .concl-amber-block {
