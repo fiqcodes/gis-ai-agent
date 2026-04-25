@@ -1183,14 +1183,17 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
     function buildPreview(text) {
       const clean = text.replace(/\*\*/g, '').replace(/\*/g, '').replace(/\n+/g, ' ').trim();
       const sentences = clean.match(/[^.!?]+[.!?]+/g) || [clean];
-      // Always grab the first sentence
-      let preview = sentences[0].trim();
-      // Find a recommendation/conclusion sentence to add as second line
-      const recSentence = sentences.find((s, i) => i > 0 && /\b(recommend|therefore|prioritize|mitigate|critical|action|urgent)\b/i.test(s));
-      if (recSentence && (preview + ' ' + recSentence.trim()).length < 280) {
-        preview += ' ' + recSentence.trim();
+      // Line 1: first sentence, hard-capped at 120 chars
+      const first = sentences[0].trim();
+      const line1 = first.length > 120 ? first.slice(0, 117).trimEnd() + '…' : first;
+      // Line 2: first sentence that has a recommendation/conclusion keyword
+      const recSentence = sentences.find((s, i) => i > 0 && /\b(recommend|therefore|prioritize|mitigate|critical|urgent)\b/i.test(s));
+      let line2 = '';
+      if (recSentence) {
+        const r = recSentence.trim();
+        line2 = r.length > 120 ? r.slice(0, 117).trimEnd() + '…' : r;
       }
-      return preview;
+      return line2 ? line1 + ' ' + line2 : line1;
     }
     const previewText = buildPreview(conclusion);
 
