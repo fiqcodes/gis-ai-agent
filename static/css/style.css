@@ -281,13 +281,13 @@ html, body {
 
 /* Result image */
 .result-img-wrap {
-  margin: 8px 0 12px 0;
+  margin: 8px auto 12px;
   border-radius: var(--radius-sm);
   overflow: hidden;
   border: 1px solid var(--border);
   max-width: 72%;
-  display: inline-block;
   width: 72%;
+  display: block;
 }
 .result-img {
   width: 100%;
@@ -306,7 +306,7 @@ html, body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin: 6px 0 10px;
+  margin: 6px auto 10px;
   max-width: 85%;
 }
 .result-chart-cell {
@@ -393,12 +393,12 @@ html, body {
 .chart-container {
   max-width: 72%;
   width: 72%;
-  margin: 10px 0;
+  margin: 10px auto;
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--bg3);
   border: 1px solid var(--border);
-  display: inline-block;
+  display: block;
 }
 
 /* Map open card */
@@ -1160,7 +1160,7 @@ html, body {
 
 /* Stats table below each map */
 .stats-table-wrap {
-  margin: 10px 0 14px 0;
+  margin: 10px auto 14px;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--border);
