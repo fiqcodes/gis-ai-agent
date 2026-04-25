@@ -1445,7 +1445,7 @@ function buildMonthlyHighlights(varLabel, monthly) {
   const avgLast  = values.slice(half).reduce((s,v) => s+v, 0) / (values.length - half);
   const trendDir = avgLast > avgFirst + threshold ? 'increasing'
                  : avgLast < avgFirst - threshold ? 'decreasing' : 'stable';
-  const trendArrow = trendDir === 'increasing' ? '↑' : trendDir === 'decreasing' ? '↓' : '→';
+  const trendArrow = '';
 
   // Variability qualifier
   const spread = maxEntry[1] - minEntry[1];
@@ -1496,7 +1496,7 @@ function buildMonthlyHighlights(varLabel, monthly) {
     `<strong>${fmtMonth(maxEntry[0])}</strong> recorded the ${peakContext} at <strong>${fmt(maxEntry[1])}</strong>.`,
     `<strong>${fmtMonth(minEntry[0])}</strong> saw the ${lowContext} at <strong>${fmt(minEntry[1])}</strong>.`,
     `The monthly time series shows ${variabilityNote}, with ${avgContext} over the full period.`,
-    `Overall, the data shows ${trendArrow} <strong>${trendContext}</strong>.`,
+    `Overall, the data shows <strong>${trendContext}</strong>.`,
   ].map(b => `<li>${b}</li>`).join('');
 
   return `<div class="monthly-narrative">

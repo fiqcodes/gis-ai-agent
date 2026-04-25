@@ -1275,7 +1275,7 @@ html, body {
 .mh-bullets li {
   font-size: 13px;
   line-height: 1.6;
-  color: var(--text2);
+  color: var(--text);
 }
 .mh-bullets li strong {
   color: var(--text);
