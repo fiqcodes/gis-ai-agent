@@ -1700,6 +1700,21 @@ function buildLulcExplanation(s) {
 
   const totalHa  = s.total_ha || 0;
   const nClasses = s.n_classes || sorted.length;
+  const topKey   = sorted[0][0].toLowerCase();
+
+  // Short intro sentence before the bullets
+  let introLine = `The mapped area totals <strong>${totalHa.toLocaleString()} ha</strong> across <strong>${nClasses} land cover classes</strong>. `;
+  if (topKey.includes('built') || topKey.includes('urban')) {
+    introLine += `Impervious surfaces account for the vast majority, with natural cover restricted to scattered patches.`;
+  } else if (topKey.includes('tree') || topKey.includes('forest')) {
+    introLine += `Vegetated surfaces dominate, though built-up and bare areas reflect ongoing land-use pressure.`;
+  } else if (topKey.includes('water')) {
+    introLine += `Water bodies define the primary land character, with terrestrial classes occupying a smaller share.`;
+  } else if (topKey.includes('crop') || topKey.includes('agric')) {
+    introLine += `Agricultural use shapes the majority of the landscape, with natural and built classes in secondary roles.`;
+  } else {
+    introLine += `Each class reflects a distinct land use type with different ecological and planning implications.`;
+  }
 
   const bullets = sorted.map(([name, info]) => {
     const pct = info.percentage.toFixed(1);
@@ -1710,6 +1725,7 @@ function buildLulcExplanation(s) {
   }).join('');
 
   return `<div class="lulc-narrative lulc-narrative--table">
+    <p class="lulc-narrative-intro">${introLine}</p>
     <ul class="lulc-narrative-bullets">${bullets}</ul>
   </div>`;
 }
