@@ -1178,8 +1178,37 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
 
   // ── CONCLUSION ────────────────────────────────────────────────────────────
   if (conclusion) {
-    html += `<p class="ai-insight-text"><strong>Conclusion</strong></p>
-      <p class="ai-insight-text">${parseMarkdown(conclusion)}</p>`;
+    // Build key metric chips from stats
+    let chips = '';
+    if (stats) {
+      for (const [varName, s] of Object.entries(stats)) {
+        if (!s) continue;
+        const vUp = varName.toUpperCase();
+        if (vUp === 'LULC' && s.classes) {
+          const sorted = Object.entries(s.classes).sort((a,b) => b[1].percentage - a[1].percentage);
+          if (sorted[0]) chips += `<div class="concl-chip"><div class="concl-chip-label">Dominant Class</div><div class="concl-chip-value">${sorted[0][0]}</div></div>`;
+          if (sorted[0]) chips += `<div class="concl-chip"><div class="concl-chip-label">Coverage</div><div class="concl-chip-value">${sorted[0][1].percentage.toFixed(1)}%</div></div>`;
+          if (s.total_ha) chips += `<div class="concl-chip"><div class="concl-chip-label">Total Area</div><div class="concl-chip-value">${s.total_ha.toLocaleString()} ha</div></div>`;
+          if (s.n_classes) chips += `<div class="concl-chip"><div class="concl-chip-label">Classes</div><div class="concl-chip-value">${s.n_classes}</div></div>`;
+        } else if ((vUp === 'NDVI' || vUp === 'EVI' || vUp === 'SAVI') && s.mean != null) {
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value">${s.mean.toFixed(3)}</div></div>`;
+          if (s.pct_healthy != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Healthy</div><div class="concl-chip-value">${s.pct_healthy.toFixed(1)}%</div></div>`;
+          if (s.pct_stressed != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Stressed</div><div class="concl-chip-value">${s.pct_stressed.toFixed(1)}%</div></div>`;
+        } else if (vUp === 'LST' && s.mean != null) {
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Mean LST</div><div class="concl-chip-value">${s.mean.toFixed(1)}°C</div></div>`;
+          if (s.max != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Max LST</div><div class="concl-chip-value">${s.max.toFixed(1)}°C</div></div>`;
+          if (s.pct_hot != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Hot Zone</div><div class="concl-chip-value">${s.pct_hot.toFixed(1)}%</div></div>`;
+        } else if (s.mean != null) {
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value">${s.mean.toFixed(4)}</div></div>`;
+        }
+      }
+    }
+
+    html += `<div class="concl-card">
+      <div class="concl-card-title">Summary</div>
+      ${chips ? `<div class="concl-chips-row">${chips}</div>` : ''}
+      <div class="concl-card-text">${parseMarkdown(conclusion)}</div>
+    </div>`;
   }
 
   // ── ATTRIBUTIONS ─────────────────────────────────────────────────────────
@@ -1511,7 +1540,7 @@ function buildDistClassExplanation(varLabel, s) {
     }
   }
 
-  return `<div class="dist-explanation">${text}</div>`;
+  return `<p class="ai-insight-text">${text}</p>`;
 }
 
 // ── LULC class explanation (auto-computed from class stats) ──────────────────
@@ -1559,7 +1588,7 @@ function buildLulcExplanation(s) {
     text += `Bare or sparsely vegetated surfaces dominate, indicating degraded land, active construction, or arid conditions that may accelerate erosion and surface heating.`;
   }
 
-  return `<div class="dist-explanation">${text}</div>`;
+  return `<p class="ai-insight-text">${text}</p>`;
 }
 
 function renderChartsInBubble(bubble, stats, variables) {
