@@ -1256,6 +1256,40 @@ html, body {
   font-weight: 600;
 }
 
+/* ── LULC ML performance section ─────────────────────────────────────── */
+.lulc-ml-section {
+  margin: 14px 0 16px;
+}
+.lulc-ml-intro {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+.lulc-ml-intro strong { color: var(--text); font-weight: 600; }
+.lulc-ml-subhead {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text3);
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.lulc-ml-bullets {
+  margin: 0;
+  padding: 0 0 0 18px;
+  list-style: disc;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.lulc-ml-bullets li {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.lulc-ml-bullets li strong { color: var(--text); font-weight: 600; }
+
 /* ── Plotly interactive chart container ───────────────────────────── */
 .plotly-chart-wrap {
   width: 100%;

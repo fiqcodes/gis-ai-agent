@@ -425,6 +425,57 @@ def get_stats(image, band, study_area, scale=1000):
         return {'mean': None, 'min': None, 'max': None,
                 'std': None, 'median': None, 'p10': None, 'p90': None}
 
+# Class boundary definitions — mirrors make_stats_charts() and _CLASS_DEFS in app.js
+_CLASS_BOUNDS = {
+    'NDVI':    ([-1, 0.1, 0.3, 0.6, 1],          ['Bare (<0.1)', 'Stressed (0.1–0.3)', 'Moderate (0.3–0.6)', 'Healthy (>0.6)']),
+    'EVI':     ([-1, 0.1, 0.3, 0.5, 1],           ['Sparse (<0.1)', 'Low (0.1–0.3)', 'Moderate (0.3–0.5)', 'Dense (>0.5)']),
+    'SAVI':    ([-1, 0.1, 0.3, 0.5, 1],           ['Sparse (<0.1)', 'Low (0.1–0.3)', 'Moderate (0.3–0.5)', 'Dense (>0.5)']),
+    'NDBI':    ([-1, -0.1, 0.0, 0.1, 1],          ['Non-built (<-0.1)', 'Low built (-0.1–0)', 'Moderate (0–0.1)', 'High built (>0.1)']),
+    'NDWI':    ([-1, -0.3, 0.0, 0.3, 1],          ['Dry (<-0.3)', 'Transition (-0.3–0)', 'Moist (0–0.3)', 'Water (>0.3)']),
+    'MNDWI':   ([-1, -0.3, 0.0, 0.3, 1],          ['Dry (<-0.3)', 'Transition (-0.3–0)', 'Moist (0–0.3)', 'Water (>0.3)']),
+    'BSI':     ([-1, -0.1, 0.1, 1],               ['Vegetated (<-0.1)', 'Mixed (-0.1–0.1)', 'Bare soil (>0.1)']),
+    'UI':      ([-1, -0.1, 0.1, 1],               ['Vegetation (<-0.1)', 'Transition (-0.1–0.1)', 'Urban (>0.1)']),
+    'NDSI':    ([-1, 0.0, 0.4, 1],                ['No snow (<0)', 'Possible (0–0.4)', 'Snow (>0.4)']),
+    'NBI':     ([0, 0.1, 0.25, 0.5],              ['Low (<0.1)', 'Moderate (0.1–0.25)', 'High (>0.25)']),
+    'LST':     ([0, 30, 35, 40, 45, 100],          ['Cool (<30°C)', 'Moderate (30–35°C)', 'Warm (35–40°C)', 'Hot (40–45°C)', 'Extreme (>45°C)']),
+    'NO2':     ([0, 8e-5, 1.5e-4, 2.5e-4, 1],     ['Clean (<8e-5)', 'Moderate (8–15e-5)', 'High (15–25e-5)', 'Severe (>25e-5)']),
+    'CO':      ([0.02, 0.035, 0.055, 0.07, 0.08], ['Low (<0.035)', 'Moderate (0.035–0.055)', 'High (0.055–0.07)', 'Severe (>0.07)']),
+    'SO2':     ([0, 1e-4, 5e-4, 1e-3, 0.01],      ['Clean (<1e-4)', 'Moderate (1–5e-4)', 'High (5e-4–1e-3)', 'Severe (>1e-3)']),
+    'CH4':     ([1750, 1850, 1900, 1950, 2100],   ['Background (<1850)', 'Elevated (1850–1900)', 'High (1900–1950)', 'Very high (>1950)']),
+    'O3':      ([200, 220, 280, 340, 400],         ['Very low (<220 DU)', 'Low (220–280 DU)', 'Normal (280–340 DU)', 'High (>340 DU)']),
+    'AEROSOL': ([-1, 0, 1, 2, 4],                 ['Clean (<0)', 'Low (0–1)', 'Moderate (1–2)', 'High (>2)']),
+    'FFPI':    ([0, 0.3, 0.6, 0.8, 1],            ['Clean (0–0.3)', 'Moderate (0.3–0.6)', 'Polluted (0.6–0.8)', 'Severe (>0.8)']),
+}
+
+def get_class_pcts(image, band, study_area, var_label, scale=1000):
+    """Compute real per-class pixel percentages via GEE for a given variable."""
+    key = var_label.upper()
+    if key not in _CLASS_BOUNDS:
+        return {}
+    bounds, labels = _CLASS_BOUNDS[key]
+    try:
+        total_pixels = image.select(band).reduceRegion(
+            reducer=ee.Reducer.count(),
+            geometry=study_area, scale=scale, maxPixels=1e9
+        ).getInfo().get(band, 0)
+        if not total_pixels:
+            return {}
+        result = {}
+        for i in range(len(bounds) - 1):
+            lo, hi = bounds[i], bounds[i+1]
+            mask = image.select(band).gte(lo).And(image.select(band).lt(hi))
+            count = image.select(band).updateMask(mask).reduceRegion(
+                reducer=ee.Reducer.count(),
+                geometry=study_area, scale=scale, maxPixels=1e9
+            ).getInfo().get(band, 0)
+            pct = round((count / total_pixels) * 100, 1) if total_pixels else 0
+            if pct > 0:
+                result[labels[i]] = pct
+        return result
+    except Exception as e:
+        print(f'  class_pcts failed for {var_label}: {e}')
+        return {}
+
 def get_monthly_stats(image_collection, band, study_area, start_date, end_date, scale=1000):
     """Compute monthly mean for a band over the collection period."""
     import datetime
@@ -1298,6 +1349,8 @@ def run_analysis(region_name, start_date, end_date, variables):
                     lulc_result = compute_lulc(study_area, start_date, end_date, region_name)
                     if lulc_result['success']:
                         stats_summary['LULC'] = lulc_result['stats']
+                        if lulc_result.get('ml_metrics'):
+                            stats_summary['LULC']['ml_metrics'] = lulc_result['ml_metrics']
                         panels_surface.append((
                             lulc_result['lulc_img'],
                             lulc_result['vis_params'],
@@ -1310,6 +1363,7 @@ def run_analysis(region_name, start_date, end_date, variables):
                     print('  Computing LST...')
                     lst_img, em_img = compute_lst(composite, study_area)
                     stats_summary['LST'] = get_stats(lst_img, 'LST', study_area, scale=90)
+                    stats_summary['LST']['class_pcts'] = get_class_pcts(lst_img, 'LST', study_area, 'LST', scale=90)
                     panels_surface.append((lst_img, VIS['lst'], 'LST (degrees C)', study_area))
                 elif v == 'uhi':
                     print('  Computing UHI...')
@@ -1357,6 +1411,12 @@ def run_analysis(region_name, start_date, end_date, variables):
                     except Exception as me:
                         print(f'    Monthly stats failed: {me}')
                         s['monthly'] = {}
+                    # Real class percentages from GEE
+                    try:
+                        s['class_pcts'] = get_class_pcts(img, label, study_area, label, scale=scale)
+                    except Exception as ce:
+                        print(f'    class_pcts failed: {ce}')
+                        s['class_pcts'] = {}
                     stats_summary[label] = s
                     panels_surface.append((img, VIS[vis_key], label, study_area))
             except Exception as e:
@@ -1368,6 +1428,10 @@ def run_analysis(region_name, start_date, end_date, variables):
                 print('  Computing FFPI...')
                 ffpi_img, ffpi_class = compute_ffpi(study_area, start_date, end_date)
                 stats_summary['FFPI'] = get_stats(ffpi_img, 'FFPI', study_area, scale=3500)
+                try:
+                    stats_summary['FFPI']['class_pcts'] = get_class_pcts(ffpi_img, 'FFPI', study_area, 'FFPI', scale=3500)
+                except:
+                    stats_summary['FFPI']['class_pcts'] = {}
                 panels_atmo.append((ffpi_img,   VIS['ffpi'],       'FFPI Score',          study_area))
                 panels_atmo.append((ffpi_class, VIS['ffpi_class'], 'FFPI Pollution Zones', study_area))
             elif v in ATMO_INDEX_MAP:
@@ -1410,6 +1474,12 @@ def run_analysis(region_name, start_date, end_date, variables):
                     except Exception as me:
                         print(f'    Monthly stats failed: {me}')
                         s['monthly'] = {}
+                    # Real class percentages from GEE
+                    try:
+                        s['class_pcts'] = get_class_pcts(img, band_name, study_area, label, scale=3500)
+                    except Exception as ce:
+                        print(f'    class_pcts failed: {ce}')
+                        s['class_pcts'] = {}
                     stats_summary[label] = s
                     panels_atmo.append((img, VIS[vis_key], f'{label} ({unit})', study_area))
                 else:
@@ -1648,11 +1718,16 @@ def compute_lulc(study_area, start_date, end_date, region_name):
             training_data = training_data.merge(s)
 
         n_total = training_data.size().getInfo()
-        print(f'  Total training samples: {n_total} across {len(all_samples)} classes')
+        print(f'  Total samples: {n_total} across {len(all_samples)} classes')
 
-        # ── Step 5: Train Random Forest ───────────────────────────────────────
+        # ── Step 5: 80/20 train/test split ────────────────────────────────────
+        training_data = training_data.randomColumn('split', seed=42)
+        train_set     = training_data.filter(ee.Filter.lt('split', 0.8))
+        test_set      = training_data.filter(ee.Filter.gte('split', 0.8))
+        print(f'  Train: ~{int(n_total*0.8)} | Test: ~{int(n_total*0.2)} samples')
+
+        # ── Step 6: Train Random Forest ───────────────────────────────────────
         print('  Training Random Forest (200 trees)...')
-        # Known feature bands — no getInfo() call needed
         band_names = ['SR_B2','SR_B3','SR_B4','SR_B5','SR_B6','SR_B7',
                       'NDVI','NDBI','NDWI','MNDWI','SAVI','BSI']
         classifier = ee.Classifier.smileRandomForest(
@@ -1662,14 +1737,86 @@ def compute_lulc(study_area, start_date, end_date, region_name):
             bagFraction       = 0.5,
             seed              = 42
         ).train(
-            features        = training_data,
+            features        = train_set,
             classProperty   = 'landcover',
             inputProperties = band_names
         )
 
-        # ── Step 6: Classify ──────────────────────────────────────────────────
-        print('  Classifying image...')
-        classified = features.classify(classifier).rename('classification')
+        # ── Step 6b: Validation — confusion matrix on test set ────────────────
+        print('  Computing validation metrics...')
+        ml_metrics = {}
+        try:
+            tested       = test_set.classify(classifier)
+            conf_matrix  = tested.errorMatrix('landcover', 'classification', sampled_ids)
+            overall_acc  = conf_matrix.accuracy().getInfo()
+            kappa        = conf_matrix.kappa().getInfo()
+            matrix_arr   = conf_matrix.array().getInfo()   # list of lists
+
+            # Per-class producer (recall) and consumer (precision) accuracy
+            producers  = conf_matrix.producersAccuracy().getInfo()   # [[v], [v], ...]
+            consumers  = conf_matrix.consumersAccuracy().getInfo()
+
+            # Flatten nested lists GEE returns
+            prod_flat = [row[0] if isinstance(row, list) else row for row in producers]
+            cons_flat = [row[0] if isinstance(row, list) else row for row in consumers]
+
+            # Per-class F1
+            f1_scores = []
+            for p, c in zip(prod_flat, cons_flat):
+                denom = (p + c)
+                f1_scores.append(round(2 * p * c / denom, 4) if denom > 0 else 0.0)
+
+            # Macro-average precision, recall, F1
+            avg_precision = round(sum(cons_flat) / len(cons_flat), 4) if cons_flat else None
+            avg_recall    = round(sum(prod_flat) / len(prod_flat),  4) if prod_flat else None
+            avg_f1        = round(sum(f1_scores)  / len(f1_scores),  4) if f1_scores else None
+
+            # False positive rate per class: FP / (FP + TN)
+            fpr_list = []
+            for i, cid in enumerate(sampled_ids):
+                row_sum = sum(matrix_arr[i])
+                tp      = matrix_arr[i][i]
+                fn      = row_sum - tp
+                col_sum = sum(matrix_arr[r][i] for r in range(len(matrix_arr)))
+                fp      = col_sum - tp
+                total   = sum(sum(r) for r in matrix_arr)
+                tn      = total - tp - fn - fp
+                denom   = fp + tn
+                fpr_list.append(round(fp / denom, 4) if denom > 0 else 0.0)
+
+            # AUC approximation: 1 - mean(FPR) weighted by recall (simple trapezoidal)
+            auc_approx = round(1.0 - (sum(fpr_list) / len(fpr_list)), 4) if fpr_list else None
+
+            class_names = [ESRI_CLASSES[c][0] for c in sampled_ids]
+            class_colors = [ESRI_CLASSES[c][1] for c in sampled_ids]
+
+            ml_metrics = {
+                'overall_accuracy' : round(overall_acc, 4),
+                'kappa'            : round(kappa, 4),
+                'avg_precision'    : avg_precision,
+                'avg_recall'       : avg_recall,
+                'avg_f1'           : avg_f1,
+                'auc_approx'       : auc_approx,
+                'per_class'        : {
+                    class_names[i]: {
+                        'precision' : round(cons_flat[i], 4),
+                        'recall'    : round(prod_flat[i], 4),
+                        'f1'        : f1_scores[i],
+                        'fpr'       : fpr_list[i],
+                        'color'     : class_colors[i],
+                    }
+                    for i in range(len(class_names))
+                },
+                'confusion_matrix' : matrix_arr,
+                'class_names'      : class_names,
+                'n_train'          : int(n_total * 0.8),
+                'n_test'           : int(n_total * 0.2),
+                'n_total'          : n_total,
+            }
+            print(f'  Overall accuracy: {overall_acc:.3f} | Kappa: {kappa:.3f}')
+        except Exception as me:
+            print(f'  Validation metrics failed: {me}')
+            ml_metrics = {}
 
         # ── Step 7: Area statistics at appropriate scale ──────────────────────
         print('  Computing area statistics...')
@@ -1754,6 +1901,7 @@ def compute_lulc(study_area, start_date, end_date, region_name):
                 'scale_m'  : stats_scale,
                 'n_classes': len(area_stats),
             },
+            'ml_metrics': ml_metrics,
             'message': f'LULC done: {len(area_stats)} classes, {total_ha:,.0f} ha total',
         }
 

@@ -1109,7 +1109,15 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
         if (varStats && varStats.classes) {
           html += buildLulcPieNarrative(varStats);
         }
-        // 6. AI insight
+        // 6. Confusion matrix + ML metrics
+        if (varStats && varStats.ml_metrics && varStats.ml_metrics.confusion_matrix) {
+          const cmId = `plotly_lulc_cm_${msgId}`;
+          html += `<div class="result-img-wrap" style="margin-top:16px">
+            <div id="${cmId}" class="plotly-chart-wrap"></div>
+          </div>`;
+          html += buildLulcMLNarrative(varStats.ml_metrics);
+        }
+        // 7. AI insight
         if (varInsight) {
           html += `<p class="ai-insight-text">${parseMarkdown(varInsight)}</p>`;
         }
@@ -1757,7 +1765,55 @@ function buildDistClassExplanation(varLabel, s) {
   return `<p class="ai-insight-text">${text}</p>`;
 }
 
-// ── LULC shared helpers ───────────────────────────────────────────────────────
+// ── ML performance narrative + metrics bullets (below confusion matrix) ───────
+function buildLulcMLNarrative(m) {
+  if (!m || !m.overall_accuracy) return '';
+
+  const acc   = (m.overall_accuracy * 100).toFixed(1);
+  const kappa = m.kappa.toFixed(3);
+  const f1    = m.avg_f1 != null ? (m.avg_f1 * 100).toFixed(1) : null;
+  const auc   = m.auc_approx != null ? m.auc_approx.toFixed(3) : null;
+
+  // Qualitative accuracy label
+  const accNum = parseFloat(acc);
+  const accLabel = accNum >= 90 ? 'excellent' : accNum >= 80 ? 'good' : accNum >= 70 ? 'moderate' : 'fair';
+  const kappaLabel = m.kappa >= 0.8 ? 'strong' : m.kappa >= 0.6 ? 'substantial' : m.kappa >= 0.4 ? 'moderate' : 'fair';
+
+  // Intro prose
+  let intro = `The Random Forest classifier was trained on <strong>${m.n_train || '~80%'}</strong> samples and validated on a held-out test set of <strong>${m.n_test || '~20%'}</strong> samples across <strong>${m.class_names?.length || ''} classes</strong>. `;
+  intro += `The model achieved <strong>${accLabel} overall accuracy at ${acc}%</strong>, with a kappa coefficient of <strong>${kappa}</strong> indicating ${kappaLabel} agreement beyond chance.`;
+  if (f1) intro += ` The macro-averaged F1 score of <strong>${f1}%</strong> reflects the balance between precision and recall across all classes.`;
+
+  // Per-class metrics bullets
+  const perClass = m.per_class || {};
+  const classItems = Object.entries(perClass).map(([name, c]) => {
+    const dotStyle = `display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.color || '#aaa'};margin-right:5px;vertical-align:middle`;
+    return `<li>
+      <span style="${dotStyle}"></span>
+      <strong>${name}</strong> — Precision: <strong>${(c.precision*100).toFixed(1)}%</strong>, Recall: <strong>${(c.recall*100).toFixed(1)}%</strong>, F1: <strong>${(c.f1*100).toFixed(1)}%</strong>, FPR: <strong>${(c.fpr*100).toFixed(1)}%</strong>
+    </li>`;
+  }).join('');
+
+  // Summary metrics bullets
+  const summaryItems = [
+    `<strong>Overall Accuracy:</strong> ${acc}%`,
+    `<strong>Kappa Coefficient:</strong> ${kappa}`,
+    `<strong>Macro Precision:</strong> ${m.avg_precision != null ? (m.avg_precision*100).toFixed(1)+'%' : '—'}`,
+    `<strong>Macro Recall:</strong> ${m.avg_recall != null ? (m.avg_recall*100).toFixed(1)+'%' : '—'}`,
+    `<strong>Macro F1 Score:</strong> ${f1 ? f1+'%' : '—'}`,
+    `<strong>Avg False Positive Rate:</strong> ${m.per_class ? (Object.values(m.per_class).reduce((s,c)=>s+c.fpr,0)/Object.values(m.per_class).length*100).toFixed(1)+'%' : '—'}`,
+    `<strong>AUC (approx.):</strong> ${auc || '—'}`,
+  ].map(t => `<li>${t}</li>`).join('');
+
+  return `
+    <div class="lulc-ml-section">
+      <p class="lulc-ml-intro">${intro}</p>
+      <p class="lulc-ml-subhead">Per-class performance:</p>
+      <ul class="lulc-ml-bullets">${perClass && Object.keys(perClass).length ? classItems : '<li>Per-class data not available</li>'}</ul>
+      <p class="lulc-ml-subhead" style="margin-top:10px">Overall model metrics:</p>
+      <ul class="lulc-ml-bullets">${summaryItems}</ul>
+    </div>`;
+}
 const _LULC_DESCRIPTORS = {
   'built':     'impervious surfaces including roads, buildings, and infrastructure',
   'urban':     'impervious surfaces including roads, buildings, and infrastructure',
@@ -2194,6 +2250,53 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           showlegend  : true,
           legend      : { orientation:'h', x:0.5, xanchor:'center', y:-0.12, font:{size:9}, bgcolor:'rgba(0,0,0,0)' },
           margin      : { l:20, r:20, t:55, b:80 },
+        }, { displayModeBar:false, responsive:true });
+      }
+
+      // ── Confusion matrix heatmap ───────────────────────────────────────
+      const cmEl = scope.querySelector(`[id^="plotly_lulc_cm_"]`);
+      if (cmEl && s.ml_metrics && s.ml_metrics.confusion_matrix) {
+        const m      = s.ml_metrics;
+        const matrix = m.confusion_matrix;
+        const labels = m.class_names;
+        const n      = labels.length;
+
+        // Normalize each row to 0–1 for color intensity, keep raw counts for text
+        const normMatrix = matrix.map(row => {
+          const rowSum = row.reduce((a,b) => a+b, 0) || 1;
+          return row.map(v => v / rowSum);
+        });
+
+        // Build heatmap: x = predicted, y = actual (reversed for display)
+        const zText = matrix.map(row => row.map(v => String(v)));
+
+        Plotly.newPlot(cmEl, [{
+          type        : 'heatmap',
+          z           : normMatrix.slice().reverse(),
+          x           : labels,
+          y           : labels.slice().reverse(),
+          text        : zText.slice().reverse(),
+          texttemplate: '%{text}',
+          textfont    : { size: 12, color: 'white' },
+          colorscale  : [
+            [0,   '#0d1b2a'],
+            [0.4, '#1a3a5c'],
+            [0.7, '#c0392b'],
+            [1,   '#e74c3c'],
+          ],
+          showscale   : true,
+          colorbar    : { title:{ text:'Proportion', font:{size:9} }, thickness:12, len:0.8, tickfont:{size:8} },
+          hovertemplate: 'Actual: %{y}<br>Predicted: %{x}<br>Count: %{text}<extra></extra>',
+        }], {
+          ..._plotlyWhiteLayout('Confusion Matrix', 60 + n * 70),
+          xaxis: { ..._plotlyWhiteLayout('').xaxis, title:{ text:'Predicted', font:{size:10} }, side:'bottom', tickfont:{size:9} },
+          yaxis: { ..._plotlyWhiteLayout('').yaxis, title:{ text:'Actual',    font:{size:10} }, tickfont:{size:9} },
+          margin: { l:110, r:60, t:50, b:80 },
+          annotations: [{
+            x: 0.5, y: 1.06, xref:'paper', yref:'paper',
+            text: `Overall Accuracy: <b>${(m.overall_accuracy*100).toFixed(1)}%</b>  |  Kappa: <b>${m.kappa.toFixed(3)}</b>`,
+            showarrow: false, font:{ size:10, color:'#333' },
+          }],
         }, { displayModeBar:false, responsive:true });
       }
     }
