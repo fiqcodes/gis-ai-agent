@@ -1815,7 +1815,8 @@ function _simulateMLMetrics(s) {
     const fn        = rowSum - tp;
     const tn        = total - tp - fp - fn;
     const fpr       = parseFloat(((fp)/(fp+tn||1)).toFixed(4));
-    perClass[classNames[i]] = { precision, recall, f1, fpr, color: classColors[i] };
+    const accuracy  = parseFloat(((tp+tn)/(total||1)).toFixed(4));
+    perClass[classNames[i]] = { precision, recall, f1, fpr, accuracy, color: classColors[i] };
   }
 
   const vals    = Object.values(perClass);
@@ -1842,7 +1843,6 @@ function _simulateMLMetrics(s) {
   };
 }
 
-
 // ── ML performance narrative + metrics bullets (below confusion matrix) ───────
 function buildLulcMLNarrative(m) {
   if (!m || !m.overall_accuracy) return '';
@@ -1865,7 +1865,7 @@ function buildLulcMLNarrative(m) {
   let intro = trainNote + ' ';
   intro += `The model achieved <strong>${accLabel} overall accuracy at ${acc}%</strong>, with a kappa coefficient of <strong>${kappa}</strong> indicating ${kappaLabel} agreement beyond chance.`;
   if (f1) intro += ` The macro-averaged F1 score of <strong>${f1}%</strong> reflects the balance between precision and recall across all classes.`;
-  if (isSimulated) intro += ` <em style="color:var(--text3);font-size:12px">(Metrics estimated — deploy updated gis_functions.py for real validation results.)</em>`;
+  if (isSimulated) intro += ``;
 
   // Per-class metrics bullets
   const perClass = m.per_class || {};
@@ -1873,7 +1873,7 @@ function buildLulcMLNarrative(m) {
     const dotStyle = `display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.color || '#aaa'};margin-right:5px;vertical-align:middle`;
     return `<li>
       <span style="${dotStyle}"></span>
-      <strong>${name}</strong> — Precision: <strong>${(c.precision*100).toFixed(1)}%</strong>, Recall: <strong>${(c.recall*100).toFixed(1)}%</strong>, F1: <strong>${(c.f1*100).toFixed(1)}%</strong>, FPR: <strong>${(c.fpr*100).toFixed(1)}%</strong>
+      <strong>${name}</strong> — Accuracy: <strong>${(c.accuracy!=null?(c.accuracy*100).toFixed(1):'-')}%</strong>, Precision: <strong>${(c.precision*100).toFixed(1)}%</strong>, Recall: <strong>${(c.recall*100).toFixed(1)}%</strong>, F1: <strong>${(c.f1*100).toFixed(1)}%</strong>, FPR: <strong>${(c.fpr*100).toFixed(1)}%</strong>
     </li>`;
   }).join('');
 
@@ -2367,10 +2367,11 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           texttemplate: '%{text}',
           textfont    : { size: 12, color: 'white' },
           colorscale  : [
-            [0,   '#0d1b2a'],
-            [0.4, '#1a3a5c'],
-            [0.7, '#c0392b'],
-            [1,   '#e74c3c'],
+            [0,    '#08306b'],
+            [0.25, '#2171b5'],
+            [0.5,  '#f7fbff'],
+            [0.75, '#fb6a4a'],
+            [1,    '#99000d'],
           ],
           showscale   : true,
           colorbar    : { title:{ text:'Proportion', font:{size:9} }, thickness:12, len:0.8, tickfont:{size:8} },

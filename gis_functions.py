@@ -1790,6 +1790,7 @@ def compute_lulc(study_area, start_date, end_date, region_name):
             class_names = [ESRI_CLASSES[c][0] for c in sampled_ids]
             class_colors = [ESRI_CLASSES[c][1] for c in sampled_ids]
 
+            total_samples = sum(sum(row) for row in matrix_arr)
             ml_metrics = {
                 'overall_accuracy' : round(overall_acc, 4),
                 'kappa'            : round(kappa, 4),
@@ -1804,6 +1805,11 @@ def compute_lulc(study_area, start_date, end_date, region_name):
                         'f1'        : f1_scores[i],
                         'fpr'       : fpr_list[i],
                         'color'     : class_colors[i],
+                        'accuracy'  : round(
+                            (matrix_arr[i][i] + total_samples
+                             - sum(matrix_arr[i])
+                             - sum(matrix_arr[r][i] for r in range(len(matrix_arr)))
+                             + matrix_arr[i][i]) / (total_samples or 1), 4),
                     }
                     for i in range(len(class_names))
                 },
