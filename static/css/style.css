@@ -1268,12 +1268,12 @@ html, body {
 }
 .lulc-ml-intro strong { color: var(--text); font-weight: 600; }
 .lulc-ml-subhead {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text3);
+  font-size: 13px;
+  color: var(--text);
   font-weight: 600;
   margin: 0 0 6px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .lulc-ml-bullets {
   margin: 0;

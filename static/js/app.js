@@ -1109,16 +1109,16 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
         if (varStats && varStats.classes) {
           html += buildLulcPieNarrative(varStats);
         }
-        // 6. Confusion matrix + ML metrics
+        // 6. ML metrics narrative + bullets first, confusion matrix chart after
         const mlData = (varStats && varStats.ml_metrics && varStats.ml_metrics.confusion_matrix)
           ? varStats.ml_metrics
           : (varStats && varStats.classes ? _simulateMLMetrics(varStats) : null);
         if (mlData) {
+          html += buildLulcMLNarrative(mlData);
           const cmId = `plotly_lulc_cm_${msgId}`;
           html += `<div class="result-img-wrap" style="margin-top:16px">
             <div id="${cmId}" class="plotly-chart-wrap"></div>
           </div>`;
-          html += buildLulcMLNarrative(mlData);
         }
         // 7. AI insight
         if (varInsight) {
@@ -1815,8 +1815,7 @@ function _simulateMLMetrics(s) {
     const fn        = rowSum - tp;
     const tn        = total - tp - fp - fn;
     const fpr       = parseFloat(((fp)/(fp+tn||1)).toFixed(4));
-    const accuracy  = parseFloat(((tp+tn)/(total||1)).toFixed(4));
-    perClass[classNames[i]] = { precision, recall, f1, fpr, accuracy, color: classColors[i] };
+    perClass[classNames[i]] = { precision, recall, f1, fpr, color: classColors[i] };
   }
 
   const vals    = Object.values(perClass);
@@ -1865,7 +1864,7 @@ function buildLulcMLNarrative(m) {
   let intro = trainNote + ' ';
   intro += `The model achieved <strong>${accLabel} overall accuracy at ${acc}%</strong>, with a kappa coefficient of <strong>${kappa}</strong> indicating ${kappaLabel} agreement beyond chance.`;
   if (f1) intro += ` The macro-averaged F1 score of <strong>${f1}%</strong> reflects the balance between precision and recall across all classes.`;
-  if (isSimulated) intro += ``;
+  if (isSimulated) intro += ` <em style="color:var(--text3);font-size:12px">(Metrics estimated — deploy updated gis_functions.py for real validation results.)</em>`;
 
   // Per-class metrics bullets
   const perClass = m.per_class || {};
@@ -1873,7 +1872,7 @@ function buildLulcMLNarrative(m) {
     const dotStyle = `display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.color || '#aaa'};margin-right:5px;vertical-align:middle`;
     return `<li>
       <span style="${dotStyle}"></span>
-      <strong>${name}</strong> — Accuracy: <strong>${(c.accuracy!=null?(c.accuracy*100).toFixed(1):'-')}%</strong>, Precision: <strong>${(c.precision*100).toFixed(1)}%</strong>, Recall: <strong>${(c.recall*100).toFixed(1)}%</strong>, F1: <strong>${(c.f1*100).toFixed(1)}%</strong>, FPR: <strong>${(c.fpr*100).toFixed(1)}%</strong>
+      <strong>${name}</strong> — Precision: <strong>${(c.precision*100).toFixed(1)}%</strong>, Recall: <strong>${(c.recall*100).toFixed(1)}%</strong>, F1: <strong>${(c.f1*100).toFixed(1)}%</strong>, FPR: <strong>${(c.fpr*100).toFixed(1)}%</strong>
     </li>`;
   }).join('');
 
@@ -1891,9 +1890,9 @@ function buildLulcMLNarrative(m) {
   return `
     <div class="lulc-ml-section">
       <p class="lulc-ml-intro">${intro}</p>
-      <p class="lulc-ml-subhead">Per-class performance:</p>
+      <p class="lulc-ml-subhead">Per-class performance</p>
       <ul class="lulc-ml-bullets">${perClass && Object.keys(perClass).length ? classItems : '<li>Per-class data not available</li>'}</ul>
-      <p class="lulc-ml-subhead" style="margin-top:10px">Overall model metrics:</p>
+      <p class="lulc-ml-subhead" style="margin-top:10px">Overall model metrics</p>
       <ul class="lulc-ml-bullets">${summaryItems}</ul>
     </div>`;
 }
@@ -2365,26 +2364,24 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           y           : labels.slice().reverse(),
           text        : zText.slice().reverse(),
           texttemplate: '%{text}',
-          textfont    : { size: 12, color: 'white' },
+          textfont    : { size: 13, color: '#ffffff', family: 'DM Sans' },
           colorscale  : [
-            [0,    '#08306b'],
-            [0.25, '#2171b5'],
-            [0.5,  '#f7fbff'],
-            [0.75, '#fb6a4a'],
-            [1,    '#99000d'],
+            [0,   '#2166ac'],
+            [0.5, '#f7f7f7'],
+            [1,   '#d6604d'],
           ],
           showscale   : true,
-          colorbar    : { title:{ text:'Proportion', font:{size:9} }, thickness:12, len:0.8, tickfont:{size:8} },
+          colorbar    : { title:{ text:'Proportion', font:{size:9} }, thickness:12, len:0.75, tickfont:{size:8} },
           hovertemplate: 'Actual: %{y}<br>Predicted: %{x}<br>Count: %{text}<extra></extra>',
         }], {
-          ..._plotlyWhiteLayout('Confusion Matrix', 60 + n * 70),
-          xaxis: { ..._plotlyWhiteLayout('').xaxis, title:{ text:'Predicted', font:{size:10} }, side:'bottom', tickfont:{size:9} },
-          yaxis: { ..._plotlyWhiteLayout('').yaxis, title:{ text:'Actual',    font:{size:10} }, tickfont:{size:9} },
-          margin: { l:110, r:60, t:50, b:80 },
+          ..._plotlyWhiteLayout('Confusion Matrix', 80 + n * 72),
+          xaxis: { ..._plotlyWhiteLayout('').xaxis, title:{ text:'Predicted', font:{size:10}, standoff:16 }, side:'bottom', tickfont:{size:9}, tickangle: labels.length > 3 ? -30 : 0 },
+          yaxis: { ..._plotlyWhiteLayout('').yaxis, title:{ text:'Actual', font:{size:10}, standoff:16 }, tickfont:{size:9} },
+          margin: { l: 120, r: 80, t: 55, b: labels.length > 3 ? 100 : 75 },
           annotations: [{
-            x: 0.5, y: 1.06, xref:'paper', yref:'paper',
+            x: 0.5, y: 1.07, xref:'paper', yref:'paper',
             text: `Overall Accuracy: <b>${(m.overall_accuracy*100).toFixed(1)}%</b>  |  Kappa: <b>${m.kappa.toFixed(3)}</b>`,
-            showarrow: false, font:{ size:10, color:'#333' },
+            showarrow: false, font:{ size:10, color:'#555' },
           }],
         }, { displayModeBar:false, responsive:true });
         } // end mlRaw
