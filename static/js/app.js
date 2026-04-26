@@ -1843,6 +1843,8 @@ function _simulateMLMetrics(s) {
 }
 
 
+// ── ML performance narrative + metrics bullets (below confusion matrix) ───────
+function buildLulcMLNarrative(m) {
   if (!m || !m.overall_accuracy) return '';
 
   const acc   = (m.overall_accuracy * 100).toFixed(1);
