@@ -2098,6 +2098,7 @@ function _plotlyWhiteLayout(title, height = 320) {
     xaxis: { gridcolor: 'rgba(0,0,0,0.08)', tickcolor: '#999', linecolor: '#ccc', zerolinecolor: '#ccc' },
     yaxis: { gridcolor: 'rgba(0,0,0,0.08)', tickcolor: '#999', linecolor: '#ccc', zerolinecolor: '#ccc' },
     showlegend: false,
+    dragmode: false,
   };
 }
 
@@ -2211,7 +2212,7 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           ..._plotlyWhiteLayout(`${vUp} Monthly Mean`, 310),
           xaxis:{ ..._plotlyWhiteLayout('').xaxis, title:{ text:'Month', font:{size:9} }, tickfont:{size:8} },
           yaxis:{ ..._plotlyWhiteLayout('').yaxis, title:{ text:yLabel, font:{size:9} }, tickfont:{size:8} },
-        }, { displayModeBar:false, responsive:true });
+        }, { displayModeBar:false, responsive:true, dragmode:false });
       }
     }
 
@@ -2256,7 +2257,7 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           xaxis:{ ..._plotlyWhiteLayout('').xaxis, title:{ text:xLabel, font:{size:9} }, tickfont:{size:8} },
           yaxis:{ ..._plotlyWhiteLayout('').yaxis, title:{ text:'Pixel count', font:{size:9} }, tickfont:{size:8} },
           shapes, annotations, bargap:0.05,
-        }, { displayModeBar:false, responsive:true });
+        }, { displayModeBar:false, responsive:true, dragmode:false });
       }
     }
 
@@ -2300,7 +2301,7 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
               ..._plotlyWhiteLayout(`${vUp} class composition`, 310),
               yaxis:{ ..._plotlyWhiteLayout('').yaxis, title:{ text:'Area share (%)', font:{size:9} }, range:[0, Math.max(...classPcts)*1.3], tickfont:{size:8} },
               xaxis:{ ..._plotlyWhiteLayout('').xaxis, title:{ text:def.xlabel, font:{size:9} }, tickfont:{size:8} },
-            }, { displayModeBar:false, responsive:true });
+            }, { displayModeBar:false, responsive:true, dragmode:false });
           }
         }
       }
@@ -2334,7 +2335,7 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           showlegend  : true,
           legend      : { orientation:'h', x:0.5, xanchor:'center', y:-0.12, font:{size:9}, bgcolor:'rgba(0,0,0,0)' },
           margin      : { l:20, r:20, t:55, b:80 },
-        }, { displayModeBar:false, responsive:true });
+        }, { displayModeBar:false, responsive:true, dragmode:false });
       }
 
       // ── Confusion matrix heatmap ───────────────────────────────────────
@@ -2384,7 +2385,7 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
             text: `Overall Accuracy: <b>${(m.overall_accuracy*100).toFixed(1)}%</b>  |  Kappa: <b>${m.kappa.toFixed(3)}</b>`,
             showarrow: false, font:{ size:10, color:'#555' },
           }],
-        }, { displayModeBar:false, responsive:true });
+        }, { displayModeBar:false, responsive:true, dragmode:false });
         } // end mlRaw
       } // end cmEl
     }
@@ -2409,6 +2410,7 @@ function plotlyConfig() {
   return {
     displayModeBar: false,
     responsive    : true,
+    dragmode      : false,
   };
 }
 

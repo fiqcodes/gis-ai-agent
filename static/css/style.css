@@ -1297,6 +1297,12 @@ html, body {
   background: #ffffff;
   border-radius: 8px;
   overflow: hidden;
+  cursor: pointer;
+}
+
+.plotly-chart-wrap .nsewdrag,
+.plotly-chart-wrap .drag {
+  cursor: pointer !important;
 }
 
 .class-breakdown-bullets {
