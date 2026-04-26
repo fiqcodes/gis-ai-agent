@@ -1109,16 +1109,16 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
         if (varStats && varStats.classes) {
           html += buildLulcPieNarrative(varStats);
         }
-        // 6. ML metrics narrative + bullets first, confusion matrix chart after
+        // 6. Confusion matrix chart first, then ML metrics narrative + bullets after
         const mlData = (varStats && varStats.ml_metrics && varStats.ml_metrics.confusion_matrix)
           ? varStats.ml_metrics
           : (varStats && varStats.classes ? _simulateMLMetrics(varStats) : null);
         if (mlData) {
-          html += buildLulcMLNarrative(mlData);
           const cmId = `plotly_lulc_cm_${msgId}`;
           html += `<div class="result-img-wrap" style="margin-top:16px">
             <div id="${cmId}" class="plotly-chart-wrap"></div>
           </div>`;
+          html += buildLulcMLNarrative(mlData);
         }
         // 7. AI insight
         if (varInsight) {
@@ -1864,7 +1864,7 @@ function buildLulcMLNarrative(m) {
   let intro = trainNote + ' ';
   intro += `The model achieved <strong>${accLabel} overall accuracy at ${acc}%</strong>, with a kappa coefficient of <strong>${kappa}</strong> indicating ${kappaLabel} agreement beyond chance.`;
   if (f1) intro += ` The macro-averaged F1 score of <strong>${f1}%</strong> reflects the balance between precision and recall across all classes.`;
-  if (isSimulated) intro += ` <em style="color:var(--text3);font-size:12px">(Metrics estimated — deploy updated gis_functions.py for real validation results.)</em>`;
+
 
   // Per-class metrics bullets
   const perClass = m.per_class || {};
