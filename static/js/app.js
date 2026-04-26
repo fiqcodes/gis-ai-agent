@@ -1815,7 +1815,8 @@ function _simulateMLMetrics(s) {
     const fn        = rowSum - tp;
     const tn        = total - tp - fp - fn;
     const fpr       = parseFloat(((fp)/(fp+tn||1)).toFixed(4));
-    perClass[classNames[i]] = { precision, recall, f1, fpr, color: classColors[i] };
+    const accuracy  = parseFloat(((tp+tn)/(total||1)).toFixed(4));
+    perClass[classNames[i]] = { precision, recall, f1, fpr, accuracy, color: classColors[i] };
   }
 
   const vals    = Object.values(perClass);
@@ -1872,7 +1873,7 @@ function buildLulcMLNarrative(m) {
     const dotStyle = `display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.color || '#aaa'};margin-right:5px;vertical-align:middle`;
     return `<li>
       <span style="${dotStyle}"></span>
-      <strong>${name}</strong> — Precision: <strong>${(c.precision*100).toFixed(1)}%</strong>, Recall: <strong>${(c.recall*100).toFixed(1)}%</strong>, F1: <strong>${(c.f1*100).toFixed(1)}%</strong>, FPR: <strong>${(c.fpr*100).toFixed(1)}%</strong>
+      <strong>${name}</strong> — Accuracy: <strong>${c.accuracy != null ? (c.accuracy*100).toFixed(1)+'%' : '—'}</strong>, Precision: <strong>${(c.precision*100).toFixed(1)}%</strong>, Recall: <strong>${(c.recall*100).toFixed(1)}%</strong>, F1: <strong>${(c.f1*100).toFixed(1)}%</strong>, FPR: <strong>${(c.fpr*100).toFixed(1)}%</strong>
     </li>`;
   }).join('');
 
