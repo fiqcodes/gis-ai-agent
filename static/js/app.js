@@ -2241,10 +2241,11 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           textinfo  : 'percent',
           textfont  : { color: 'white', size: 11, family: 'DM Sans' },
           insidetextorientation: 'radial',
+          texttemplate: pcts.map(p => p < 5 ? '' : '%{percent:.1%}'),
           startangle: 140,
           direction : 'clockwise',
           pull      : pcts.map((_,i) => i === 0 ? 0.04 : 0),
-          hovertemplate: '%{label}<br>%{percent:.1%}<extra></extra>',
+          hovertemplate: '<b>%{label}</b><br>%{percent:.1%}<extra></extra>',
         }], {
           ..._plotlyWhiteLayout(`Land Cover Distribution<br><sup>Total: ${total.toLocaleString()} ha</sup>`, 420),
           showlegend  : true,
