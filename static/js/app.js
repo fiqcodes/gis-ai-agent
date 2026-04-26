@@ -1095,21 +1095,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
         if (varStats && varStats.classes) {
           html += buildLulcExplanation(varStats);
         }
-        // 4. Pie chart — Plotly interactive
-        if (fig.charts && fig.charts.length > 0) {
-          const lulcPie = fig.charts.find(c => c[0] === 'lulc_pie');
-          if (lulcPie) {
-            const pieId = `plotly_lulc_pie_${msgId}`;
-            html += `<div class="result-img-wrap">
-              <div id="${pieId}" class="plotly-chart-wrap"></div>
-            </div>`;
-          }
-        }
-        // 5. Pie prose narrative — right below the pie chart
-        if (varStats && varStats.classes) {
-          html += buildLulcPieNarrative(varStats);
-        }
-        // 6. Confusion matrix chart first, then ML metrics narrative + bullets after
+        // 4. Confusion matrix chart + ML narrative — right after bullets, before pie
         const mlData = (varStats && varStats.ml_metrics && varStats.ml_metrics.confusion_matrix)
           ? varStats.ml_metrics
           : (varStats && varStats.classes ? _simulateMLMetrics(varStats) : null);
@@ -1119,6 +1105,20 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
             <div id="${cmId}" class="plotly-chart-wrap"></div>
           </div>`;
           html += buildLulcMLNarrative(mlData);
+        }
+        // 5. Pie chart — Plotly interactive
+        if (fig.charts && fig.charts.length > 0) {
+          const lulcPie = fig.charts.find(c => c[0] === 'lulc_pie');
+          if (lulcPie) {
+            const pieId = `plotly_lulc_pie_${msgId}`;
+            html += `<div class="result-img-wrap">
+              <div id="${pieId}" class="plotly-chart-wrap"></div>
+            </div>`;
+          }
+        }
+        // 6. Pie prose narrative — right below the pie chart
+        if (varStats && varStats.classes) {
+          html += buildLulcPieNarrative(varStats);
         }
         // 7. AI insight
         if (varInsight) {
