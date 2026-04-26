@@ -739,6 +739,8 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 lulc_result = compute_lulc(study_area_lulc, start_date, end_date, region_name)
                 if lulc_result['success']:
                     all_stats['LULC'] = lulc_result['stats']
+                    if lulc_result.get('ml_metrics'):
+                        all_stats['LULC']['ml_metrics'] = lulc_result['ml_metrics']
                     lulc_vis     = lulc_result['vis_params']
                     lulc_clipped = lulc_result['lulc_img'].clip(study_area_lulc)
                     if 'sld_style' in lulc_vis:
