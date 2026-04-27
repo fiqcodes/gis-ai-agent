@@ -1274,8 +1274,35 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           // ── 4 findings ───────────────────────────────────────────────────────
           findingItems += `<div class="concl-finding-item">Mean ${vUp} across the ROI: <strong class="fv-cyan">${s.mean.toFixed(3)}</strong></div>`;
           findingItems += `<div class="concl-finding-item">Vegetation condition classified as <strong class="f${vegColor.slice(1)}">${vegClass}</strong></div>`;
-          if (s.p10 != null && s.p90 != null) findingItems += `<div class="concl-finding-item">Spatial range: P10 = <strong class="fv-amber">${s.p10.toFixed(3)}</strong> → P90 = <strong class="fv-green">${s.p90.toFixed(3)}</strong></div>`;
-          if (s.std != null) findingItems += `<div class="concl-finding-item">Std deviation of <strong class="fv-cyan">${s.std.toFixed(3)}</strong> indicates ${s.std > 0.15 ? 'high spatial variability in vegetation cover' : 'relatively uniform vegetation distribution'}</div>`;
+          // Class-based findings: show top classes by ha + %
+          {
+            const ndviClassDef = Object.entries(_CLASS_DEFS).find(([k]) => vUp.includes(k))?.[1];
+            const totalHa = s.total_ha || null;
+            let classPcts = [], classLabels = [];
+            if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
+              for (const [lbl, pct] of Object.entries(s.class_pcts)) {
+                if (pct < 0.5) continue;
+                classPcts.push(parseFloat(pct.toFixed(1)));
+                classLabels.push(lbl);
+              }
+            } else if (ndviClassDef && s.std != null) {
+              const mean = s.mean, std = Math.max(s.std, 0.001);
+              const phi = x => 0.5 * (1 + Math.sign(x) * Math.sqrt(1 - Math.exp(-Math.PI * x * x / 2)));
+              for (let i = 0; i < ndviClassDef.bounds.length - 1; i++) {
+                const p = Math.max(0, Math.min(100, (phi((ndviClassDef.bounds[i+1]-mean)/std) - phi((ndviClassDef.bounds[i]-mean)/std)) * 100));
+                if (p < 0.5) continue;
+                classPcts.push(parseFloat(p.toFixed(1)));
+                classLabels.push(ndviClassDef.labels[i].replace(/\n/g,' '));
+              }
+            }
+            // Sort descending by pct, show all classes
+            const sorted = classLabels.map((lbl,i) => [lbl, classPcts[i]]).sort((a,b) => b[1]-a[1]);
+            const fvColors = ['fv-green','fv-cyan','fv-amber','fv-pink'];
+            sorted.forEach(([lbl, pct], idx) => {
+              const haStr = totalHa ? ` (~<strong>${Math.round(totalHa * pct / 100).toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item"><strong class="${fvColors[idx % fvColors.length]}">${lbl}</strong>: <strong>${pct.toFixed(1)}%</strong>${haStr}</div>`;
+            });
+          }
         } else if (vUp === 'LST' && s.mean != null) {
           // ── Thermal class derived from mean LST ──────────────────────────────
           let thermalClass, thermalColor;
@@ -1292,9 +1319,35 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           chips += `<div class="concl-chip"><div class="concl-chip-label">Thermal Class</div><div class="concl-chip-value ${thermalColor}">${thermalClass}</div></div>`;
           // ── 4 findings ───────────────────────────────────────────────────────
           findingItems += `<div class="concl-finding-item">Mean surface temperature: <strong class="fv-amber">${s.mean.toFixed(1)}°C</strong></div>`;
-          if (s.max != null) findingItems += `<div class="concl-finding-item">Peak temperature recorded: <strong class="fv-pink">${s.max.toFixed(1)}°C</strong></div>`;
-          if (s.min != null) findingItems += `<div class="concl-finding-item">Coolest zone recorded: <strong class="fv-cyan">${s.min.toFixed(1)}°C</strong>${s.p10 != null ? ` (P10: ${s.p10.toFixed(1)}°C)` : ''}</div>`;
-          if (s.p10 != null && s.p90 != null) findingItems += `<div class="concl-finding-item">Thermal spread: P10 = <strong class="fv-cyan">${s.p10.toFixed(1)}°C</strong> → P90 = <strong class="fv-pink">${s.p90.toFixed(1)}°C</strong></div>`;
+          findingItems += `<div class="concl-finding-item">Thermal class: <strong class="${thermalColor.replace('cv-','fv-')}">${thermalClass}</strong></div>`;
+          // Class-based findings: show all LST classes by ha + %
+          {
+            const lstClassDef = Object.entries(_CLASS_DEFS).find(([k]) => k === 'LST')?.[1];
+            const totalHa = s.total_ha || null;
+            let classPcts = [], classLabels = [];
+            if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
+              for (const [lbl, pct] of Object.entries(s.class_pcts)) {
+                if (pct < 0.5) continue;
+                classPcts.push(parseFloat(pct.toFixed(1)));
+                classLabels.push(lbl);
+              }
+            } else if (lstClassDef && s.std != null) {
+              const mean = s.mean, std = Math.max(s.std, 0.001);
+              const phi = x => 0.5 * (1 + Math.sign(x) * Math.sqrt(1 - Math.exp(-Math.PI * x * x / 2)));
+              for (let i = 0; i < lstClassDef.bounds.length - 1; i++) {
+                const p = Math.max(0, Math.min(100, (phi((lstClassDef.bounds[i+1]-mean)/std) - phi((lstClassDef.bounds[i]-mean)/std)) * 100));
+                if (p < 0.5) continue;
+                classPcts.push(parseFloat(p.toFixed(1)));
+                classLabels.push(lstClassDef.labels[i].replace(/\n/g,' '));
+              }
+            }
+            const sorted = classLabels.map((lbl,i) => [lbl, classPcts[i]]).sort((a,b) => b[1]-a[1]);
+            const fvColors = ['fv-pink','fv-amber','fv-cyan','fv-green'];
+            sorted.forEach(([lbl, pct], idx) => {
+              const haStr = totalHa ? ` (~<strong>${Math.round(totalHa * pct / 100).toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item"><strong class="${fvColors[idx % fvColors.length]}">${lbl}</strong>: <strong>${pct.toFixed(1)}%</strong>${haStr}</div>`;
+            });
+          }
         } else if (s.mean != null) {
           chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value cv-cyan">${s.mean.toFixed(4)}</div></div>`;
           findingItems += `<div class="concl-finding-item">Mean ${vUp}: <strong class="fv-cyan">${s.mean.toFixed(4)}</strong></div>`;
@@ -2290,10 +2343,15 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           }
 
           if (classPcts.length > 0) {
+            const totalHa = s.total_ha || null;
+            const barText = classPcts.map(p => {
+              const haStr = totalHa ? `\n~${Math.round(totalHa * p / 100).toLocaleString()} ha` : '';
+              return `${p.toFixed(1)}%${haStr}`;
+            });
             Plotly.newPlot(el, [{
               type:'bar', x:classLabels, y:classPcts,
               marker:{ color:classColors, line:{ color:'white', width:0.5 } },
-              text: classPcts.map(p => `${p.toFixed(1)}%`),
+              text: barText,
               textposition:'outside',
               textfont:{ color:'#333', size:9 },
               width: 0.5,
