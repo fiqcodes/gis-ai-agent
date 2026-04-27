@@ -1274,33 +1274,31 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           // ── 4 findings ───────────────────────────────────────────────────────
           findingItems += `<div class="concl-finding-item">Mean ${vUp} across the ROI: <strong class="fv-cyan">${s.mean.toFixed(3)}</strong></div>`;
           findingItems += `<div class="concl-finding-item">Vegetation condition classified as <strong class="f${vegColor.slice(1)}">${vegClass}</strong></div>`;
-          // Class-based findings: show top classes by ha + %
+          // Class-based findings with real ha from backend
           {
-            const ndviClassDef = Object.entries(_CLASS_DEFS).find(([k]) => vUp.includes(k))?.[1];
-            const totalHa = s.total_ha || null;
-            let classPcts = [], classLabels = [];
-            if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
-              for (const [lbl, pct] of Object.entries(s.class_pcts)) {
-                if (pct < 0.5) continue;
-                classPcts.push(parseFloat(pct.toFixed(1)));
-                classLabels.push(lbl);
+            const _cpNdvi = s.class_pcts || {};
+            const _ndviDef = Object.entries(_CLASS_DEFS).find(([k]) => vUp.includes(k))?.[1];
+            let _totalHa = _cpNdvi['__total_ha__'] ?? s.total_ha ?? null;
+            let _rows = [];
+            if (Object.keys(_cpNdvi).filter(k => k !== '__total_ha__').length > 0) {
+              for (const [lbl, val] of Object.entries(_cpNdvi)) {
+                if (lbl === '__total_ha__') continue;
+                const pct = typeof val === 'object' ? val.pct : val;
+                const ha  = typeof val === 'object' ? val.ha  : (_totalHa ? Math.round(_totalHa * pct / 100) : null);
+                if (pct >= 0.5) _rows.push([lbl, pct, ha]);
               }
-            } else if (ndviClassDef && s.std != null) {
-              const mean = s.mean, std = Math.max(s.std, 0.001);
-              const phi = x => 0.5 * (1 + Math.sign(x) * Math.sqrt(1 - Math.exp(-Math.PI * x * x / 2)));
-              for (let i = 0; i < ndviClassDef.bounds.length - 1; i++) {
-                const p = Math.max(0, Math.min(100, (phi((ndviClassDef.bounds[i+1]-mean)/std) - phi((ndviClassDef.bounds[i]-mean)/std)) * 100));
-                if (p < 0.5) continue;
-                classPcts.push(parseFloat(p.toFixed(1)));
-                classLabels.push(ndviClassDef.labels[i].replace(/\n/g,' '));
+            } else if (_ndviDef && s.std != null) {
+              const _phi = x => 0.5*(1+Math.sign(x)*Math.sqrt(1-Math.exp(-Math.PI*x*x/2)));
+              for (let i = 0; i < _ndviDef.bounds.length-1; i++) {
+                const p = Math.max(0,Math.min(100,(_phi((_ndviDef.bounds[i+1]-s.mean)/Math.max(s.std,0.001))-_phi((_ndviDef.bounds[i]-s.mean)/Math.max(s.std,0.001)))*100));
+                if (p >= 0.5) _rows.push([_ndviDef.labels[i].replace(/\n/g,' '), p, _totalHa ? Math.round(_totalHa*p/100) : null]);
               }
             }
-            // Sort descending by pct, show all classes
-            const sorted = classLabels.map((lbl,i) => [lbl, classPcts[i]]).sort((a,b) => b[1]-a[1]);
-            const fvColors = ['fv-green','fv-cyan','fv-amber','fv-pink'];
-            sorted.forEach(([lbl, pct], idx) => {
-              const haStr = totalHa ? ` (~<strong>${Math.round(totalHa * pct / 100).toLocaleString()} ha</strong>)` : '';
-              findingItems += `<div class="concl-finding-item"><strong class="${fvColors[idx % fvColors.length]}">${lbl}</strong>: <strong>${pct.toFixed(1)}%</strong>${haStr}</div>`;
+            _rows.sort((a,b) => b[1]-a[1]);
+            const _ndviColors = ['fv-green','fv-cyan','fv-amber','fv-pink'];
+            _rows.forEach(([lbl,pct,ha],i) => {
+              const haStr = ha ? ` (~<strong>${ha.toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item"><strong class="${_ndviColors[i%_ndviColors.length]}">${lbl}</strong>: <strong>${pct.toFixed(1)}%</strong>${haStr}</div>`;
             });
           }
         } else if (vUp === 'LST' && s.mean != null) {
@@ -1317,35 +1315,33 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           chips += `<div class="concl-chip"><div class="concl-chip-label">Max LST</div><div class="concl-chip-value cv-pink">${s.max != null ? s.max.toFixed(1) + '°C' : '—'}</div></div>`;
           chips += `<div class="concl-chip"><div class="concl-chip-label">Min LST</div><div class="concl-chip-value cv-cyan">${s.min != null ? s.min.toFixed(1) + '°C' : '—'}</div></div>`;
           chips += `<div class="concl-chip"><div class="concl-chip-label">Thermal Class</div><div class="concl-chip-value ${thermalColor}">${thermalClass}</div></div>`;
-          // ── 4 findings ───────────────────────────────────────────────────────
+          // ── findings: mean + thermal class + all classes with ha ─────────────
           findingItems += `<div class="concl-finding-item">Mean surface temperature: <strong class="fv-amber">${s.mean.toFixed(1)}°C</strong></div>`;
           findingItems += `<div class="concl-finding-item">Thermal class: <strong class="${thermalColor.replace('cv-','fv-')}">${thermalClass}</strong></div>`;
-          // Class-based findings: show all LST classes by ha + %
           {
-            const lstClassDef = Object.entries(_CLASS_DEFS).find(([k]) => k === 'LST')?.[1];
-            const totalHa = s.total_ha || null;
-            let classPcts = [], classLabels = [];
-            if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
-              for (const [lbl, pct] of Object.entries(s.class_pcts)) {
-                if (pct < 0.5) continue;
-                classPcts.push(parseFloat(pct.toFixed(1)));
-                classLabels.push(lbl);
+            const _cpLst = s.class_pcts || {};
+            const _lstDef = Object.entries(_CLASS_DEFS).find(([k]) => k === 'LST')?.[1];
+            let _totalHa = _cpLst['__total_ha__'] ?? s.total_ha ?? null;
+            let _rows = [];
+            if (Object.keys(_cpLst).filter(k => k !== '__total_ha__').length > 0) {
+              for (const [lbl, val] of Object.entries(_cpLst)) {
+                if (lbl === '__total_ha__') continue;
+                const pct = typeof val === 'object' ? val.pct : val;
+                const ha  = typeof val === 'object' ? val.ha  : (_totalHa ? Math.round(_totalHa * pct / 100) : null);
+                if (pct >= 0.5) _rows.push([lbl, pct, ha]);
               }
-            } else if (lstClassDef && s.std != null) {
-              const mean = s.mean, std = Math.max(s.std, 0.001);
-              const phi = x => 0.5 * (1 + Math.sign(x) * Math.sqrt(1 - Math.exp(-Math.PI * x * x / 2)));
-              for (let i = 0; i < lstClassDef.bounds.length - 1; i++) {
-                const p = Math.max(0, Math.min(100, (phi((lstClassDef.bounds[i+1]-mean)/std) - phi((lstClassDef.bounds[i]-mean)/std)) * 100));
-                if (p < 0.5) continue;
-                classPcts.push(parseFloat(p.toFixed(1)));
-                classLabels.push(lstClassDef.labels[i].replace(/\n/g,' '));
+            } else if (_lstDef && s.std != null) {
+              const _phi = x => 0.5*(1+Math.sign(x)*Math.sqrt(1-Math.exp(-Math.PI*x*x/2)));
+              for (let i = 0; i < _lstDef.bounds.length-1; i++) {
+                const p = Math.max(0,Math.min(100,(_phi((_lstDef.bounds[i+1]-s.mean)/Math.max(s.std,0.001))-_phi((_lstDef.bounds[i]-s.mean)/Math.max(s.std,0.001)))*100));
+                if (p >= 0.5) _rows.push([_lstDef.labels[i].replace(/\n/g,' '), p, _totalHa ? Math.round(_totalHa*p/100) : null]);
               }
             }
-            const sorted = classLabels.map((lbl,i) => [lbl, classPcts[i]]).sort((a,b) => b[1]-a[1]);
-            const fvColors = ['fv-pink','fv-amber','fv-cyan','fv-green'];
-            sorted.forEach(([lbl, pct], idx) => {
-              const haStr = totalHa ? ` (~<strong>${Math.round(totalHa * pct / 100).toLocaleString()} ha</strong>)` : '';
-              findingItems += `<div class="concl-finding-item"><strong class="${fvColors[idx % fvColors.length]}">${lbl}</strong>: <strong>${pct.toFixed(1)}%</strong>${haStr}</div>`;
+            _rows.sort((a,b) => b[1]-a[1]);
+            const _lstColors = ['fv-pink','fv-amber','fv-cyan','fv-green'];
+            _rows.forEach(([lbl,pct,ha],i) => {
+              const haStr = ha ? ` (~<strong>${ha.toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item"><strong class="${_lstColors[i%_lstColors.length]}">${lbl}</strong>: <strong>${pct.toFixed(1)}%</strong>${haStr}</div>`;
             });
           }
         } else if (s.mean != null) {
@@ -1763,21 +1759,38 @@ function buildDistClassExplanation(varLabel, s) {
 
   // ── Class composition paragraph — uses real backend data if available ────────
   const def = Object.entries(_CLASS_DEFS).find(([k]) => varLabel.toUpperCase().includes(k))?.[1];
+
+  // Helper: normalise a class_pcts entry — new format {pct, ha} or legacy flat number
+  function _readClassPcts(cp) {
+    if (!cp || !Object.keys(cp).length) return { labels: [], pcts: [], has: [], totalHa: null };
+    const totalHa = cp['__total_ha__'] ?? null;
+    const labels = [], pcts = [], has = [];
+    for (const [lbl, val] of Object.entries(cp)) {
+      if (lbl === '__total_ha__') continue;
+      const pct = typeof val === 'object' ? val.pct : val;
+      const ha  = typeof val === 'object' ? val.ha  : (totalHa ? Math.round(totalHa * pct / 100) : null);
+      if (pct < 0.5) continue;
+      labels.push(lbl);
+      pcts.push(parseFloat(pct.toFixed(1)));
+      has.push(ha);
+    }
+    return { labels, pcts, has, totalHa };
+  }
+
   const totalHa = s.total_ha || null;
 
   if (def) {
-    // Prefer real class_pcts from backend; fall back to normal approx
-    let classPcts = [], classLabels = [];
+    let classLabels = [], classPcts = [], classHas = [], realTotalHa = totalHa;
 
     if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
-      // Backend provided exact percentages keyed by label
-      for (const [lbl, pct] of Object.entries(s.class_pcts)) {
-        if (pct < 0.5) continue;
-        classPcts.push(parseFloat(pct.toFixed(1)));
-        classLabels.push(lbl);
-      }
+      // Backend provided real data
+      const parsed = _readClassPcts(s.class_pcts);
+      classLabels = parsed.labels;
+      classPcts   = parsed.pcts;
+      classHas    = parsed.has;
+      if (parsed.totalHa) realTotalHa = parsed.totalHa;
     } else if (s.mean != null && s.std != null) {
-      // Approximation fallback
+      // Approximation fallback — no real ha available
       const mean = s.mean, std = Math.max(s.std, 0.001);
       const nC = def.bounds.length - 1;
       const phi = x => 0.5 * (1 + Math.sign(x) * Math.sqrt(1 - Math.exp(-Math.PI * x * x / 2)));
@@ -1788,6 +1801,7 @@ function buildDistClassExplanation(varLabel, s) {
         if (pct < 0.5) continue;
         classPcts.push(parseFloat(pct.toFixed(1)));
         classLabels.push(def.labels[i].replace(/\n/g, ' '));
+        classHas.push(realTotalHa ? Math.round(realTotalHa * pct / 100) : null);
       }
     }
 
@@ -1795,22 +1809,19 @@ function buildDistClassExplanation(varLabel, s) {
       const maxIdx   = classPcts.indexOf(Math.max(...classPcts));
       const dominant = classLabels[maxIdx];
       const domPct   = classPcts[maxIdx];
+      const domHa    = classHas[maxIdx];
 
       let classText = `Looking at the class composition above, <strong>${dominant}</strong> is the dominant condition at <strong>${domPct.toFixed(1)}%</strong>`;
-      if (totalHa) {
-        const domHa = Math.round(totalHa * domPct / 100);
-        classText += ` (~<strong>${domHa.toLocaleString()} ha</strong>)`;
-      }
+      if (domHa) classText += ` (~<strong>${domHa.toLocaleString()} ha</strong>)`;
       classText += '. ';
 
       // Per-class breakdown as bullet list
       const items = classLabels.map((lbl, i) => {
         const pct = classPcts[i].toFixed(1);
-        if (totalHa) {
-          const ha = Math.round(totalHa * classPcts[i] / 100).toLocaleString();
-          return `<li><strong>${lbl}</strong>: ${pct}% (~${ha} ha)</li>`;
-        }
-        return `<li><strong>${lbl}</strong>: ${pct}%</li>`;
+        const ha  = classHas[i];
+        return ha
+          ? `<li><strong>${lbl}</strong>: ${pct}% (~${ha.toLocaleString()} ha)</li>`
+          : `<li><strong>${lbl}</strong>: ${pct}%</li>`;
       }).join('');
 
       text += ` ${classText}`;
@@ -2321,31 +2332,58 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
         const defEntry = Object.entries(_CLASS_DEFS).find(([k]) => vUp.includes(k));
         const def = defEntry?.[1];
         if (def) {
-          const mean    = s.mean, std = Math.max(s.std || 0.1, 0.001);
-          const sLo     = s.min ?? mean - 5*std;
-          const sHi     = s.max ?? mean + 5*std;
-          const samples = _sampleNormal(mean, std, 20000, sLo, sHi);
-          const nC      = def.bounds.length - 1;
+          const classPcts = [], classColors = [], classLabels = [], classHas = [];
+          let realTotalHa = null;
 
-          const classPcts = [], classColors = [], classLabels = [];
-          for (let i = 0; i < nC; i++) {
-            const lo2 = def.bounds[i], hi2 = def.bounds[i+1];
-            const pct = (samples.filter(v => v >= lo2 && v < hi2).length / samples.length) * 100;
-            if (pct < 0.5) continue;
-            classPcts.push(parseFloat(pct.toFixed(1)));
-            classLabels.push(def.labels[i].replace(/\n/g, ' '));
-            if (def.colors) {
-              classColors.push(def.colors[i] || '#aaa');
-            } else {
-              const vis = _VIS_PAL[def.visKey];
-              classColors.push(vis ? _palColor(vis.pal, vis.min, vis.max, (lo2+hi2)/2) : '#5B9BD5');
+          // Prefer real backend data
+          if (s.class_pcts && Object.keys(s.class_pcts).filter(k => k !== '__total_ha__').length > 0) {
+            realTotalHa = s.class_pcts['__total_ha__'] ?? s.total_ha ?? null;
+            const nC = def.bounds.length - 1;
+            for (let i = 0; i < nC; i++) {
+              const lbl = def.labels[i].replace(/\n/g, ' ');
+              const val = s.class_pcts[lbl];
+              if (!val) continue;
+              const pct = typeof val === 'object' ? val.pct : val;
+              const ha  = typeof val === 'object' ? val.ha  : (realTotalHa ? Math.round(realTotalHa * pct / 100) : null);
+              if (pct < 0.5) continue;
+              classPcts.push(parseFloat(pct.toFixed(1)));
+              classLabels.push(lbl);
+              classHas.push(ha);
+              if (def.colors) {
+                classColors.push(def.colors[i] || '#aaa');
+              } else {
+                const vis = _VIS_PAL[def.visKey];
+                classColors.push(vis ? _palColor(vis.pal, vis.min, vis.max, (def.bounds[i]+def.bounds[i+1])/2) : '#5B9BD5');
+              }
+            }
+          }
+
+          // Fallback: simulate from normal distribution
+          if (classPcts.length === 0) {
+            realTotalHa = s.total_ha ?? null;
+            const mean = s.mean, std = Math.max(s.std || 0.1, 0.001);
+            const sLo = s.min ?? mean - 5*std, sHi = s.max ?? mean + 5*std;
+            const samples = _sampleNormal(mean, std, 20000, sLo, sHi);
+            const nC = def.bounds.length - 1;
+            for (let i = 0; i < nC; i++) {
+              const lo2 = def.bounds[i], hi2 = def.bounds[i+1];
+              const pct = (samples.filter(v => v >= lo2 && v < hi2).length / samples.length) * 100;
+              if (pct < 0.5) continue;
+              classPcts.push(parseFloat(pct.toFixed(1)));
+              classLabels.push(def.labels[i].replace(/\n/g, ' '));
+              classHas.push(realTotalHa ? Math.round(realTotalHa * pct / 100) : null);
+              if (def.colors) {
+                classColors.push(def.colors[i] || '#aaa');
+              } else {
+                const vis = _VIS_PAL[def.visKey];
+                classColors.push(vis ? _palColor(vis.pal, vis.min, vis.max, (lo2+hi2)/2) : '#5B9BD5');
+              }
             }
           }
 
           if (classPcts.length > 0) {
-            const totalHa = s.total_ha || null;
-            const barText = classPcts.map(p => {
-              const haStr = totalHa ? `\n~${Math.round(totalHa * p / 100).toLocaleString()} ha` : '';
+            const barText = classPcts.map((p, i) => {
+              const haStr = classHas[i] ? `\n~${classHas[i].toLocaleString()} ha` : '';
               return `${p.toFixed(1)}%${haStr}`;
             });
             Plotly.newPlot(el, [{
@@ -2465,11 +2503,7 @@ function plotlyLayout(title, height = 200) {
 }
 
 function plotlyConfig() {
-  return {
-    displayModeBar: false,
-    responsive    : true,
-    dragmode      : false,
-  };
+  return { displayModeBar: false, responsive: true, dragmode: false };
 }
 
 function parseMarkdown(text) {
