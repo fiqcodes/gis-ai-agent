@@ -1759,7 +1759,6 @@ function buildDistClassExplanation(varLabel, s) {
 
   // ── Class composition paragraph — uses real backend data if available ────────
   const def = Object.entries(_CLASS_DEFS).find(([k]) => varLabel.toUpperCase().includes(k))?.[1];
-  const totalHa = s.total_ha || null;
 
   if (def) {
     // Prefer real class_pcts from backend; fall back to normal approx
