@@ -409,21 +409,26 @@ def get_stats(image, band, study_area, scale=1000):
                          .combine(ee.Reducer.minMax(),   sharedInputs=True)
                          .combine(ee.Reducer.stdDev(),   sharedInputs=True)
                          .combine(ee.Reducer.median(),   sharedInputs=True)
+                         .combine(ee.Reducer.count(),    sharedInputs=True)
                          .combine(ee.Reducer.percentile([10, 90]), sharedInputs=True),
             geometry = study_area, scale=scale, maxPixels=1e9
         ).getInfo()
+        pixel_count   = stats.get(f'{band}_count', 0) or 0
+        pixel_area_ha = (scale ** 2) / 10000.0
+        total_ha      = round(pixel_count * pixel_area_ha, 1) if pixel_count else None
         return {
-            'mean'  : stats.get(f'{band}_mean'),
-            'min'   : stats.get(f'{band}_min'),
-            'max'   : stats.get(f'{band}_max'),
-            'std'   : stats.get(f'{band}_stdDev'),
-            'median': stats.get(f'{band}_median'),
-            'p10'   : stats.get(f'{band}_p10'),
-            'p90'   : stats.get(f'{band}_p90'),
+            'mean'    : stats.get(f'{band}_mean'),
+            'min'     : stats.get(f'{band}_min'),
+            'max'     : stats.get(f'{band}_max'),
+            'std'     : stats.get(f'{band}_stdDev'),
+            'median'  : stats.get(f'{band}_median'),
+            'p10'     : stats.get(f'{band}_p10'),
+            'p90'     : stats.get(f'{band}_p90'),
+            'total_ha': total_ha,
         }
     except:
         return {'mean': None, 'min': None, 'max': None,
-                'std': None, 'median': None, 'p10': None, 'p90': None}
+                'std': None, 'median': None, 'p10': None, 'p90': None, 'total_ha': None}
 
 # Class boundary definitions — mirrors make_stats_charts() and _CLASS_DEFS in app.js
 _CLASS_BOUNDS = {
