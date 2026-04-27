@@ -448,30 +448,26 @@ _CLASS_BOUNDS = {
 }
 
 def get_area_ha(study_area, scale=90):
-    """Compute total area of study_area in hectares using pixel counting at given scale."""
+    """Compute total area of study_area in hectares at given pixel scale."""
     try:
-        # Use a constant image to count valid pixels and convert to area
         pixel_area_ha = (scale ** 2) / 10000.0
-        count_img = ee.Image.constant(1).clip(study_area)
-        count = count_img.reduceRegion(
+        count = ee.Image.constant(1).clip(study_area).reduceRegion(
             reducer=ee.Reducer.count(),
-            geometry=study_area,
-            scale=scale,
-            maxPixels=1e9
+            geometry=study_area, scale=scale, maxPixels=1e9
         ).getInfo().get('constant', 0)
         return round(count * pixel_area_ha, 1)
     except Exception as e:
         print(f'  get_area_ha failed: {e}')
-        # Fallback: use geometry area directly
         try:
-            area_m2 = study_area.area(maxError=1).getInfo()
-            return round(area_m2 / 10000.0, 1)
+            return round(study_area.area(maxError=1).getInfo() / 10000.0, 1)
         except:
             return None
 
 
 def get_class_pcts(image, band, study_area, var_label, scale=1000):
-    """Compute real per-class pixel percentages and hectares via GEE for a given variable."""
+    """Compute real per-class pixel percentages and hectares via GEE for a given variable.
+    Returns dict of label -> {'pct': float, 'ha': float, 'total_ha': float}
+    """
     key = var_label.upper()
     if key not in _CLASS_BOUNDS:
         return {}
