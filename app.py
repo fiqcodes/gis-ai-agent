@@ -452,10 +452,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 s['monthly'] = {}
                                 print(f'  LST monthly failed: {lst_me}')
                             all_stats['LST'] = s
-                            # Compute real per-class pixel percentages + hectares for LST
+                            # Compute real per-class pixel percentages + hectares (single GEE call)
                             try:
-                                s['class_pcts'] = get_class_pcts(lst_img, 'LST', study_area_surf, 'LST', scale=90)
-                                print(f'  ✓ LST class_pcts: {list(s["class_pcts"].keys())}')
+                                cp = get_class_pcts(lst_img, 'LST', study_area_surf, 'LST', scale=90)
+                                s['total_ha']  = cp.pop('__total_ha__', None)
+                                s['class_pcts'] = cp
+                                print(f'  ✓ LST class_pcts: {list(cp.keys())}')
                             except Exception as _cp_err:
                                 print(f'  LST class_pcts failed: {_cp_err}')
                                 s['class_pcts'] = {}
@@ -645,10 +647,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             except Exception as me:
                                 s['monthly'] = {}
                             all_stats[label] = s
-                            # Compute real per-class pixel percentages + hectares
+                            # Compute real per-class pixel percentages + hectares (single GEE call)
                             try:
-                                s['class_pcts'] = get_class_pcts(img, label, study_area_surf, label, scale=scale)
-                                print(f'  ✓ {label} class_pcts: {list(s["class_pcts"].keys())}')
+                                cp = get_class_pcts(img, label, study_area_surf, label, scale=scale)
+                                s['total_ha']  = cp.pop('__total_ha__', None)
+                                s['class_pcts'] = cp
+                                print(f'  ✓ {label} class_pcts: {list(cp.keys())}')
                             except Exception as _cp_err:
                                 print(f'  {label} class_pcts failed: {_cp_err}')
                                 s['class_pcts'] = {}
