@@ -458,14 +458,17 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 s['monthly'] = {}
                                 print(f'  LST monthly failed: {lst_me}')
                             all_stats['LST'] = s
-                            # Enrich with area data if available
+                            # Enrich with area data BEFORE charts are generated
                             if _has_area_funcs:
                                 try:
                                     all_stats['LST']['total_ha'] = get_area_ha(study_area_surf, scale=90)
-                                except Exception as _e: pass
+                                except Exception as _e:
+                                    print(f'  LST total_ha failed: {_e}')
                                 try:
                                     all_stats['LST']['class_pcts'] = _get_class_pcts(lst_img, 'LST', study_area_surf, 'LST', scale=90)
-                                except Exception as _e: pass
+                                    print(f'  ✓ LST class_pcts: {list(all_stats["LST"]["class_pcts"].keys())}')
+                                except Exception as _e:
+                                    print(f'  LST class_pcts failed: {_e}')
                             map_id   = lst_img.clip(study_area_surf).getMapId(VIS['lst'])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': _layer_label('LST', region_name, start_date, end_date), 'tile_url': tile_url,
@@ -652,14 +655,17 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             except Exception as me:
                                 s['monthly'] = {}
                             all_stats[label] = s
-                            # Enrich with area data if available
+                            # Enrich with area data BEFORE charts are generated
                             if _has_area_funcs:
                                 try:
                                     all_stats[label]['total_ha'] = get_area_ha(study_area_surf, scale=scale)
-                                except Exception as _e: pass
+                                except Exception as _e:
+                                    print(f'  {label} total_ha failed: {_e}')
                                 try:
                                     all_stats[label]['class_pcts'] = _get_class_pcts(img, label, study_area_surf, label, scale=scale)
-                                except Exception as _e: pass
+                                    print(f'  ✓ {label} class_pcts: {list(all_stats[label]["class_pcts"].keys())}')
+                                except Exception as _e:
+                                    print(f'  {label} class_pcts failed: {_e}')
                             map_id   = img.clip(study_area_surf).getMapId(VIS[vis_key])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': _layer_label(label, region_name, start_date, end_date), 'tile_url': tile_url,
