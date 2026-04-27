@@ -1274,8 +1274,30 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           // ── 4 findings ───────────────────────────────────────────────────────
           findingItems += `<div class="concl-finding-item">Mean ${vUp} across the ROI: <strong class="fv-cyan">${s.mean.toFixed(3)}</strong></div>`;
           findingItems += `<div class="concl-finding-item">Vegetation condition classified as <strong class="f${vegColor.slice(1)}">${vegClass}</strong></div>`;
-          if (s.p10 != null && s.p90 != null) findingItems += `<div class="concl-finding-item">Spatial range: P10 = <strong class="fv-amber">${s.p10.toFixed(3)}</strong> → P90 = <strong class="fv-green">${s.p90.toFixed(3)}</strong></div>`;
-          if (s.std != null) findingItems += `<div class="concl-finding-item">Std deviation of <strong class="fv-cyan">${s.std.toFixed(3)}</strong> indicates ${s.std > 0.15 ? 'high spatial variability in vegetation cover' : 'relatively uniform vegetation distribution'}</div>`;
+          // Healthy vs stressed area breakdown using class_pcts if available
+          if (s.class_pcts && typeof s.class_pcts === 'object') {
+            const totalHaV = s.total_ha || null;
+            // Find healthy class (>0.6) and stressed class (0.1–0.3)
+            let healthyEntry = null, stressedEntry = null;
+            for (const [lbl, val] of Object.entries(s.class_pcts)) {
+              const lblLow = lbl.toLowerCase();
+              const pct = typeof val === 'object' ? val.pct : val;
+              const ha  = typeof val === 'object' ? val.ha : (totalHaV ? Math.round(totalHaV * pct / 100) : null);
+              if (lblLow.includes('healthy')) healthyEntry  = { lbl, pct, ha };
+              if (lblLow.includes('stressed')) stressedEntry = { lbl, pct, ha };
+            }
+            if (healthyEntry) {
+              const haStr = healthyEntry.ha != null ? ` (~<strong class="fv-green">${healthyEntry.ha.toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item">Healthy vegetation covers <strong class="fv-green">${healthyEntry.pct.toFixed(1)}%</strong> of the area${haStr}</div>`;
+            }
+            if (stressedEntry) {
+              const haStr = stressedEntry.ha != null ? ` (~<strong class="fv-amber">${stressedEntry.ha.toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item">Stressed vegetation accounts for <strong class="fv-amber">${stressedEntry.pct.toFixed(1)}%</strong>${haStr} — indicating heat or drought pressure</div>`;
+            }
+          } else {
+            if (s.p10 != null && s.p90 != null) findingItems += `<div class="concl-finding-item">Spatial range: P10 = <strong class="fv-amber">${s.p10.toFixed(3)}</strong> → P90 = <strong class="fv-green">${s.p90.toFixed(3)}</strong></div>`;
+            if (s.std != null) findingItems += `<div class="concl-finding-item">Std deviation of <strong class="fv-cyan">${s.std.toFixed(3)}</strong> indicates ${s.std > 0.15 ? 'high spatial variability in vegetation cover' : 'relatively uniform vegetation distribution'}</div>`;
+          }
         } else if (vUp === 'LST' && s.mean != null) {
           // ── Thermal class derived from mean LST ──────────────────────────────
           let thermalClass, thermalColor;
@@ -1294,7 +1316,34 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           findingItems += `<div class="concl-finding-item">Mean surface temperature: <strong class="fv-amber">${s.mean.toFixed(1)}°C</strong></div>`;
           if (s.max != null) findingItems += `<div class="concl-finding-item">Peak temperature recorded: <strong class="fv-pink">${s.max.toFixed(1)}°C</strong></div>`;
           if (s.min != null) findingItems += `<div class="concl-finding-item">Coolest zone recorded: <strong class="fv-cyan">${s.min.toFixed(1)}°C</strong>${s.p10 != null ? ` (P10: ${s.p10.toFixed(1)}°C)` : ''}</div>`;
-          if (s.p10 != null && s.p90 != null) findingItems += `<div class="concl-finding-item">Thermal spread: P10 = <strong class="fv-cyan">${s.p10.toFixed(1)}°C</strong> → P90 = <strong class="fv-pink">${s.p90.toFixed(1)}°C</strong></div>`;
+          // Hot and extreme class ha from class_pcts if available
+          if (s.class_pcts && typeof s.class_pcts === 'object') {
+            let hotEntry = null, extremeEntry = null, coolEntry = null;
+            for (const [lbl, val] of Object.entries(s.class_pcts)) {
+              const lblLow = lbl.toLowerCase();
+              const pct = typeof val === 'object' ? val.pct : val;
+              const ha  = typeof val === 'object' ? val.ha  : (s.total_ha ? Math.round(s.total_ha * pct / 100) : null);
+              if (lblLow.includes('hot') && !lblLow.includes('extreme')) hotEntry     = { lbl, pct, ha };
+              if (lblLow.includes('extreme'))                             extremeEntry = { lbl, pct, ha };
+              if (lblLow.includes('cool') || lblLow.includes('moderate')) {
+                if (!coolEntry || pct > coolEntry.pct) coolEntry = { lbl, pct, ha };
+              }
+            }
+            if (hotEntry) {
+              const haStr = hotEntry.ha != null ? ` (~<strong class="fv-pink">${hotEntry.ha.toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item">Hot zone (40–45°C) covers <strong class="fv-pink">${hotEntry.pct.toFixed(1)}%</strong>${haStr} — likely over roads, rooftops, and built surfaces</div>`;
+            }
+            if (extremeEntry) {
+              const haStr = extremeEntry.ha != null ? ` (~<strong class="fv-pink">${extremeEntry.ha.toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item">Extreme heat (&gt;45°C) detected across <strong class="fv-pink">${extremeEntry.pct.toFixed(1)}%</strong>${haStr} — posing serious risk to outdoor safety</div>`;
+            }
+            if (coolEntry) {
+              const haStr = coolEntry.ha != null ? ` (~<strong class="fv-cyan">${coolEntry.ha.toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item">Cooler zones (${coolEntry.lbl}) cover <strong class="fv-cyan">${coolEntry.pct.toFixed(1)}%</strong>${haStr} — likely parks, water bodies, or shaded areas</div>`;
+            }
+          } else {
+            if (s.p10 != null && s.p90 != null) findingItems += `<div class="concl-finding-item">Thermal spread: P10 = <strong class="fv-cyan">${s.p10.toFixed(1)}°C</strong> → P90 = <strong class="fv-pink">${s.p90.toFixed(1)}°C</strong></div>`;
+          }
         } else if (s.mean != null) {
           chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value cv-cyan">${s.mean.toFixed(4)}</div></div>`;
           findingItems += `<div class="concl-finding-item">Mean ${vUp}: <strong class="fv-cyan">${s.mean.toFixed(4)}</strong></div>`;
@@ -1714,14 +1763,25 @@ function buildDistClassExplanation(varLabel, s) {
 
   if (def) {
     // Prefer real class_pcts from backend; fall back to normal approx
-    let classPcts = [], classLabels = [];
+    let classPcts = [], classLabels = [], classHas = [];
+    let totalHa = s.total_ha || null;
 
     if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
-      // Backend provided exact percentages keyed by label
-      for (const [lbl, pct] of Object.entries(s.class_pcts)) {
+      // Backend provided exact percentages — new format: {pct, ha, total_ha} or legacy number
+      for (const [lbl, val] of Object.entries(s.class_pcts)) {
+        let pct, ha;
+        if (typeof val === 'object' && val !== null) {
+          pct = parseFloat((val.pct || 0).toFixed(1));
+          ha  = val.ha || null;
+          if (!totalHa && val.total_ha) totalHa = val.total_ha;
+        } else {
+          pct = parseFloat(parseFloat(val).toFixed(1));
+          ha  = null;
+        }
         if (pct < 0.5) continue;
-        classPcts.push(parseFloat(pct.toFixed(1)));
+        classPcts.push(pct);
         classLabels.push(lbl);
+        classHas.push(ha);
       }
     } else if (s.mean != null && s.std != null) {
       // Approximation fallback
@@ -1735,6 +1795,7 @@ function buildDistClassExplanation(varLabel, s) {
         if (pct < 0.5) continue;
         classPcts.push(parseFloat(pct.toFixed(1)));
         classLabels.push(def.labels[i].replace(/\n/g, ' '));
+        classHas.push(totalHa ? Math.round(totalHa * pct / 100) : null);
       }
     }
 
@@ -1742,20 +1803,25 @@ function buildDistClassExplanation(varLabel, s) {
       const maxIdx   = classPcts.indexOf(Math.max(...classPcts));
       const dominant = classLabels[maxIdx];
       const domPct   = classPcts[maxIdx];
+      const domHa    = classHas[maxIdx];
 
       let classText = `Looking at the class composition above, <strong>${dominant}</strong> is the dominant condition at <strong>${domPct.toFixed(1)}%</strong>`;
-      if (totalHa) {
-        const domHa = Math.round(totalHa * domPct / 100);
+      if (domHa != null) {
         classText += ` (~<strong>${domHa.toLocaleString()} ha</strong>)`;
+      } else if (totalHa) {
+        const domHaFallback = Math.round(totalHa * domPct / 100);
+        classText += ` (~<strong>${domHaFallback.toLocaleString()} ha</strong>)`;
       }
       classText += '. ';
 
-      // Per-class breakdown as bullet list
+      // Per-class breakdown as bullet list with ha
       const items = classLabels.map((lbl, i) => {
         const pct = classPcts[i].toFixed(1);
-        if (totalHa) {
-          const ha = Math.round(totalHa * classPcts[i] / 100).toLocaleString();
-          return `<li><strong>${lbl}</strong>: ${pct}% (~${ha} ha)</li>`;
+        const ha  = classHas[i] != null
+          ? classHas[i]
+          : (totalHa ? Math.round(totalHa * classPcts[i] / 100) : null);
+        if (ha != null) {
+          return `<li><strong>${lbl}</strong>: ${pct}% (~${ha.toLocaleString()} ha)</li>`;
         }
         return `<li><strong>${lbl}</strong>: ${pct}%</li>`;
       }).join('');

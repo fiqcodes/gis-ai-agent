@@ -447,19 +447,44 @@ _CLASS_BOUNDS = {
     'FFPI':    ([0, 0.3, 0.6, 0.8, 1],            ['Clean (0–0.3)', 'Moderate (0.3–0.6)', 'Polluted (0.6–0.8)', 'Severe (>0.8)']),
 }
 
+def get_area_ha(study_area, scale=90):
+    """Compute total area of study_area in hectares using pixel counting at given scale."""
+    try:
+        # Use a constant image to count valid pixels and convert to area
+        pixel_area_ha = (scale ** 2) / 10000.0
+        count_img = ee.Image.constant(1).clip(study_area)
+        count = count_img.reduceRegion(
+            reducer=ee.Reducer.count(),
+            geometry=study_area,
+            scale=scale,
+            maxPixels=1e9
+        ).getInfo().get('constant', 0)
+        return round(count * pixel_area_ha, 1)
+    except Exception as e:
+        print(f'  get_area_ha failed: {e}')
+        # Fallback: use geometry area directly
+        try:
+            area_m2 = study_area.area(maxError=1).getInfo()
+            return round(area_m2 / 10000.0, 1)
+        except:
+            return None
+
+
 def get_class_pcts(image, band, study_area, var_label, scale=1000):
-    """Compute real per-class pixel percentages via GEE for a given variable."""
+    """Compute real per-class pixel percentages and hectares via GEE for a given variable."""
     key = var_label.upper()
     if key not in _CLASS_BOUNDS:
         return {}
     bounds, labels = _CLASS_BOUNDS[key]
     try:
+        pixel_area_ha = (scale ** 2) / 10000.0
         total_pixels = image.select(band).reduceRegion(
             reducer=ee.Reducer.count(),
             geometry=study_area, scale=scale, maxPixels=1e9
         ).getInfo().get(band, 0)
         if not total_pixels:
             return {}
+        total_ha = round(total_pixels * pixel_area_ha, 1)
         result = {}
         for i in range(len(bounds) - 1):
             lo, hi = bounds[i], bounds[i+1]
@@ -469,8 +494,9 @@ def get_class_pcts(image, band, study_area, var_label, scale=1000):
                 geometry=study_area, scale=scale, maxPixels=1e9
             ).getInfo().get(band, 0)
             pct = round((count / total_pixels) * 100, 1) if total_pixels else 0
+            ha  = round(count * pixel_area_ha, 1)
             if pct > 0:
-                result[labels[i]] = pct
+                result[labels[i]] = {'pct': pct, 'ha': ha, 'total_ha': total_ha}
         return result
     except Exception as e:
         print(f'  class_pcts failed for {var_label}: {e}')

@@ -380,7 +380,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             try:
                 from gis_functions import (
                     load_landsat, compute_lst, compute_uhi,
-                    get_stats, SURFACE_INDEX_MAP, VIS,
+                    get_stats, get_area_ha, get_class_pcts, SURFACE_INDEX_MAP, VIS,
                     get_thumb, make_rgb_overview, make_analysis_map, make_stats_charts,
                 )
                 study_area_surf = study_area_main
@@ -451,6 +451,15 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             except Exception as lst_me:
                                 s['monthly'] = {}
                                 print(f'  LST monthly failed: {lst_me}')
+                            try:
+                                s['total_ha'] = get_area_ha(study_area_surf, scale=90)
+                            except Exception as _tha_e:
+                                print(f'  LST total_ha failed: {_tha_e}')
+                            try:
+                                s['class_pcts'] = get_class_pcts(lst_img, 'LST', study_area_surf, 'LST', scale=90)
+                            except Exception as _cp_e:
+                                print(f'  LST class_pcts failed: {_cp_e}')
+                                s['class_pcts'] = {}
                             all_stats['LST'] = s
                             map_id   = lst_img.clip(study_area_surf).getMapId(VIS['lst'])
                             tile_url = map_id['tile_fetcher'].url_format
@@ -637,6 +646,17 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 s['monthly'] = monthly
                             except Exception as me:
                                 s['monthly'] = {}
+                            # Compute total_ha for this variable
+                            try:
+                                s['total_ha'] = get_area_ha(study_area_surf, scale=scale)
+                            except Exception as _tha_e:
+                                print(f'  {label} total_ha failed: {_tha_e}')
+                            # Compute class_pcts (hectares per class)
+                            try:
+                                s['class_pcts'] = get_class_pcts(img, label, study_area_surf, label, scale=scale)
+                            except Exception as _cp_e:
+                                print(f'  {label} class_pcts failed: {_cp_e}')
+                                s['class_pcts'] = {}
                             all_stats[label] = s
                             map_id   = img.clip(study_area_surf).getMapId(VIS[vis_key])
                             tile_url = map_id['tile_fetcher'].url_format
