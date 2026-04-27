@@ -409,26 +409,21 @@ def get_stats(image, band, study_area, scale=1000):
                          .combine(ee.Reducer.minMax(),   sharedInputs=True)
                          .combine(ee.Reducer.stdDev(),   sharedInputs=True)
                          .combine(ee.Reducer.median(),   sharedInputs=True)
-                         .combine(ee.Reducer.count(),    sharedInputs=True)
                          .combine(ee.Reducer.percentile([10, 90]), sharedInputs=True),
             geometry = study_area, scale=scale, maxPixels=1e9
         ).getInfo()
-        pixel_count   = stats.get(f'{band}_count', 0) or 0
-        pixel_area_ha = (scale ** 2) / 10000.0
-        total_ha      = round(pixel_count * pixel_area_ha, 1) if pixel_count else None
         return {
-            'mean'    : stats.get(f'{band}_mean'),
-            'min'     : stats.get(f'{band}_min'),
-            'max'     : stats.get(f'{band}_max'),
-            'std'     : stats.get(f'{band}_stdDev'),
-            'median'  : stats.get(f'{band}_median'),
-            'p10'     : stats.get(f'{band}_p10'),
-            'p90'     : stats.get(f'{band}_p90'),
-            'total_ha': total_ha,
+            'mean'  : stats.get(f'{band}_mean'),
+            'min'   : stats.get(f'{band}_min'),
+            'max'   : stats.get(f'{band}_max'),
+            'std'   : stats.get(f'{band}_stdDev'),
+            'median': stats.get(f'{band}_median'),
+            'p10'   : stats.get(f'{band}_p10'),
+            'p90'   : stats.get(f'{band}_p90'),
         }
     except:
         return {'mean': None, 'min': None, 'max': None,
-                'std': None, 'median': None, 'p10': None, 'p90': None, 'total_ha': None}
+                'std': None, 'median': None, 'p10': None, 'p90': None}
 
 # Class boundary definitions — mirrors make_stats_charts() and _CLASS_DEFS in app.js
 _CLASS_BOUNDS = {
@@ -453,7 +448,7 @@ _CLASS_BOUNDS = {
 }
 
 def get_class_pcts(image, band, study_area, var_label, scale=1000):
-    """Compute real per-class pixel percentages and hectares via GEE for a given variable."""
+    """Compute real per-class pixel percentages via GEE for a given variable."""
     key = var_label.upper()
     if key not in _CLASS_BOUNDS:
         return {}
@@ -465,8 +460,6 @@ def get_class_pcts(image, band, study_area, var_label, scale=1000):
         ).getInfo().get(band, 0)
         if not total_pixels:
             return {}
-        pixel_area_ha = (scale ** 2) / 10000.0
-        total_ha = round(total_pixels * pixel_area_ha, 1)
         result = {}
         for i in range(len(bounds) - 1):
             lo, hi = bounds[i], bounds[i+1]
@@ -476,10 +469,8 @@ def get_class_pcts(image, band, study_area, var_label, scale=1000):
                 geometry=study_area, scale=scale, maxPixels=1e9
             ).getInfo().get(band, 0)
             pct = round((count / total_pixels) * 100, 1) if total_pixels else 0
-            ha  = round(count * pixel_area_ha, 1)
             if pct > 0:
-                result[labels[i]] = {'pct': pct, 'ha': ha}
-        result['__total_ha__'] = total_ha
+                result[labels[i]] = pct
         return result
     except Exception as e:
         print(f'  class_pcts failed for {var_label}: {e}')
