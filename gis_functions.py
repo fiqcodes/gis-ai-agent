@@ -448,56 +448,30 @@ _CLASS_BOUNDS = {
 }
 
 def get_class_pcts(image, band, study_area, var_label, scale=1000):
-    """
-    Compute per-class pixel percentages and hectares via GEE.
-    Uses a SINGLE reduceRegion call (frequencyHistogram on a classified image)
-    to avoid the per-class call overhead that caused timeouts.
-    """
+    """Compute real per-class pixel percentages via GEE for a given variable."""
     key = var_label.upper()
     if key not in _CLASS_BOUNDS:
         return {}
     bounds, labels = _CLASS_BOUNDS[key]
     try:
-        img_band = image.select(band)
-        pixel_area_ha = (scale ** 2) / 10000.0
-
-        # Build a classified image: assign each pixel an integer class ID (1-indexed)
-        # Start with class 0 = outside all bounds (will be ignored)
-        classified = img_band.multiply(0)  # all zeros baseline
-        for i in range(len(bounds) - 1):
-            lo, hi = bounds[i], bounds[i + 1]
-            classified = classified.where(
-                img_band.gte(lo).And(img_band.lt(hi)),
-                i + 1  # class IDs: 1, 2, 3, ...
-            )
-
-        # Single batch call — count all class pixels at once
-        counts_raw = classified.reduceRegion(
-            reducer  = ee.Reducer.frequencyHistogram(),
-            geometry = study_area,
-            scale    = scale,
-            maxPixels= 1e9
-        ).getInfo().get(band, {})
-
-        # counts_raw: {'0': N, '1': N, '2': N, ...} — keys are strings
-        total_pixels = sum(int(v) for v in counts_raw.values())
+        total_pixels = image.select(band).reduceRegion(
+            reducer=ee.Reducer.count(),
+            geometry=study_area, scale=scale, maxPixels=1e9
+        ).getInfo().get(band, 0)
         if not total_pixels:
             return {}
-
         result = {}
-        for i, lbl in enumerate(labels):
-            count = int(counts_raw.get(str(i + 1), 0))
-            if count == 0:
-                continue
-            pct = round((count / total_pixels) * 100, 1)
-            ha  = round(count * pixel_area_ha, 1)
-            if pct >= 0.5:
-                result[lbl] = {'pct': pct, 'ha': ha}
-
-        # Store total_ha as a special key so the frontend can use it
-        result['__total_ha__'] = round(total_pixels * pixel_area_ha, 1)
+        for i in range(len(bounds) - 1):
+            lo, hi = bounds[i], bounds[i+1]
+            mask = image.select(band).gte(lo).And(image.select(band).lt(hi))
+            count = image.select(band).updateMask(mask).reduceRegion(
+                reducer=ee.Reducer.count(),
+                geometry=study_area, scale=scale, maxPixels=1e9
+            ).getInfo().get(band, 0)
+            pct = round((count / total_pixels) * 100, 1) if total_pixels else 0
+            if pct > 0:
+                result[labels[i]] = pct
         return result
-
     except Exception as e:
         print(f'  class_pcts failed for {var_label}: {e}')
         return {}
