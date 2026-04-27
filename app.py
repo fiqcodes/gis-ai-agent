@@ -380,7 +380,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             try:
                 from gis_functions import (
                     load_landsat, compute_lst, compute_uhi,
-                    get_stats, SURFACE_INDEX_MAP, VIS,
+                    get_stats, get_class_pcts, SURFACE_INDEX_MAP, VIS,
                     get_thumb, make_rgb_overview, make_analysis_map, make_stats_charts,
                 )
                 study_area_surf = study_area_main
@@ -452,6 +452,13 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 s['monthly'] = {}
                                 print(f'  LST monthly failed: {lst_me}')
                             all_stats['LST'] = s
+                            # Compute real per-class pixel percentages + hectares for LST
+                            try:
+                                s['class_pcts'] = get_class_pcts(lst_img, 'LST', study_area_surf, 'LST', scale=90)
+                                print(f'  ✓ LST class_pcts: {list(s["class_pcts"].keys())}')
+                            except Exception as _cp_err:
+                                print(f'  LST class_pcts failed: {_cp_err}')
+                                s['class_pcts'] = {}
                             map_id   = lst_img.clip(study_area_surf).getMapId(VIS['lst'])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': _layer_label('LST', region_name, start_date, end_date), 'tile_url': tile_url,
@@ -638,6 +645,13 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             except Exception as me:
                                 s['monthly'] = {}
                             all_stats[label] = s
+                            # Compute real per-class pixel percentages + hectares
+                            try:
+                                s['class_pcts'] = get_class_pcts(img, label, study_area_surf, label, scale=scale)
+                                print(f'  ✓ {label} class_pcts: {list(s["class_pcts"].keys())}')
+                            except Exception as _cp_err:
+                                print(f'  {label} class_pcts failed: {_cp_err}')
+                                s['class_pcts'] = {}
                             map_id   = img.clip(study_area_surf).getMapId(VIS[vis_key])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': _layer_label(label, region_name, start_date, end_date), 'tile_url': tile_url,
