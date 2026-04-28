@@ -89,7 +89,77 @@ _APP_CLASS_BOUNDS = {
 }
 
 
-def _compute_area_stats(ee_image, band_name, study_area, var_label, scale):
+def _make_class_bar_b64(class_pcts, title, xlabel):
+    """
+    Generate a class composition bar chart from real class_pcts data.
+    Returns base64 PNG string or None if failed.
+    """
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import io, base64
+
+        # Color map for known LST and index class labels
+        _COLOR_MAP = {
+            'Cool (<30°C)'        : '#0502b8',
+            'Moderate (30–35°C)'  : '#269db1',
+            'Warm (35–40°C)'      : '#3be285',
+            'Hot (40–45°C)'       : '#f5a800',
+            'Extreme (>45°C)'     : '#ff500d',
+            'Bare (<0.1)'         : '#d4a96a',
+            'Stressed (0.1–0.3)'  : '#a8c97f',
+            'Moderate (0.3–0.6)'  : '#5aaa4f',
+            'Healthy (>0.6)'      : '#1a6e1a',
+            'Non-built (<-0.1)'   : '#4fc3f7',
+            'Low built (-0.1–0)'  : '#b0bec5',
+            'High built (>0.1)'   : '#e53935',
+            'Dry (<-0.3)'         : '#bf8c4c',
+            'Transition (-0.3–0)' : '#a5d6a7',
+            'Moist (0–0.3)'       : '#42a5f5',
+            'Water (>0.3)'        : '#0d47a1',
+        }
+        _DEFAULT_COLORS = ['#4e79a7','#f28e2b','#e15759','#76b7b2',
+                           '#59a14f','#edc948','#b07aa1','#ff9da7']
+
+        pairs = []
+        for lbl, val in class_pcts.items():
+            pct = val['pct'] if isinstance(val, dict) else float(val)
+            if pct <= 0.1: continue
+            color = _COLOR_MAP.get(lbl, _DEFAULT_COLORS[len(pairs) % len(_DEFAULT_COLORS)])
+            # Display label: wrap at space before '(' for readability
+            disp = lbl.replace(' (', '\n(') if ' (' in lbl else lbl
+            pairs.append((disp, pct, color))
+
+        if not pairs:
+            return None
+
+        cls, pct_vals, col_vals = zip(*pairs)
+        fig, ax = plt.subplots(figsize=(max(5, len(pairs) * 1.3), 3.5))
+        bars = ax.bar(cls, pct_vals, color=col_vals, edgecolor='white',
+                      linewidth=0.5, width=0.55)
+        ax.set_ylim(0, max(pct_vals) * 1.28)
+        for bar, pct in zip(bars, pct_vals):
+            ax.text(bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + max(pct_vals) * 0.02,
+                    f'{pct:.1f}%', ha='center', va='bottom',
+                    fontsize=8, fontweight='bold', color='#333')
+        ax.set_xlabel(xlabel, fontsize=9)
+        ax.set_ylabel('Area share (%)', fontsize=9)
+        ax.set_title(title, fontsize=10, fontweight='bold')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        fig.tight_layout()
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=120, bbox_inches='tight')
+        plt.close(fig)
+        buf.seek(0)
+        b64 = base64.b64encode(buf.read()).decode('utf-8')
+        return f'data:image/png;base64,{b64}'
+    except Exception as e:
+        print(f'  _make_class_bar_b64 failed: {e}')
+        return None
     """
     Compute per-class pixel counts + hectares using GEE directly in app.py.
     Returns {'total_ha': float, 'class_pcts': {label: {'pct': float, 'ha': float, 'total_ha': float}}}
@@ -520,6 +590,13 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 arr          = get_thumb(lst_img.clip(study_area_surf), VIS['lst'], study_area_surf, dim=512)
                                 analysis_b64 = make_analysis_map(arr, VIS['lst'], 'LST (°C)', region_name, bbox)
                                 charts       = make_stats_charts(all_stats, 'lst', 'LST')
+                                # Replace simulated class bar with real one if class_pcts available
+                                if _class_pcts:
+                                    real_bar = _make_class_bar_b64(
+                                        _class_pcts, 'LST class composition', 'Temperature class')
+                                    if real_bar:
+                                        charts = [(t, d) for t, d in charts if t != 'class_bar']
+                                        charts.append(('class_bar', real_bar))
                                 figures['LST'] = {'analysis_map': analysis_b64, 'charts': charts,
                                                   'rgb_overview': rgb_overview_b64}
                             print('  ✓ LST ready')
@@ -713,6 +790,21 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 arr          = get_thumb(img.clip(study_area_surf), VIS[vis_key], study_area_surf, dim=512)
                                 analysis_b64 = make_analysis_map(arr, VIS[vis_key], label, region_name, bbox)
                                 charts       = make_stats_charts(all_stats, v, label)
+                                # Replace simulated class bar with real one if class_pcts available
+                                if _class_pcts:
+                                    _xlabel_map = {
+                                        'NDVI':'NDVI class', 'EVI':'Vegetation class', 'SAVI':'Vegetation class',
+                                        'NDBI':'Built-up class', 'NDWI':'Water class', 'MNDWI':'Water class',
+                                        'BSI':'Bare soil class', 'UI':'Urban class',
+                                        'NDSI':'Snow class', 'NBI':'Built-up class',
+                                    }
+                                    _xu = next((xv for xk, xv in _xlabel_map.items()
+                                                if xk in label.upper()), f'{label} class')
+                                    real_bar = _make_class_bar_b64(
+                                        _class_pcts, f'{label} class composition', _xu)
+                                    if real_bar:
+                                        charts = [(t, d) for t, d in charts if t != 'class_bar']
+                                        charts.append(('class_bar', real_bar))
                                 figures[label] = {
                                     'analysis_map': analysis_b64,
                                     'charts'      : charts,

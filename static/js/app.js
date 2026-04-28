@@ -1315,7 +1315,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           // ── 4 findings ───────────────────────────────────────────────────────
           findingItems += `<div class="concl-finding-item">Mean surface temperature: <strong class="fv-amber">${s.mean.toFixed(1)}°C</strong></div>`;
           if (s.max != null) findingItems += `<div class="concl-finding-item">Peak temperature recorded: <strong class="fv-pink">${s.max.toFixed(1)}°C</strong></div>`;
-          if (s.min != null) findingItems += `<div class="concl-finding-item">Coolest zone recorded: <strong class="fv-cyan">${s.min.toFixed(1)}°C</strong>${s.p10 != null ? ` (P10: ${s.p10.toFixed(1)}°C)` : ''}</div>`;
+          if (s.min != null) findingItems += `<div class="concl-finding-item">Coolest zone recorded: <strong class="fv-cyan">${s.min.toFixed(1)}°C</strong></div>`;
           // Hot and extreme class ha from class_pcts if available
           if (s.class_pcts && typeof s.class_pcts === 'object') {
             let hotEntry = null, extremeEntry = null, coolEntry = null;
@@ -1339,7 +1339,9 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
             }
             if (coolEntry) {
               const haStr = coolEntry.ha != null ? ` (~<strong class="fv-cyan">${coolEntry.ha.toLocaleString()} ha</strong>)` : '';
-              findingItems += `<div class="concl-finding-item">Cooler zones (${coolEntry.lbl}) cover <strong class="fv-cyan">${coolEntry.pct.toFixed(1)}%</strong>${haStr} — likely parks, water bodies, or shaded areas</div>`;
+              // Strip the raw class label parens for clean display e.g. "Moderate (30–35°C)" → "30–35°C"
+              const coolRange = coolEntry.lbl.replace(/^[^(]+\(([^)]+)\).*$/, '$1');
+              findingItems += `<div class="concl-finding-item">Cooler zones (${coolRange}) cover <strong class="fv-cyan">${coolEntry.pct.toFixed(1)}%</strong>${haStr} — likely parks, water bodies, or shaded areas</div>`;
             }
           } else {
             if (s.p10 != null && s.p90 != null) findingItems += `<div class="concl-finding-item">Thermal spread: P10 = <strong class="fv-cyan">${s.p10.toFixed(1)}°C</strong> → P90 = <strong class="fv-pink">${s.p90.toFixed(1)}°C</strong></div>`;
