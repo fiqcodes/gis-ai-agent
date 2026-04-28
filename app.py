@@ -73,6 +73,60 @@ def image_to_base64(path: str) -> str:
     return f'data:image/{mime};base64,{data}'
 
 
+# ── Class boundary definitions for area enrichment (mirrors gis_functions._CLASS_BOUNDS) ──
+_APP_CLASS_BOUNDS = {
+    'NDVI':    ([-1, 0.1, 0.3, 0.6, 1],          ['Bare (<0.1)', 'Stressed (0.1–0.3)', 'Moderate (0.3–0.6)', 'Healthy (>0.6)']),
+    'EVI':     ([-1, 0.1, 0.3, 0.5, 1],           ['Sparse (<0.1)', 'Low (0.1–0.3)', 'Moderate (0.3–0.5)', 'Dense (>0.5)']),
+    'SAVI':    ([-1, 0.1, 0.3, 0.5, 1],           ['Sparse (<0.1)', 'Low (0.1–0.3)', 'Moderate (0.3–0.5)', 'Dense (>0.5)']),
+    'NDBI':    ([-1, -0.1, 0.0, 0.1, 1],          ['Non-built (<-0.1)', 'Low built (-0.1–0)', 'Moderate (0–0.1)', 'High built (>0.1)']),
+    'NDWI':    ([-1, -0.3, 0.0, 0.3, 1],          ['Dry (<-0.3)', 'Transition (-0.3–0)', 'Moist (0–0.3)', 'Water (>0.3)']),
+    'MNDWI':   ([-1, -0.3, 0.0, 0.3, 1],          ['Dry (<-0.3)', 'Transition (-0.3–0)', 'Moist (0–0.3)', 'Water (>0.3)']),
+    'BSI':     ([-1, -0.1, 0.1, 1],               ['Vegetated (<-0.1)', 'Mixed (-0.1–0.1)', 'Bare soil (>0.1)']),
+    'UI':      ([-1, -0.1, 0.1, 1],               ['Vegetation (<-0.1)', 'Transition (-0.1–0.1)', 'Urban (>0.1)']),
+    'NDSI':    ([-1, 0.0, 0.4, 1],                ['No snow (<0)', 'Possible (0–0.4)', 'Snow (>0.4)']),
+    'NBI':     ([0, 0.1, 0.25, 0.5],              ['Low (<0.1)', 'Moderate (0.1–0.25)', 'High (>0.25)']),
+    'LST':     ([0, 30, 35, 40, 45, 100],          ['Cool (<30°C)', 'Moderate (30–35°C)', 'Warm (35–40°C)', 'Hot (40–45°C)', 'Extreme (>45°C)']),
+}
+
+
+def _compute_area_stats(ee_image, band_name, study_area, var_label, scale):
+    """
+    Compute per-class pixel counts + hectares using GEE directly in app.py.
+    Returns {'total_ha': float, 'class_pcts': {label: {'pct': float, 'ha': float, 'total_ha': float}}}
+    """
+    import ee as _ee
+    key = var_label.upper()
+    if key not in _APP_CLASS_BOUNDS:
+        return None, {}
+    bounds, labels = _APP_CLASS_BOUNDS[key]
+    pixel_area_ha = (scale ** 2) / 10000.0
+    try:
+        total_pixels = ee_image.select(band_name).reduceRegion(
+            reducer=_ee.Reducer.count(),
+            geometry=study_area, scale=scale, maxPixels=1e9
+        ).getInfo().get(band_name, 0)
+        if not total_pixels:
+            return None, {}
+        total_ha = round(total_pixels * pixel_area_ha, 1)
+        class_pcts = {}
+        for i in range(len(bounds) - 1):
+            lo, hi = bounds[i], bounds[i + 1]
+            mask  = ee_image.select(band_name).gte(lo).And(ee_image.select(band_name).lt(hi))
+            count = ee_image.select(band_name).updateMask(mask).reduceRegion(
+                reducer=_ee.Reducer.count(),
+                geometry=study_area, scale=scale, maxPixels=1e9
+            ).getInfo().get(band_name, 0)
+            pct = round((count / total_pixels) * 100, 1) if total_pixels else 0
+            ha  = round(count * pixel_area_ha, 1)
+            if pct > 0:
+                class_pcts[labels[i]] = {'pct': pct, 'ha': ha, 'total_ha': total_ha}
+        print(f'  ✓ {var_label} area stats: {total_ha:,.0f} ha total, {len(class_pcts)} classes')
+        return total_ha, class_pcts
+    except Exception as e:
+        print(f'  {var_label} area stats failed: {e}')
+        return None, {}
+
+
 def find_latest_outputs(prefix_keywords: list) -> dict:
     """Find the most recently saved output images matching keywords."""
     results = {}
@@ -383,12 +437,6 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     get_stats, SURFACE_INDEX_MAP, VIS,
                     get_thumb, make_rgb_overview, make_analysis_map, make_stats_charts,
                 )
-                # Optional imports — gracefully skip if not present in this gis_functions version
-                try:
-                    from gis_functions import get_area_ha, get_class_pcts as _get_class_pcts
-                    _has_area_funcs = True
-                except ImportError:
-                    _has_area_funcs = False
                 study_area_surf = study_area_main
                 landsat_col, composite = load_landsat(study_area_surf, start_date, end_date)
                 count = landsat_col.size().getInfo()
@@ -458,17 +506,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 s['monthly'] = {}
                                 print(f'  LST monthly failed: {lst_me}')
                             all_stats['LST'] = s
-                            # Enrich with area data BEFORE charts are generated
-                            if _has_area_funcs:
-                                try:
-                                    all_stats['LST']['total_ha'] = get_area_ha(study_area_surf, scale=90)
-                                except Exception as _e:
-                                    print(f'  LST total_ha failed: {_e}')
-                                try:
-                                    all_stats['LST']['class_pcts'] = _get_class_pcts(lst_img, 'LST', study_area_surf, 'LST', scale=90)
-                                    print(f'  ✓ LST class_pcts: {list(all_stats["LST"]["class_pcts"].keys())}')
-                                except Exception as _e:
-                                    print(f'  LST class_pcts failed: {_e}')
+                            # ── Enrich with real per-class area (ha) ─────────
+                            _total_ha, _class_pcts = _compute_area_stats(
+                                lst_img, 'LST', study_area_surf, 'LST', scale=90)
+                            if _total_ha:
+                                all_stats['LST']['total_ha']   = _total_ha
+                                all_stats['LST']['class_pcts'] = _class_pcts
                             map_id   = lst_img.clip(study_area_surf).getMapId(VIS['lst'])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': _layer_label('LST', region_name, start_date, end_date), 'tile_url': tile_url,
@@ -655,17 +698,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             except Exception as me:
                                 s['monthly'] = {}
                             all_stats[label] = s
-                            # Enrich with area data BEFORE charts are generated
-                            if _has_area_funcs:
-                                try:
-                                    all_stats[label]['total_ha'] = get_area_ha(study_area_surf, scale=scale)
-                                except Exception as _e:
-                                    print(f'  {label} total_ha failed: {_e}')
-                                try:
-                                    all_stats[label]['class_pcts'] = _get_class_pcts(img, label, study_area_surf, label, scale=scale)
-                                    print(f'  ✓ {label} class_pcts: {list(all_stats[label]["class_pcts"].keys())}')
-                                except Exception as _e:
-                                    print(f'  {label} class_pcts failed: {_e}')
+                            # ── Enrich with real per-class area (ha) ─────────
+                            _total_ha, _class_pcts = _compute_area_stats(
+                                img, label, study_area_surf, label, scale=scale)
+                            if _total_ha:
+                                all_stats[label]['total_ha']   = _total_ha
+                                all_stats[label]['class_pcts'] = _class_pcts
                             map_id   = img.clip(study_area_surf).getMapId(VIS[vis_key])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': _layer_label(label, region_name, start_date, end_date), 'tile_url': tile_url,

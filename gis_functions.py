@@ -447,40 +447,19 @@ _CLASS_BOUNDS = {
     'FFPI':    ([0, 0.3, 0.6, 0.8, 1],            ['Clean (0–0.3)', 'Moderate (0.3–0.6)', 'Polluted (0.6–0.8)', 'Severe (>0.8)']),
 }
 
-def get_area_ha(study_area, scale=90):
-    """Compute total area of study_area in hectares at given pixel scale."""
-    try:
-        pixel_area_ha = (scale ** 2) / 10000.0
-        count = ee.Image.constant(1).clip(study_area).reduceRegion(
-            reducer=ee.Reducer.count(),
-            geometry=study_area, scale=scale, maxPixels=1e9
-        ).getInfo().get('constant', 0)
-        return round(count * pixel_area_ha, 1)
-    except Exception as e:
-        print(f'  get_area_ha failed: {e}')
-        try:
-            return round(study_area.area(maxError=1).getInfo() / 10000.0, 1)
-        except:
-            return None
-
-
 def get_class_pcts(image, band, study_area, var_label, scale=1000):
-    """Compute real per-class pixel percentages and hectares via GEE for a given variable.
-    Returns dict of label -> {'pct': float, 'ha': float, 'total_ha': float}
-    """
+    """Compute real per-class pixel percentages via GEE for a given variable."""
     key = var_label.upper()
     if key not in _CLASS_BOUNDS:
         return {}
     bounds, labels = _CLASS_BOUNDS[key]
     try:
-        pixel_area_ha = (scale ** 2) / 10000.0
         total_pixels = image.select(band).reduceRegion(
             reducer=ee.Reducer.count(),
             geometry=study_area, scale=scale, maxPixels=1e9
         ).getInfo().get(band, 0)
         if not total_pixels:
             return {}
-        total_ha = round(total_pixels * pixel_area_ha, 1)
         result = {}
         for i in range(len(bounds) - 1):
             lo, hi = bounds[i], bounds[i+1]
@@ -490,9 +469,8 @@ def get_class_pcts(image, band, study_area, var_label, scale=1000):
                 geometry=study_area, scale=scale, maxPixels=1e9
             ).getInfo().get(band, 0)
             pct = round((count / total_pixels) * 100, 1) if total_pixels else 0
-            ha  = round(count * pixel_area_ha, 1)
             if pct > 0:
-                result[labels[i]] = {'pct': pct, 'ha': ha, 'total_ha': total_ha}
+                result[labels[i]] = pct
         return result
     except Exception as e:
         print(f'  class_pcts failed for {var_label}: {e}')
@@ -758,82 +736,75 @@ def make_stats_charts(stats, var_name, label):
 
             # ── Per-index class boundaries ────────────────────────────────────
             if 'NDVI' in label_up:
-                bounds   = [-1, 0.1, 0.3, 0.6, 1]
+                bounds = [-1, 0.1, 0.3, 0.6, 1]
                 labels_c = ['Bare\n(<0.1)', 'Stressed\n(0.1–0.3)',
                              'Moderate\n(0.3–0.6)', 'Healthy\n(>0.6)']
                 xlabel = 'NDVI class'
             elif 'NDBI' in label_up:
-                bounds   = [-1, -0.1, 0.0, 0.1, 1]
+                bounds = [-1, -0.1, 0.0, 0.1, 1]
                 labels_c = ['Non-built\n(<–0.1)', 'Low built\n(–0.1–0)',
                              'Moderate\n(0–0.1)', 'High built\n(>0.1)']
                 xlabel = 'Built-up class'
             elif 'NDWI' in label_up or 'MNDWI' in label_up:
-                bounds   = [-1, -0.3, 0.0, 0.3, 1]
+                bounds = [-1, -0.3, 0.0, 0.3, 1]
                 labels_c = ['Dry\n(<–0.3)', 'Transition\n(–0.3–0)',
                              'Moist\n(0–0.3)', 'Water\n(>0.3)']
                 xlabel = 'Water class'
             elif 'BSI' in label_up:
-                bounds   = [-1, -0.1, 0.1, 1]
+                bounds = [-1, -0.1, 0.1, 1]
                 labels_c = ['Vegetated\n(<–0.1)', 'Mixed\n(–0.1–0.1)', 'Bare soil\n(>0.1)']
                 xlabel = 'Bare soil class'
             elif 'UI' in label_up:
-                bounds   = [-1, -0.1, 0.1, 1]
+                bounds = [-1, -0.1, 0.1, 1]
                 labels_c = ['Vegetation\n(<–0.1)', 'Transition\n(–0.1–0.1)', 'Urban\n(>0.1)']
                 xlabel = 'Urban class'
             elif 'EVI' in label_up or 'SAVI' in label_up:
-                bounds   = [-1, 0.1, 0.3, 0.5, 1]
+                bounds = [-1, 0.1, 0.3, 0.5, 1]
                 labels_c = ['Sparse\n(<0.1)', 'Low\n(0.1–0.3)',
                              'Moderate\n(0.3–0.5)', 'Dense\n(>0.5)']
                 xlabel = 'Vegetation class'
             elif 'NDSI' in label_up:
-                bounds   = [-1, 0.0, 0.4, 1]
+                bounds = [-1, 0.0, 0.4, 1]
                 labels_c = ['No snow\n(<0)', 'Possible\n(0–0.4)', 'Snow\n(>0.4)']
                 xlabel = 'Snow class'
             elif 'NBI' in label_up:
-                bounds   = [0, 0.1, 0.25, 0.5]
+                bounds = [0, 0.1, 0.25, 0.5]
                 labels_c = ['Low\n(<0.1)', 'Moderate\n(0.1–0.25)', 'High\n(>0.25)']
                 xlabel = 'Built-up class'
             else:
                 bounds, labels_c, xlabel = [], [], label
 
             if pal and len(bounds) >= 2:
-                # Use real class_pcts if available (keyed by GEE labels matching _CLASS_BOUNDS)
-                real_class_pcts = s.get('class_pcts') or {}
-
-                if real_class_pcts:
-                    # Build label display map: strip newlines for matching
-                    flat_to_display = {lc.replace('\n', ' '): lc for lc in labels_c}
+                # ── Use real class_pcts if available; else simulate ───────────
+                real_cp = s.get('class_pcts') or {}
+                if real_cp:
+                    # Map backend labels → display labels + palette colors
+                    backend_to_display = {}
+                    for i, lc in enumerate(labels_c):
+                        # backend label is labels_c[i] without newlines
+                        backend_lbl = lc.replace('\n', ' ')
+                        midpoint = (bounds[i] + bounds[i + 1]) / 2
+                        color    = _pal_color(pal, vmin_p, vmax_p, midpoint)
+                        backend_to_display[backend_lbl] = (lc, color)
                     pairs = []
-                    for raw_lbl, val in real_class_pcts.items():
+                    for raw_lbl, val in real_cp.items():
                         pct = val['pct'] if isinstance(val, dict) else float(val)
                         if pct <= 0.5: continue
-                        # Match to display label
-                        disp = flat_to_display.get(raw_lbl, raw_lbl.replace(' ', '\n', 1))
-                        # Get color from midpoint of corresponding bound range
-                        idx = next((i for i, lc in enumerate(labels_c)
-                                    if lc.replace('\n', ' ') == raw_lbl), None)
-                        if idx is not None and idx < len(bounds) - 1:
-                            midpoint = (bounds[idx] + bounds[idx + 1]) / 2
-                            color = _pal_color(pal, vmin_p, vmax_p, midpoint)
-                        else:
-                            color = _pal_color(pal, vmin_p, vmax_p, (vmin_p + vmax_p) / 2)
+                        disp, color = backend_to_display.get(
+                            raw_lbl, (raw_lbl.replace(' ', '\n', 1),
+                                      _pal_color(pal, vmin_p, vmax_p, (vmin_p + vmax_p) / 2)))
                         pairs.append((disp, pct, color))
                 else:
-                    # Fallback: simulate from normal distribution
                     std_v   = s.get('std', 0.1) or 0.1
                     rng     = np.random.default_rng(42)
-                    samples = rng.normal(mean_v, std_v, 50000)
-                    samples = np.clip(samples, bounds[0], bounds[-1])
-                    class_defs = []
+                    samples = np.clip(rng.normal(mean_v, std_v, 50000), bounds[0], bounds[-1])
+                    pairs   = []
                     for i in range(len(bounds) - 1):
                         lo_b, hi_b = bounds[i], bounds[i + 1]
-                        mask       = (samples >= lo_b) & (samples < hi_b)
-                        midpoint   = (lo_b + hi_b) / 2
-                        color      = _pal_color(pal, vmin_p, vmax_p, midpoint)
-                        class_defs.append((labels_c[i], mask, color))
-                    pairs = [(name, float(np.mean(mask) * 100), col)
-                             for name, mask, col in class_defs
-                             if float(np.mean(mask) * 100) > 0.5]
+                        pct  = float(np.mean((samples >= lo_b) & (samples < hi_b)) * 100)
+                        if pct <= 0.5: continue
+                        mid  = (lo_b + hi_b) / 2
+                        pairs.append((labels_c[i], pct, _pal_color(pal, vmin_p, vmax_p, mid)))
 
                 if pairs:
                     cls, pct_vals, col_vals = zip(*pairs)
@@ -866,45 +837,45 @@ def make_stats_charts(stats, var_name, label):
                     return default if (np.isnan(f) or np.isinf(f)) else f
                 except: return default
 
-            # Class definitions: label → (display_label, color)
-            _lst_class_map = {
-                'Cool (<30°C)'        : ('Cool\n(<30°C)',       '#0502b8'),
-                'Moderate (30–35°C)'  : ('Moderate\n(30–35°C)','#269db1'),
-                'Warm (35–40°C)'      : ('Warm\n(35–40°C)',    '#3be285'),
-                'Hot (40–45°C)'       : ('Hot\n(40–45°C)',     '#f5a800'),
-                'Extreme (>45°C)'     : ('Extreme\n(>45°C)',   '#ff500d'),
+            # Label → (display, color)
+            _lst_display = {
+                'Cool (<30°C)'       : ('Cool\n(<30°C)',        '#0502b8'),
+                'Moderate (30–35°C)' : ('Moderate\n(30–35°C)', '#269db1'),
+                'Warm (35–40°C)'     : ('Warm\n(35–40°C)',      '#3be285'),
+                'Hot (40–45°C)'      : ('Hot\n(40–45°C)',       '#f5a800'),
+                'Extreme (>45°C)'    : ('Extreme\n(>45°C)',     '#ff500d'),
             }
 
-            # Use real class_pcts if available, else fall back to simulation
-            real_class_pcts = s.get('class_pcts') or {}
-            if real_class_pcts:
+            real_cp = s.get('class_pcts') or {}
+            if real_cp:
                 pairs = []
-                for lbl, val in real_class_pcts.items():
+                for lbl, val in real_cp.items():
                     pct = val['pct'] if isinstance(val, dict) else float(val)
                     if pct <= 0.1: continue
-                    disp, color = _lst_class_map.get(lbl, (lbl.replace(' ', '\n'), '#aaaaaa'))
+                    disp, color = _lst_display.get(lbl, (lbl, '#aaaaaa'))
                     pairs.append((disp, pct, color))
             else:
                 _heat_mean = _safe_float(mean_v, 35.0)
                 _std_v     = _safe_float(s.get('std'), 3.0)
                 if _std_v <= 0: _std_v = 3.0
-                min_lst    = _safe_float(s.get('min'), 20.0)
-                max_lst    = _safe_float(s.get('max'), 60.0)
+                min_lst = _safe_float(s.get('min'), 20.0)
+                max_lst = _safe_float(s.get('max'), 60.0)
                 if max_lst <= min_lst: max_lst = min_lst + 40.0
                 rng     = np.random.default_rng(42)
                 samples = rng.normal(_heat_mean, _std_v, 50000)
                 samples = np.clip(samples, min_lst, max_lst)
-                pcts_sim = [
+                classes = ['Cool\n(<30°C)', 'Moderate\n(30–35°C)', 'Warm\n(35–40°C)',
+                           'Hot\n(40–45°C)', 'Extreme\n(>45°C)']
+                pcts    = [
                     float(np.mean(samples < 30) * 100),
                     float(np.mean((samples >= 30) & (samples < 35)) * 100),
                     float(np.mean((samples >= 35) & (samples < 40)) * 100),
                     float(np.mean((samples >= 40) & (samples < 45)) * 100),
                     float(np.mean(samples >= 45) * 100),
                 ]
-                classes = ['Cool\n(<30°C)', 'Moderate\n(30–35°C)', 'Warm\n(35–40°C)',
-                           'Hot\n(40–45°C)', 'Extreme\n(>45°C)']
                 colors  = ['#0502b8', '#269db1', '#3be285', '#f5a800', '#ff500d']
-                pairs = [(c, p, col) for c, p, col in zip(classes, pcts_sim, colors) if p > 0.1]
+                pairs   = [(c, p, col) for c, p, col in zip(classes, pcts, colors) if p > 0.1]
+
             if pairs:
                 cls, pct_vals, col_vals = zip(*pairs)
                 fig, ax = plt.subplots(figsize=(6, 3.5))
@@ -918,7 +889,7 @@ def make_stats_charts(stats, var_name, label):
                             fontweight='bold', color='#333')
                 ax.set_xlabel('Temperature class', fontsize=9)
                 ax.set_ylabel('Area share (%)', fontsize=9)
-                ax.set_title('LST heat class composition', fontsize=10, fontweight='bold')
+                ax.set_title('LST class composition', fontsize=10, fontweight='bold')
                 ax.spines['top'].set_visible(False)
                 ax.spines['right'].set_visible(False)
                 fig.tight_layout()
