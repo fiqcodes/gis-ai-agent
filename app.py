@@ -73,130 +73,6 @@ def image_to_base64(path: str) -> str:
     return f'data:image/{mime};base64,{data}'
 
 
-# ── Class boundary definitions for area enrichment (mirrors gis_functions._CLASS_BOUNDS) ──
-_APP_CLASS_BOUNDS = {
-    'NDVI':    ([-1, 0.1, 0.3, 0.6, 1],          ['Bare (<0.1)', 'Stressed (0.1–0.3)', 'Moderate (0.3–0.6)', 'Healthy (>0.6)']),
-    'EVI':     ([-1, 0.1, 0.3, 0.5, 1],           ['Sparse (<0.1)', 'Low (0.1–0.3)', 'Moderate (0.3–0.5)', 'Dense (>0.5)']),
-    'SAVI':    ([-1, 0.1, 0.3, 0.5, 1],           ['Sparse (<0.1)', 'Low (0.1–0.3)', 'Moderate (0.3–0.5)', 'Dense (>0.5)']),
-    'NDBI':    ([-1, -0.1, 0.0, 0.1, 1],          ['Non-built (<-0.1)', 'Low built (-0.1–0)', 'Moderate (0–0.1)', 'High built (>0.1)']),
-    'NDWI':    ([-1, -0.3, 0.0, 0.3, 1],          ['Dry (<-0.3)', 'Transition (-0.3–0)', 'Moist (0–0.3)', 'Water (>0.3)']),
-    'MNDWI':   ([-1, -0.3, 0.0, 0.3, 1],          ['Dry (<-0.3)', 'Transition (-0.3–0)', 'Moist (0–0.3)', 'Water (>0.3)']),
-    'BSI':     ([-1, -0.1, 0.1, 1],               ['Vegetated (<-0.1)', 'Mixed (-0.1–0.1)', 'Bare soil (>0.1)']),
-    'UI':      ([-1, -0.1, 0.1, 1],               ['Vegetation (<-0.1)', 'Transition (-0.1–0.1)', 'Urban (>0.1)']),
-    'NDSI':    ([-1, 0.0, 0.4, 1],                ['No snow (<0)', 'Possible (0–0.4)', 'Snow (>0.4)']),
-    'NBI':     ([0, 0.1, 0.25, 0.5],              ['Low (<0.1)', 'Moderate (0.1–0.25)', 'High (>0.25)']),
-    'LST':     ([0, 30, 35, 40, 45, 100],          ['Cool (<30°C)', 'Moderate (30–35°C)', 'Warm (35–40°C)', 'Hot (40–45°C)', 'Extreme (>45°C)']),
-}
-
-
-def _make_class_bar_b64(class_pcts, title, xlabel):
-    """
-    Generate a class composition bar chart from real class_pcts data.
-    Returns base64 PNG string or None if failed.
-    """
-    try:
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
-        import io, base64
-
-        # Color map for known LST and index class labels
-        _COLOR_MAP = {
-            'Cool (<30°C)'        : '#0502b8',
-            'Moderate (30–35°C)'  : '#269db1',
-            'Warm (35–40°C)'      : '#3be285',
-            'Hot (40–45°C)'       : '#f5a800',
-            'Extreme (>45°C)'     : '#ff500d',
-            'Bare (<0.1)'         : '#d4a96a',
-            'Stressed (0.1–0.3)'  : '#a8c97f',
-            'Moderate (0.3–0.6)'  : '#5aaa4f',
-            'Healthy (>0.6)'      : '#1a6e1a',
-            'Non-built (<-0.1)'   : '#4fc3f7',
-            'Low built (-0.1–0)'  : '#b0bec5',
-            'High built (>0.1)'   : '#e53935',
-            'Dry (<-0.3)'         : '#bf8c4c',
-            'Transition (-0.3–0)' : '#a5d6a7',
-            'Moist (0–0.3)'       : '#42a5f5',
-            'Water (>0.3)'        : '#0d47a1',
-        }
-        _DEFAULT_COLORS = ['#4e79a7','#f28e2b','#e15759','#76b7b2',
-                           '#59a14f','#edc948','#b07aa1','#ff9da7']
-
-        pairs = []
-        for lbl, val in class_pcts.items():
-            pct = val['pct'] if isinstance(val, dict) else float(val)
-            if pct <= 0.1: continue
-            color = _COLOR_MAP.get(lbl, _DEFAULT_COLORS[len(pairs) % len(_DEFAULT_COLORS)])
-            # Display label: wrap at space before '(' for readability
-            disp = lbl.replace(' (', '\n(') if ' (' in lbl else lbl
-            pairs.append((disp, pct, color))
-
-        if not pairs:
-            return None
-
-        cls, pct_vals, col_vals = zip(*pairs)
-        fig, ax = plt.subplots(figsize=(max(5, len(pairs) * 1.3), 3.5))
-        bars = ax.bar(cls, pct_vals, color=col_vals, edgecolor='white',
-                      linewidth=0.5, width=0.55)
-        ax.set_ylim(0, max(pct_vals) * 1.28)
-        for bar, pct in zip(bars, pct_vals):
-            ax.text(bar.get_x() + bar.get_width() / 2,
-                    bar.get_height() + max(pct_vals) * 0.02,
-                    f'{pct:.1f}%', ha='center', va='bottom',
-                    fontsize=8, fontweight='bold', color='#333')
-        ax.set_xlabel(xlabel, fontsize=9)
-        ax.set_ylabel('Area share (%)', fontsize=9)
-        ax.set_title(title, fontsize=10, fontweight='bold')
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        fig.tight_layout()
-
-        buf = io.BytesIO()
-        fig.savefig(buf, format='png', dpi=120, bbox_inches='tight')
-        plt.close(fig)
-        buf.seek(0)
-        b64 = base64.b64encode(buf.read()).decode('utf-8')
-        return f'data:image/png;base64,{b64}'
-    except Exception as e:
-        print(f'  _make_class_bar_b64 failed: {e}')
-        return None
-    """
-    Compute per-class pixel counts + hectares using GEE directly in app.py.
-    Returns {'total_ha': float, 'class_pcts': {label: {'pct': float, 'ha': float, 'total_ha': float}}}
-    """
-    import ee as _ee
-    key = var_label.upper()
-    if key not in _APP_CLASS_BOUNDS:
-        return None, {}
-    bounds, labels = _APP_CLASS_BOUNDS[key]
-    pixel_area_ha = (scale ** 2) / 10000.0
-    try:
-        total_pixels = ee_image.select(band_name).reduceRegion(
-            reducer=_ee.Reducer.count(),
-            geometry=study_area, scale=scale, maxPixels=1e9
-        ).getInfo().get(band_name, 0)
-        if not total_pixels:
-            return None, {}
-        total_ha = round(total_pixels * pixel_area_ha, 1)
-        class_pcts = {}
-        for i in range(len(bounds) - 1):
-            lo, hi = bounds[i], bounds[i + 1]
-            mask  = ee_image.select(band_name).gte(lo).And(ee_image.select(band_name).lt(hi))
-            count = ee_image.select(band_name).updateMask(mask).reduceRegion(
-                reducer=_ee.Reducer.count(),
-                geometry=study_area, scale=scale, maxPixels=1e9
-            ).getInfo().get(band_name, 0)
-            pct = round((count / total_pixels) * 100, 1) if total_pixels else 0
-            ha  = round(count * pixel_area_ha, 1)
-            if pct > 0:
-                class_pcts[labels[i]] = {'pct': pct, 'ha': ha, 'total_ha': total_ha}
-        print(f'  ✓ {var_label} area stats: {total_ha:,.0f} ha total, {len(class_pcts)} classes')
-        return total_ha, class_pcts
-    except Exception as e:
-        print(f'  {var_label} area stats failed: {e}')
-        return None, {}
-
-
 def find_latest_outputs(prefix_keywords: list) -> dict:
     """Find the most recently saved output images matching keywords."""
     results = {}
@@ -339,6 +215,107 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             SURFACE_INDEX_MAP, ATMO_INDEX_MAP, KEYWORD_MAP, SYSTEM_PROMPT,
             resolve_region, fetch_web_context, generate_insight,
         )
+
+        # ── Local helpers (defined here so they're always in scope) ──────────
+        _APP_CLASS_BOUNDS_LOCAL = {
+            'NDVI':  ([-1, 0.1, 0.3, 0.6, 1],        ['Bare (<0.1)', 'Stressed (0.1–0.3)', 'Moderate (0.3–0.6)', 'Healthy (>0.6)']),
+            'EVI':   ([-1, 0.1, 0.3, 0.5, 1],         ['Sparse (<0.1)', 'Low (0.1–0.3)', 'Moderate (0.3–0.5)', 'Dense (>0.5)']),
+            'SAVI':  ([-1, 0.1, 0.3, 0.5, 1],         ['Sparse (<0.1)', 'Low (0.1–0.3)', 'Moderate (0.3–0.5)', 'Dense (>0.5)']),
+            'NDBI':  ([-1, -0.1, 0.0, 0.1, 1],        ['Non-built (<-0.1)', 'Low built (-0.1–0)', 'Moderate (0–0.1)', 'High built (>0.1)']),
+            'NDWI':  ([-1, -0.3, 0.0, 0.3, 1],        ['Dry (<-0.3)', 'Transition (-0.3–0)', 'Moist (0–0.3)', 'Water (>0.3)']),
+            'MNDWI': ([-1, -0.3, 0.0, 0.3, 1],        ['Dry (<-0.3)', 'Transition (-0.3–0)', 'Moist (0–0.3)', 'Water (>0.3)']),
+            'BSI':   ([-1, -0.1, 0.1, 1],             ['Vegetated (<-0.1)', 'Mixed (-0.1–0.1)', 'Bare soil (>0.1)']),
+            'UI':    ([-1, -0.1, 0.1, 1],             ['Vegetation (<-0.1)', 'Transition (-0.1–0.1)', 'Urban (>0.1)']),
+            'NDSI':  ([-1, 0.0, 0.4, 1],              ['No snow (<0)', 'Possible (0–0.4)', 'Snow (>0.4)']),
+            'NBI':   ([0, 0.1, 0.25, 0.5],            ['Low (<0.1)', 'Moderate (0.1–0.25)', 'High (>0.25)']),
+            'LST':   ([0, 30, 35, 40, 45, 100],        ['Cool (<30°C)', 'Moderate (30–35°C)', 'Warm (35–40°C)', 'Hot (40–45°C)', 'Extreme (>45°C)']),
+        }
+
+        def _compute_area_stats(ee_image, band_name, study_area, var_label, scale):
+            import ee as _ee
+            key = var_label.upper()
+            if key not in _APP_CLASS_BOUNDS_LOCAL:
+                return None, {}
+            bounds, labels = _APP_CLASS_BOUNDS_LOCAL[key]
+            pixel_area_ha = (scale ** 2) / 10000.0
+            try:
+                total_pixels = ee_image.select(band_name).reduceRegion(
+                    reducer=_ee.Reducer.count(),
+                    geometry=study_area, scale=scale, maxPixels=1e9
+                ).getInfo().get(band_name, 0)
+                if not total_pixels:
+                    return None, {}
+                total_ha   = round(total_pixels * pixel_area_ha, 1)
+                class_pcts = {}
+                for i in range(len(bounds) - 1):
+                    lo, hi = bounds[i], bounds[i + 1]
+                    mask  = ee_image.select(band_name).gte(lo).And(ee_image.select(band_name).lt(hi))
+                    count = ee_image.select(band_name).updateMask(mask).reduceRegion(
+                        reducer=_ee.Reducer.count(),
+                        geometry=study_area, scale=scale, maxPixels=1e9
+                    ).getInfo().get(band_name, 0)
+                    pct = round((count / total_pixels) * 100, 1) if total_pixels else 0
+                    ha  = round(count * pixel_area_ha, 1)
+                    if pct > 0:
+                        class_pcts[labels[i]] = {'pct': pct, 'ha': ha, 'total_ha': total_ha}
+                print(f'  ✓ {var_label} area stats: {total_ha:,.0f} ha, {len(class_pcts)} classes')
+                return total_ha, class_pcts
+            except Exception as _e:
+                print(f'  {var_label} area stats failed: {_e}')
+                return None, {}
+
+        def _make_class_bar_b64(class_pcts, title, xlabel):
+            try:
+                import matplotlib
+                matplotlib.use('Agg')
+                import matplotlib.pyplot as _plt
+                import io as _io, base64 as _b64
+                _COLOR_MAP = {
+                    'Cool (<30°C)': '#0502b8', 'Moderate (30–35°C)': '#269db1',
+                    'Warm (35–40°C)': '#3be285', 'Hot (40–45°C)': '#f5a800',
+                    'Extreme (>45°C)': '#ff500d', 'Bare (<0.1)': '#d4a96a',
+                    'Stressed (0.1–0.3)': '#a8c97f', 'Moderate (0.3–0.6)': '#5aaa4f',
+                    'Healthy (>0.6)': '#1a6e1a', 'Non-built (<-0.1)': '#4fc3f7',
+                    'Low built (-0.1–0)': '#b0bec5', 'High built (>0.1)': '#e53935',
+                    'Dry (<-0.3)': '#bf8c4c', 'Transition (-0.3–0)': '#a5d6a7',
+                    'Moist (0–0.3)': '#42a5f5', 'Water (>0.3)': '#0d47a1',
+                }
+                _FALLBACK = ['#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f','#edc948']
+                pairs = []
+                for lbl, val in class_pcts.items():
+                    pct = val['pct'] if isinstance(val, dict) else float(val)
+                    if pct <= 0.1: continue
+                    color = _COLOR_MAP.get(lbl, _FALLBACK[len(pairs) % len(_FALLBACK)])
+                    disp  = lbl.replace(' (', '\n(') if ' (' in lbl else lbl
+                    pairs.append((disp, pct, color))
+                if not pairs:
+                    return None
+                cls, pct_vals, col_vals = zip(*pairs)
+                fig, ax = _plt.subplots(figsize=(max(5, len(pairs) * 1.3), 3.5))
+                bars = ax.bar(cls, pct_vals, color=col_vals, edgecolor='white', linewidth=0.5, width=0.55)
+                ax.set_ylim(0, max(pct_vals) * 1.28)
+                for bar, pct in zip(bars, pct_vals):
+                    ax.text(bar.get_x() + bar.get_width() / 2,
+                            bar.get_height() + max(pct_vals) * 0.02,
+                            f'{pct:.1f}%', ha='center', va='bottom', fontsize=8,
+                            fontweight='bold', color='#333')
+                ax.set_xlabel(xlabel, fontsize=9)
+                ax.set_ylabel('Area share (%)', fontsize=9)
+                ax.set_title(title, fontsize=10, fontweight='bold')
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                fig.tight_layout()
+                buf = _io.BytesIO()
+                fig.savefig(buf, format='png', dpi=120, bbox_inches='tight')
+                _plt.close(fig)
+                buf.seek(0)
+                b64 = _b64.b64encode(buf.read()).decode('utf-8')
+                return f'data:image/png;base64,{b64}'
+            except Exception as _e:
+                print(f'  _make_class_bar_b64 failed: {_e}')
+                return None
+        # ── End local helpers ─────────────────────────────────────────────────
+
         update_step(0, 'done', 100)
 
         # ── Step 2: parse intent via Ollama ───────────────────────────────────

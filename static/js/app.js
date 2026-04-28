@@ -1344,7 +1344,8 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
               findingItems += `<div class="concl-finding-item">Cooler zones (${coolRange}) cover <strong class="fv-cyan">${coolEntry.pct.toFixed(1)}%</strong>${haStr} — likely parks, water bodies, or shaded areas</div>`;
             }
           } else {
-            if (s.p10 != null && s.p90 != null) findingItems += `<div class="concl-finding-item">Thermal spread: P10 = <strong class="fv-cyan">${s.p10.toFixed(1)}°C</strong> → P90 = <strong class="fv-pink">${s.p90.toFixed(1)}°C</strong></div>`;
+            // No class_pcts — show a neutral fallback without raw P10/P90
+            findingItems += `<div class="concl-finding-item">Thermal distribution indicates predominantly <strong class="fv-amber">${thermalClass}</strong> conditions across the region</div>`;
           }
         } else if (s.mean != null) {
           chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value cv-cyan">${s.mean.toFixed(4)}</div></div>`;
