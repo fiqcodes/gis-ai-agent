@@ -1729,25 +1729,75 @@ function buildDistClassExplanation(varLabel, s) {
     const mean = s.mean;
     const p90  = s.p90  || mean;
     const p10  = s.p10  || mean;
+    const std  = s.std  || 0;
 
-    // Infer dominant heat class from mean
-    let dominantClass;
-    if      (mean < 30) { dominantClass = 'cool (<30°C)';       }
-    else if (mean < 35) { dominantClass = 'moderate (30–35°C)'; }
-    else if (mean < 40) { dominantClass = 'warm (35–40°C)';     }
-    else if (mean < 45) { dominantClass = 'hot (40–45°C)';      }
-    else                { dominantClass = 'extreme (>45°C)';     }
+    // ── Lead with class composition summary if class_pcts is available ──
+    if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
+      // Build sorted class list to find dominant and secondary classes
+      const cpEntries = Object.entries(s.class_pcts)
+        .map(([lbl, val]) => {
+          const pct = typeof val === 'object' && val !== null ? (val.pct || 0) : parseFloat(val || 0);
+          const ha  = typeof val === 'object' && val !== null ? (val.ha || null) : null;
+          return { lbl, pct, ha };
+        })
+        .filter(e => e.pct >= 0.5)
+        .sort((a, b) => b.pct - a.pct);
 
-    text += `The mean surface temperature places the region predominantly in the <strong>${dominantClass}</strong> thermal class. `;
+      if (cpEntries.length > 0) {
+        const dom = cpEntries[0];
+        const sec = cpEntries[1];
 
-    // Hotspot warning if P90 crosses a danger threshold
+        // Dominant class opening sentence
+        let classIntro = `The thermal landscape is dominated by the <strong>${dom.lbl}</strong> class`;
+        if (dom.ha != null) {
+          classIntro += `, covering <strong>${dom.pct.toFixed(1)}%</strong> of the area (~${Math.round(dom.ha).toLocaleString()} ha)`;
+        } else {
+          classIntro += ` at <strong>${dom.pct.toFixed(1)}%</strong> of the area`;
+        }
+        classIntro += '. ';
+
+        // Secondary class context
+        if (sec) {
+          classIntro += `<strong>${sec.lbl}</strong> accounts for an additional <strong>${sec.pct.toFixed(1)}%</strong>`;
+          if (sec.ha != null) classIntro += ` (~${Math.round(sec.ha).toLocaleString()} ha)`;
+          classIntro += '. ';
+        }
+
+        // High-heat risk note based on class composition
+        const hotEntry    = cpEntries.find(e => e.lbl.toLowerCase().includes('hot'));
+        const extremeEntry = cpEntries.find(e => e.lbl.toLowerCase().includes('extreme'));
+        const hotCoverage = (hotEntry?.pct || 0) + (extremeEntry?.pct || 0);
+        if (hotCoverage > 50) {
+          classIntro += `Combined hot and extreme heat classes cover more than half the region, pointing to widespread impervious surface dominance — rooftops, roads, and bare soil act as primary heat emitters. `;
+        } else if (hotCoverage > 20) {
+          classIntro += `Hot and extreme zones together represent a significant <strong>${hotCoverage.toFixed(1)}%</strong> of the surface, concentrated over built-up and impervious areas. `;
+        }
+
+        text += classIntro;
+      }
+    } else {
+      // Fallback: infer dominant heat class from mean when class_pcts not available
+      let dominantClass;
+      if      (mean < 30) { dominantClass = 'cool (<30°C)';       }
+      else if (mean < 35) { dominantClass = 'moderate (30–35°C)'; }
+      else if (mean < 40) { dominantClass = 'warm (35–40°C)';     }
+      else if (mean < 45) { dominantClass = 'hot (40–45°C)';      }
+      else                { dominantClass = 'extreme (>45°C)';     }
+      text += `The mean surface temperature places the region predominantly in the <strong>${dominantClass}</strong> thermal class. `;
+    }
+
+    // ── Distribution context as supporting detail ──
+    text += `The distribution centers around a mean of <strong>${fmtLST(mean)}°C</strong> (median ${fmtLST(s.p50 || mean)}°C), with a standard deviation of <strong>${fmtLST(std)}°C</strong>. `;
+    text += `The interquartile spread from P10 (${fmtLST(p10)}°C) to P90 (${fmtLST(p90)}°C) shows ${(p90 - p10) > 8 ? 'high' : 'moderate'} spatial variability, with cooler vegetated areas and warmer built surfaces coexisting. `;
+
+    // Hotspot warning
     if (p90 >= 45) {
-      text += `The P90 value of <strong>${fmtLST(p90)}°C</strong> indicates that a significant portion of the landscape reaches extreme heat levels, posing risks for outdoor comfort and urban infrastructure. `;
+      text += `The P90 value of <strong>${fmtLST(p90)}°C</strong> confirms that extreme heat zones are present across a significant portion of the landscape, posing risks for outdoor safety and urban infrastructure. `;
     } else if (p90 >= 40) {
       text += `The P90 value of <strong>${fmtLST(p90)}°C</strong> shows that hot surface zones are present, likely concentrated over impervious surfaces such as roads, rooftops, and industrial areas. `;
     }
 
-    // Cool refuges note if P10 is meaningfully cooler
+    // Cool refuges note
     if (p90 - p10 > 6) {
       text += `Cooler zones near <strong>${fmtLST(p10)}°C</strong> (P10) likely correspond to vegetated parks, water bodies, or shaded areas that act as thermal refuges within the urban fabric.`;
     }
@@ -1807,14 +1857,21 @@ function buildDistClassExplanation(varLabel, s) {
       const domPct   = classPcts[maxIdx];
       const domHa    = classHas[maxIdx];
 
-      let classText = `Looking at the class composition above, <strong>${dominant}</strong> is the dominant condition at <strong>${domPct.toFixed(1)}%</strong>`;
-      if (domHa != null) {
-        classText += ` (~<strong>${domHa.toLocaleString()} ha</strong>)`;
-      } else if (totalHa) {
-        const domHaFallback = Math.round(totalHa * domPct / 100);
-        classText += ` (~<strong>${domHaFallback.toLocaleString()} ha</strong>)`;
+      // For LST with real class_pcts, the leading paragraph already introduced the dominant class.
+      // Skip the redundant summary sentence; only show the bullet breakdown.
+      const skipSummary = isLST && s.class_pcts && Object.keys(s.class_pcts).length > 0;
+
+      let classText = '';
+      if (!skipSummary) {
+        classText = `Looking at the class composition above, <strong>${dominant}</strong> is the dominant condition at <strong>${domPct.toFixed(1)}%</strong>`;
+        if (domHa != null) {
+          classText += ` (~<strong>${domHa.toLocaleString()} ha</strong>)`;
+        } else if (totalHa) {
+          const domHaFallback = Math.round(totalHa * domPct / 100);
+          classText += ` (~<strong>${domHaFallback.toLocaleString()} ha</strong>)`;
+        }
+        classText += '. ';
       }
-      classText += '. ';
 
       // Per-class breakdown as bullet list with ha
       const items = classLabels.map((lbl, i) => {
@@ -2336,24 +2393,50 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
         const defEntry = Object.entries(_CLASS_DEFS).find(([k]) => vUp.includes(k));
         const def = defEntry?.[1];
         if (def) {
-          const mean    = s.mean, std = Math.max(s.std || 0.1, 0.001);
-          const sLo     = s.min ?? mean - 5*std;
-          const sHi     = s.max ?? mean + 5*std;
-          const samples = _sampleNormal(mean, std, 20000, sLo, sHi);
-          const nC      = def.bounds.length - 1;
-
+          const nC = def.bounds.length - 1;
           const classPcts = [], classColors = [], classLabels = [];
-          for (let i = 0; i < nC; i++) {
-            const lo2 = def.bounds[i], hi2 = def.bounds[i+1];
-            const pct = (samples.filter(v => v >= lo2 && v < hi2).length / samples.length) * 100;
-            if (pct < 0.5) continue;
-            classPcts.push(parseFloat(pct.toFixed(1)));
-            classLabels.push(def.labels[i].replace(/\n/g, ' '));
-            if (def.colors) {
-              classColors.push(def.colors[i] || '#aaa');
-            } else {
-              const vis = _VIS_PAL[def.visKey];
-              classColors.push(vis ? _palColor(vis.pal, vis.min, vis.max, (lo2+hi2)/2) : '#5B9BD5');
+
+          // Prefer exact backend class_pcts; fall back to Monte Carlo approximation
+          if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
+            // Build a label→index map so colors stay aligned with _CLASS_DEFS order
+            const labelToIdx = {};
+            def.labels.forEach((lbl, i) => { labelToIdx[lbl.replace(/\n/g, ' ')] = i; });
+
+            for (const [lbl, val] of Object.entries(s.class_pcts)) {
+              let pct = typeof val === 'object' && val !== null ? parseFloat((val.pct || 0).toFixed(1)) : parseFloat(parseFloat(val).toFixed(1));
+              if (pct < 0.5) continue;
+              const cleanLbl = lbl.replace(/\n/g, ' ');
+              const idx = labelToIdx[cleanLbl] ?? -1;
+              classPcts.push(pct);
+              classLabels.push(cleanLbl);
+              if (def.colors) {
+                classColors.push(def.colors[idx >= 0 ? idx : 0] || '#aaa');
+              } else {
+                const lo2 = idx >= 0 ? def.bounds[idx] : def.bounds[0];
+                const hi2 = idx >= 0 ? def.bounds[idx + 1] : def.bounds[1];
+                const vis = _VIS_PAL[def.visKey];
+                classColors.push(vis ? _palColor(vis.pal, vis.min, vis.max, (lo2 + hi2) / 2) : '#5B9BD5');
+              }
+            }
+          } else {
+            // Monte Carlo fallback when backend didn't return class_pcts
+            const mean    = s.mean, std = Math.max(s.std || 0.1, 0.001);
+            const sLo     = s.min ?? mean - 5*std;
+            const sHi     = s.max ?? mean + 5*std;
+            const samples = _sampleNormal(mean, std, 20000, sLo, sHi);
+
+            for (let i = 0; i < nC; i++) {
+              const lo2 = def.bounds[i], hi2 = def.bounds[i+1];
+              const pct = (samples.filter(v => v >= lo2 && v < hi2).length / samples.length) * 100;
+              if (pct < 0.5) continue;
+              classPcts.push(parseFloat(pct.toFixed(1)));
+              classLabels.push(def.labels[i].replace(/\n/g, ' '));
+              if (def.colors) {
+                classColors.push(def.colors[i] || '#aaa');
+              } else {
+                const vis = _VIS_PAL[def.visKey];
+                classColors.push(vis ? _palColor(vis.pal, vis.min, vis.max, (lo2+hi2)/2) : '#5B9BD5');
+              }
             }
           }
 
