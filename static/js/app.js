@@ -2398,22 +2398,31 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
 
           // Prefer exact backend class_pcts; fall back to Monte Carlo approximation
           if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
-            // Build a label→index map so colors stay aligned with _CLASS_DEFS order
+            // Build a label→index map so colors and order stay aligned with _CLASS_DEFS
             const labelToIdx = {};
             def.labels.forEach((lbl, i) => { labelToIdx[lbl.replace(/\n/g, ' ')] = i; });
 
+            // Collect entries first, then sort by canonical class index (ascending) so
+            // bars always render in natural class order (e.g. Moderate→Warm→Hot→Extreme)
+            const cpEntries = [];
             for (const [lbl, val] of Object.entries(s.class_pcts)) {
               let pct = typeof val === 'object' && val !== null ? parseFloat((val.pct || 0).toFixed(1)) : parseFloat(parseFloat(val).toFixed(1));
               if (pct < 0.5) continue;
               const cleanLbl = lbl.replace(/\n/g, ' ');
-              const idx = labelToIdx[cleanLbl] ?? -1;
+              const idx = labelToIdx[cleanLbl] ?? 999;
+              cpEntries.push({ cleanLbl, pct, idx });
+            }
+            // Sort by class index ascending = left-to-right natural order
+            cpEntries.sort((a, b) => a.idx - b.idx);
+
+            for (const { cleanLbl, pct, idx } of cpEntries) {
               classPcts.push(pct);
               classLabels.push(cleanLbl);
               if (def.colors) {
-                classColors.push(def.colors[idx >= 0 ? idx : 0] || '#aaa');
+                classColors.push(def.colors[idx < def.colors.length ? idx : 0] || '#aaa');
               } else {
-                const lo2 = idx >= 0 ? def.bounds[idx] : def.bounds[0];
-                const hi2 = idx >= 0 ? def.bounds[idx + 1] : def.bounds[1];
+                const lo2 = idx < def.bounds.length - 1 ? def.bounds[idx] : def.bounds[0];
+                const hi2 = idx < def.bounds.length - 1 ? def.bounds[idx + 1] : def.bounds[1];
                 const vis = _VIS_PAL[def.visKey];
                 classColors.push(vis ? _palColor(vis.pal, vis.min, vis.max, (lo2 + hi2) / 2) : '#5B9BD5');
               }
