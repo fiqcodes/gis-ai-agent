@@ -567,13 +567,16 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 arr          = get_thumb(lst_img.clip(study_area_surf), VIS['lst'], study_area_surf, dim=512)
                                 analysis_b64 = make_analysis_map(arr, VIS['lst'], 'LST (°C)', region_name, bbox)
                                 charts       = make_stats_charts(all_stats, 'lst', 'LST')
-                                # Replace simulated class bar with real one if class_pcts available
-                                if _class_pcts:
+                                # Always replace class bar with real GEE data if available
+                                _cp_for_bar  = all_stats['LST'].get('class_pcts') or {}
+                                print(f'  LST class_pcts for bar: {list(_cp_for_bar.keys())}')
+                                if _cp_for_bar:
                                     real_bar = _make_class_bar_b64(
-                                        _class_pcts, 'LST class composition', 'Temperature class')
+                                        _cp_for_bar, 'LST class composition', 'Temperature class')
                                     if real_bar:
                                         charts = [(t, d) for t, d in charts if t != 'class_bar']
-                                        charts.append(('class_bar', real_bar))
+                                        charts.insert(0, ('class_bar', real_bar))
+                                        print(f'  ✓ LST class bar replaced with real GEE data')
                                 figures['LST'] = {'analysis_map': analysis_b64, 'charts': charts,
                                                   'rgb_overview': rgb_overview_b64}
                             print('  ✓ LST ready')
@@ -767,8 +770,10 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 arr          = get_thumb(img.clip(study_area_surf), VIS[vis_key], study_area_surf, dim=512)
                                 analysis_b64 = make_analysis_map(arr, VIS[vis_key], label, region_name, bbox)
                                 charts       = make_stats_charts(all_stats, v, label)
-                                # Replace simulated class bar with real one if class_pcts available
-                                if _class_pcts:
+                                # Always replace class bar with real GEE data if available
+                                _cp_for_bar = all_stats[label].get('class_pcts') or {}
+                                print(f'  {label} class_pcts for bar: {list(_cp_for_bar.keys())}')
+                                if _cp_for_bar:
                                     _xlabel_map = {
                                         'NDVI':'NDVI class', 'EVI':'Vegetation class', 'SAVI':'Vegetation class',
                                         'NDBI':'Built-up class', 'NDWI':'Water class', 'MNDWI':'Water class',
@@ -778,10 +783,11 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                     _xu = next((xv for xk, xv in _xlabel_map.items()
                                                 if xk in label.upper()), f'{label} class')
                                     real_bar = _make_class_bar_b64(
-                                        _class_pcts, f'{label} class composition', _xu)
+                                        _cp_for_bar, f'{label} class composition', _xu)
                                     if real_bar:
                                         charts = [(t, d) for t, d in charts if t != 'class_bar']
-                                        charts.append(('class_bar', real_bar))
+                                        charts.insert(0, ('class_bar', real_bar))
+                                        print(f'  ✓ {label} class bar replaced with real GEE data')
                                 figures[label] = {
                                     'analysis_map': analysis_b64,
                                     'charts'      : charts,
