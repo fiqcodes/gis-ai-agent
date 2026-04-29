@@ -1820,6 +1820,10 @@ function buildDistClassExplanation(varLabel, s) {
 
     if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
       // Backend provided exact percentages — new format: {pct, ha, total_ha} or legacy number
+      // Build label->index map so we can sort by canonical class order (matches bar chart)
+      const labelToIdx = {};
+      def.labels.forEach((lbl, i) => { labelToIdx[lbl.replace(/\n/g, ' ')] = i; });
+      const cpEntries = [];
       for (const [lbl, val] of Object.entries(s.class_pcts)) {
         let pct, ha;
         if (typeof val === 'object' && val !== null) {
@@ -1831,9 +1835,15 @@ function buildDistClassExplanation(varLabel, s) {
           ha  = null;
         }
         if (pct < 0.5) continue;
-        classPcts.push(pct);
-        classLabels.push(lbl);
-        classHas.push(ha);
+        const cleanLbl = lbl.replace(/\n/g, ' ');
+        cpEntries.push({ lbl: cleanLbl, pct, ha, idx: labelToIdx[cleanLbl] ?? 999 });
+      }
+      // Sort ascending by class index = natural left-to-right order (matches bar chart)
+      cpEntries.sort((a, b) => a.idx - b.idx);
+      for (const e of cpEntries) {
+        classPcts.push(e.pct);
+        classLabels.push(e.lbl);
+        classHas.push(e.ha);
       }
     } else if (s.mean != null && s.std != null) {
       // Approximation fallback
