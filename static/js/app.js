@@ -2339,16 +2339,31 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           const num = parseInt(m.slice(5), 10);
           return _MON_NAMES[num - 1] || m.slice(5);
         });
-        const baseline = Math.min(...vals) - Math.abs(Math.min(...vals)) * 0.05;
         const yLabel   = isLST ? `${vUp} (°C)` : vUp;
-        Plotly.newPlot(el, [
-          { x:shortM, y:vals, type:'scatter', mode:'lines+markers',
-            line:{ color:'#2196F3', width:2 },
-            marker:{ color:'#2196F3', size:6, symbol:'circle', line:{ color:'white', width:1.5 } },
-            fill:'tonexty', fillcolor:'rgba(33,150,243,0.12)', name:vUp },
-          { x:shortM, y:vals.map(()=>baseline), type:'scatter', mode:'lines',
-            line:{ color:'transparent' }, showlegend:false, hoverinfo:'skip' },
-        ], {
+        // For all-negative series (e.g. NDBI), place baseline at the min so fill
+        // shades the area BELOW the line (toward the min), not above it toward 0.
+        const allNeg   = vals.every(v => v <= 0);
+        const allPos   = vals.every(v => v >= 0);
+        const fillBase = allNeg ? Math.min(...vals) * 1.05 : 0;
+        const traces   = (allNeg || allPos)
+          // Baseline-first trick: invisible flat line at bottom, then fill tonexty (upward)
+          // gives correct shading below the data line for negative series.
+          ? [
+              { x:shortM, y:vals.map(()=>fillBase), type:'scatter', mode:'lines',
+                line:{ color:'transparent' }, showlegend:false, hoverinfo:'skip' },
+              { x:shortM, y:vals, type:'scatter', mode:'lines+markers',
+                line:{ color:'#2196F3', width:2 },
+                marker:{ color:'#2196F3', size:6, symbol:'circle', line:{ color:'white', width:1.5 } },
+                fill:'tonexty', fillcolor:'rgba(33,150,243,0.12)', name:vUp },
+            ]
+          // Mixed-sign series: fill to zero baseline directly
+          : [
+              { x:shortM, y:vals, type:'scatter', mode:'lines+markers',
+                line:{ color:'#2196F3', width:2 },
+                marker:{ color:'#2196F3', size:6, symbol:'circle', line:{ color:'white', width:1.5 } },
+                fill:'tozeroy', fillcolor:'rgba(33,150,243,0.12)', name:vUp },
+            ];
+        Plotly.newPlot(el, traces, {
           ..._plotlyWhiteLayout(`${vUp} Monthly Mean`, 310),
           xaxis:{ ..._plotlyWhiteLayout('').xaxis, title:{ text:'Month', font:{size:9} }, tickfont:{size:8} },
           yaxis:{ ..._plotlyWhiteLayout('').yaxis, title:{ text:yLabel, font:{size:9} }, tickfont:{size:8} },
