@@ -1821,8 +1821,9 @@ function buildDistClassExplanation(varLabel, s) {
     if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
       // Backend provided exact percentages — new format: {pct, ha, total_ha} or legacy number
       // Build label->index map so we can sort by canonical class order (matches bar chart)
+      const _normLbl = s => s.replace(/\n/g, ' ').replace(/\u2013|\u2014/g, '-').replace(/\s+/g, ' ').trim().toLowerCase();
       const labelToIdx = {};
-      def.labels.forEach((lbl, i) => { labelToIdx[lbl.replace(/\n/g, ' ')] = i; });
+      def.labels.forEach((lbl, i) => { labelToIdx[_normLbl(lbl)] = i; });
       const cpEntries = [];
       for (const [lbl, val] of Object.entries(s.class_pcts)) {
         let pct, ha;
@@ -1836,7 +1837,7 @@ function buildDistClassExplanation(varLabel, s) {
         }
         if (pct < 0.5) continue;
         const cleanLbl = lbl.replace(/\n/g, ' ');
-        cpEntries.push({ lbl: cleanLbl, pct, ha, idx: labelToIdx[cleanLbl] ?? 999 });
+        cpEntries.push({ lbl: cleanLbl, pct, ha, idx: labelToIdx[_normLbl(lbl)] ?? 999 });
       }
       // Sort ascending by class index = natural left-to-right order (matches bar chart)
       cpEntries.sort((a, b) => a.idx - b.idx);
@@ -2333,7 +2334,11 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
       if (el && Object.keys(s.monthly).length >= 2) {
         const months   = Object.keys(s.monthly).sort();
         const vals     = months.map(m => s.monthly[m]);
-        const shortM   = months.map(m => m.slice(5));
+        const _MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const shortM   = months.map(m => {
+          const num = parseInt(m.slice(5), 10);
+          return _MON_NAMES[num - 1] || m.slice(5);
+        });
         const baseline = Math.min(...vals) - Math.abs(Math.min(...vals)) * 0.05;
         const yLabel   = isLST ? `${vUp} (°C)` : vUp;
         Plotly.newPlot(el, [
@@ -2409,8 +2414,9 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           // Prefer exact backend class_pcts; fall back to Monte Carlo approximation
           if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
             // Build a label→index map so colors and order stay aligned with _CLASS_DEFS
+            const _normLbl = s => s.replace(/\n/g, ' ').replace(/\u2013|\u2014/g, '-').replace(/\s+/g, ' ').trim().toLowerCase();
             const labelToIdx = {};
-            def.labels.forEach((lbl, i) => { labelToIdx[lbl.replace(/\n/g, ' ')] = i; });
+            def.labels.forEach((lbl, i) => { labelToIdx[_normLbl(lbl)] = i; });
 
             // Collect entries first, then sort by canonical class index (ascending) so
             // bars always render in natural class order (e.g. Moderate→Warm→Hot→Extreme)
@@ -2419,7 +2425,7 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
               let pct = typeof val === 'object' && val !== null ? parseFloat((val.pct || 0).toFixed(1)) : parseFloat(parseFloat(val).toFixed(1));
               if (pct < 0.5) continue;
               const cleanLbl = lbl.replace(/\n/g, ' ');
-              const idx = labelToIdx[cleanLbl] ?? 999;
+              const idx = labelToIdx[_normLbl(lbl)] ?? 999;
               cpEntries.push({ cleanLbl, pct, idx });
             }
             // Sort by class index ascending = left-to-right natural order
