@@ -3616,7 +3616,7 @@ function renderKnowledgeNav(items) {
     catItems.forEach(k => {
       const isActive = k.id === _activeKnowledgeId;
       html += `<div class="kp-nav-item ${isActive ? 'active' : ''}" onclick="openKnowledgeDetail('${k.id}')">
-        <div class="kp-nav-dot" style="background:${k.palette[k.palette.length-1]}"></div>
+        <div class="kp-nav-chip kp-nav-chip-${k.category}"></div>
         <div>
           <div class="kp-nav-name">${k.name}</div>
           <div class="kp-nav-full">${k.full}</div>
@@ -3654,6 +3654,58 @@ function openKnowledgeDetail(id) {
   // Palette gradient
   const paletteStops = k.palette.map((c,i) => `${c} ${Math.round(i/(k.palette.length-1)*100)}%`).join(', ');
 
+  // Category color map for scorecards
+  const catColorMap = {
+    vegetation: 'green', water: 'blue', urban: 'red',
+    thermal: 'yellow', atmospheric: 'purple', landcover: 'cyan'
+  };
+  const cardColor = catColorMap[k.category] || 'green';
+
+  // Range low/high
+  const rangeParts = k.range.split(' to ');
+  const rangeMin = rangeParts[0] || '—';
+  const rangeMax = rangeParts[1] || '—';
+
+  // Key Metrics scorecards
+  const keyMetricsHtml = `
+    <div class="kpd-km-section">
+      <div class="kpd-section-title">Key Metrics</div>
+      <div class="kpd-scorecard-row">
+        <div class="kpd-scorecard kpd-scorecard-${cardColor}">
+          <div class="kpd-scorecard-label">Min Value</div>
+          <div class="kpd-scorecard-value">${rangeMin}</div>
+        </div>
+        <div class="kpd-scorecard kpd-scorecard-${cardColor}">
+          <div class="kpd-scorecard-label">Max Value</div>
+          <div class="kpd-scorecard-value">${rangeMax}</div>
+        </div>
+        <div class="kpd-scorecard kpd-scorecard-${cardColor}">
+          <div class="kpd-scorecard-label">Category</div>
+          <div class="kpd-scorecard-value" style="font-size:13px;font-family:var(--font-body);font-weight:700">${k.tag}</div>
+        </div>
+        <div class="kpd-scorecard kpd-scorecard-${cardColor}">
+          <div class="kpd-scorecard-label">Resolution</div>
+          <div class="kpd-scorecard-value" style="font-size:13px;font-family:var(--font-body);font-weight:700">${k.scale.replace(' spatial resolution','')}</div>
+        </div>
+      </div>
+    </div>`;
+
+  // Findings from interpretation data
+  const findingsHtml = k.interpretation && k.interpretation.length ? `
+    <div class="kpd-findings-section">
+      <div class="kpd-section-title">Findings & Interpretation</div>
+      <div class="kpd-findings-list">
+        ${k.interpretation.map(it => `
+          <div class="kpd-finding-item">
+            <div class="kpd-finding-bar" style="background:${it.color}"></div>
+            <div class="kpd-finding-body">
+              <span class="kpd-finding-range">${it.range}</span>
+              <span class="kpd-finding-label">${it.label}</span>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
   document.getElementById('kpDetailContent').innerHTML = `
     <div class="kpd-page theme-${k.category}">
 
@@ -3677,6 +3729,9 @@ function openKnowledgeDetail(id) {
           </div>
         </div>
       </div>
+
+      <!-- Key Metrics -->
+      ${keyMetricsHtml}
 
       <!-- Formula (paper style) -->
       <div class="kpd-formula-paper-section">
@@ -3710,6 +3765,9 @@ function openKnowledgeDetail(id) {
           <span>${k.range.split(' to ')[1] || 'High'}</span>
         </div>
       </div>
+
+      <!-- Findings -->
+      ${findingsHtml}
 
       <!-- Visualization / Interpretation -->
       ${vizHtml}
