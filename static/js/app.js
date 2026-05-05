@@ -3577,7 +3577,7 @@ function renderKnowledgeNav(items) {
   cats.forEach(cat => {
     const catItems = items.filter(k => k.category === cat);
     if (!catItems.length) return;
-    html += `<div class="kp-nav-group-label">${catLabels[cat]}</div>`;
+    html += `<div class="kp-nav-group-label" data-cat="${cat}">${catLabels[cat]}</div>`;
     catItems.forEach(k => {
       const isActive = k.id === _activeKnowledgeId;
       html += `<div class="kp-nav-item ${isActive ? 'active' : ''}" onclick="openKnowledgeDetail('${k.id}')">
