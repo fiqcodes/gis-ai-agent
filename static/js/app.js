@@ -3615,8 +3615,7 @@ function renderKnowledgeNav(items) {
     html += `<div class="kp-nav-group-label">${catLabels[cat]}</div>`;
     catItems.forEach(k => {
       const isActive = k.id === _activeKnowledgeId;
-      html += `<div class="kp-nav-item ${isActive ? 'active' : ''}" onclick="openKnowledgeDetail('${k.id}')">
-        <div class="kp-nav-chip kp-nav-chip-${k.category}"></div>
+      html += `<div class="kp-nav-item ${isActive ? 'active' : ''}" data-cat="${k.category}" onclick="openKnowledgeDetail('${k.id}')">
         <div>
           <div class="kp-nav-name">${k.name}</div>
           <div class="kp-nav-full">${k.full}</div>
