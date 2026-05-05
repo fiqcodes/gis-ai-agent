@@ -23,6 +23,41 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(checkHealth, 30000);
 });
 
+// ════════════════════════════════════════════════════════
+// MAP SETUP
+// ════════════════════════════════════════════════════════
+// ── Basemap definitions ───────────────────────────────────────────────────────
+const BASEMAPS = {
+  esri: {
+    url  : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attr : 'Tiles © Esri',
+    maxZoom: 19,
+  },
+  google: {
+    url  : 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    attr : 'Imagery © Google',
+    maxZoom: 20,
+  },
+  googlehybrid: {
+    url  : 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    attr : 'Imagery © Google',
+    maxZoom: 20,
+  },
+  esriclarity: {
+    url  : 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attr : 'Tiles © Esri',
+    maxZoom: 19,
+  },
+  opentopomap: {
+    url  : 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attr : '© OpenTopoMap contributors',
+    maxZoom: 17,
+  },
+};
+
+let activeBasemapLayer = null;
+let activeBasemapKey   = 'esri';
+
 function initMap() {
   map = L.map('map', {
     center: [20, 0],
@@ -3577,7 +3612,7 @@ function renderKnowledgeNav(items) {
   cats.forEach(cat => {
     const catItems = items.filter(k => k.category === cat);
     if (!catItems.length) return;
-    html += `<div class="kp-nav-group-label" data-cat="${cat}">${catLabels[cat]}</div>`;
+    html += `<div class="kp-nav-group-label">${catLabels[cat]}</div>`;
     catItems.forEach(k => {
       const isActive = k.id === _activeKnowledgeId;
       html += `<div class="kp-nav-item ${isActive ? 'active' : ''}" onclick="openKnowledgeDetail('${k.id}')">
