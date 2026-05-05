@@ -1830,7 +1830,7 @@ html, body {
   position: fixed;
   left: var(--nav-w);
   top: 0; right: 0; bottom: 0;
-  background: #000;
+  background: var(--bg);
   z-index: 300;
   display: flex;
   flex-direction: row;
@@ -1841,7 +1841,7 @@ html, body {
 .kp-sidebar {
   width: 260px;
   flex-shrink: 0;
-  background: #0a0a0b;
+  background: var(--bg2);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -1917,6 +1917,7 @@ html, body {
   flex: 1;
   overflow: hidden;
   position: relative;
+  background: var(--bg);
 }
 
 /* Landing */
@@ -2148,6 +2149,168 @@ html, body {
 .kp-tag-thermal     { background: rgba(245,168,0,0.15); color: #f5a800; }
 .kp-tag-atmospheric { background: rgba(160,80,255,0.15);color: #c084fc; }
 .kp-tag-landcover   { background: var(--bg3);   color: var(--text2); }
+
+/* ── Category-themed detail blocks & score cards ──────── */
+
+/* Vegetation — green */
+.kpd-page.theme-vegetation .kpd-block,
+.kpd-page.theme-vegetation .kpd-full-block {
+  border-color: rgba(74,222,128,0.22);
+}
+.kpd-page.theme-vegetation .kpd-section-title {
+  color: #4ade80;
+}
+.kpd-page.theme-vegetation .kpd-big-name {
+  color: #4ade80;
+}
+.kpd-page.theme-vegetation .kpd-command-code { color: #4ade80; }
+.kpd-page.theme-vegetation .kpd-bench-item:hover { border-color: rgba(74,222,128,0.35); }
+.kpd-page.theme-vegetation .kpd-nav-item.active { border-left-color: #4ade80; }
+
+/* Water — blue */
+.kpd-page.theme-water .kpd-block,
+.kpd-page.theme-water .kpd-full-block {
+  border-color: rgba(96,165,250,0.22);
+}
+.kpd-page.theme-water .kpd-section-title {
+  color: #60a5fa;
+}
+.kpd-page.theme-water .kpd-big-name {
+  color: #60a5fa;
+}
+.kpd-page.theme-water .kpd-command-code { color: #60a5fa; }
+.kpd-page.theme-water .kpd-bench-item:hover { border-color: rgba(96,165,250,0.35); }
+
+/* Urban — red */
+.kpd-page.theme-urban .kpd-block,
+.kpd-page.theme-urban .kpd-full-block {
+  border-color: rgba(255,102,102,0.22);
+}
+.kpd-page.theme-urban .kpd-section-title {
+  color: #ff6666;
+}
+.kpd-page.theme-urban .kpd-big-name {
+  color: #ff6666;
+}
+.kpd-page.theme-urban .kpd-command-code { color: #ff6666; }
+.kpd-page.theme-urban .kpd-bench-item:hover { border-color: rgba(255,102,102,0.35); }
+
+/* Thermal — yellow/amber */
+.kpd-page.theme-thermal .kpd-block,
+.kpd-page.theme-thermal .kpd-full-block {
+  border-color: rgba(245,168,0,0.22);
+}
+.kpd-page.theme-thermal .kpd-section-title {
+  color: #f5a800;
+}
+.kpd-page.theme-thermal .kpd-big-name {
+  color: #f5a800;
+}
+.kpd-page.theme-thermal .kpd-command-code { color: #f5a800; }
+.kpd-page.theme-thermal .kpd-bench-item:hover { border-color: rgba(245,168,0,0.35); }
+
+/* Atmospheric — purple */
+.kpd-page.theme-atmospheric .kpd-block,
+.kpd-page.theme-atmospheric .kpd-full-block {
+  border-color: rgba(192,132,252,0.22);
+}
+.kpd-page.theme-atmospheric .kpd-section-title {
+  color: #c084fc;
+}
+.kpd-page.theme-atmospheric .kpd-big-name {
+  color: #c084fc;
+}
+.kpd-page.theme-atmospheric .kpd-command-code { color: #c084fc; }
+.kpd-page.theme-atmospheric .kpd-bench-item:hover { border-color: rgba(192,132,252,0.35); }
+
+/* Landcover — cyan */
+.kpd-page.theme-landcover .kpd-block,
+.kpd-page.theme-landcover .kpd-full-block {
+  border-color: rgba(0,212,255,0.18);
+}
+.kpd-page.theme-landcover .kpd-section-title {
+  color: var(--cyan);
+}
+.kpd-page.theme-landcover .kpd-big-name {
+  color: var(--cyan);
+}
+.kpd-page.theme-landcover .kpd-command-code { color: var(--cyan); }
+.kpd-page.theme-landcover .kpd-bench-item:hover { border-color: rgba(0,212,255,0.3); }
+
+/* ── Themed score-card chips (key metrics style) ───────── */
+.kpd-scorecard-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.kpd-scorecard {
+  flex: 1;
+  min-width: 110px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.kpd-scorecard-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  opacity: 0.7;
+}
+
+.kpd-scorecard-value {
+  font-size: 17px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  line-height: 1;
+}
+
+/* Vegetation green scorecard */
+.kpd-scorecard-green {
+  background: rgba(34,197,94,0.10);
+  border-color: rgba(74,222,128,0.25);
+  color: #4ade80;
+}
+
+/* Water blue scorecard */
+.kpd-scorecard-blue {
+  background: rgba(59,130,246,0.10);
+  border-color: rgba(96,165,250,0.25);
+  color: #60a5fa;
+}
+
+/* Urban red scorecard */
+.kpd-scorecard-red {
+  background: rgba(255,102,102,0.10);
+  border-color: rgba(255,102,102,0.25);
+  color: #ff6666;
+}
+
+/* Thermal yellow scorecard */
+.kpd-scorecard-yellow {
+  background: rgba(245,168,0,0.10);
+  border-color: rgba(245,168,0,0.25);
+  color: #f5a800;
+}
+
+/* Atmospheric purple scorecard */
+.kpd-scorecard-purple {
+  background: rgba(160,80,255,0.10);
+  border-color: rgba(192,132,252,0.25);
+  color: #c084fc;
+}
+
+/* Landcover cyan scorecard */
+.kpd-scorecard-cyan {
+  background: rgba(0,212,255,0.08);
+  border-color: rgba(0,212,255,0.2);
+  color: var(--cyan);
+}
 
 /* ── Formula paper style ───────────────────────────────── */
 .kpd-formula-paper-section { }

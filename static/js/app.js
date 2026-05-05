@@ -3655,7 +3655,7 @@ function openKnowledgeDetail(id) {
   const paletteStops = k.palette.map((c,i) => `${c} ${Math.round(i/(k.palette.length-1)*100)}%`).join(', ');
 
   document.getElementById('kpDetailContent').innerHTML = `
-    <div class="kpd-page">
+    <div class="kpd-page theme-${k.category}">
 
       <!-- Hero -->
       <div class="kpd-hero-full">
