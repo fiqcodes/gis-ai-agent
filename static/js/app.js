@@ -1347,9 +1347,87 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
             // No class_pcts — show a neutral fallback without raw P10/P90
             findingItems += `<div class="concl-finding-item">Thermal distribution indicates predominantly <strong class="fv-amber">${thermalClass}</strong> conditions across the region</div>`;
           }
-        } else if (s.mean != null) {
+        } else if (['NDBI','NDWI','MNDWI'].includes(vUp) && s.mean != null) {
+          // ── Built-up / Water index chips & findings ──────────────────────────
+          const isWater = vUp.includes('NDW') || vUp.includes('MNDW');
+          // Class label from mean
+          let idxClass, idxColor;
+          if (isWater) {
+            if      (s.mean >= 0.3)  { idxClass = 'High Water';    idxColor = 'cv-cyan';   }
+            else if (s.mean >= 0.0)  { idxClass = 'Moderate Water';idxColor = 'cv-cyan';   }
+            else if (s.mean >= -0.1) { idxClass = 'Low Water';     idxColor = 'cv-amber';  }
+            else                     { idxClass = 'Non-water';      idxColor = 'cv-pink';   }
+          } else {
+            // NDBI
+            if      (s.mean > 0.1)   { idxClass = 'High built';    idxColor = 'cv-pink';   }
+            else if (s.mean > 0.0)   { idxClass = 'Moderate';      idxColor = 'cv-amber';  }
+            else if (s.mean > -0.1)  { idxClass = 'Low built';     idxColor = 'cv-cyan';   }
+            else                     { idxClass = 'Non-built';      idxColor = 'cv-green';  }
+          }
+          // ── 4 chips ─────────────────────────────────────────────────────────
           chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value cv-cyan">${s.mean.toFixed(4)}</div></div>`;
+          chips += `<div class="concl-chip"><div class="concl-chip-label">${isWater ? 'Water Class' : 'Built Class'}</div><div class="concl-chip-value ${idxColor}">${idxClass}</div></div>`;
+          if (s.p10 != null) chips += `<div class="concl-chip"><div class="concl-chip-label">P10 (Low)</div><div class="concl-chip-value cv-amber">${s.p10.toFixed(4)}</div></div>`;
+          if (s.p90 != null) chips += `<div class="concl-chip"><div class="concl-chip-label">P90 (Peak)</div><div class="concl-chip-value cv-green">${s.p90.toFixed(4)}</div></div>`;
+          // ── 4 findings ───────────────────────────────────────────────────────
+          findingItems += `<div class="concl-finding-item">Mean ${vUp} across the ROI: <strong class="fv-cyan">${s.mean.toFixed(4)}</strong></div>`;
+          findingItems += `<div class="concl-finding-item">${isWater ? 'Water' : 'Built-up'} condition classified as <strong class="f${idxColor.slice(1)}">${idxClass}</strong></div>`;
+          if (s.class_pcts && typeof s.class_pcts === 'object') {
+            // Dominant class from class_pcts
+            const cpArr = Object.entries(s.class_pcts)
+              .map(([lbl, val]) => ({ lbl, pct: typeof val === 'object' ? val.pct : val, ha: typeof val === 'object' ? val.ha : null }))
+              .filter(e => e.pct >= 0.5)
+              .sort((a, b) => b.pct - a.pct);
+            if (cpArr[0]) {
+              const d = cpArr[0];
+              const haStr = d.ha != null ? ` (~<strong class="fv-cyan">${d.ha.toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item">Dominant class: <strong class="f${idxColor.slice(1)}">${d.lbl}</strong> at <strong class="fv-cyan">${d.pct.toFixed(1)}%</strong>${haStr}</div>`;
+            }
+            if (cpArr[1]) {
+              const d2 = cpArr[1];
+              const haStr2 = d2.ha != null ? ` (~<strong class="fv-amber">${d2.ha.toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item">Second class: <strong class="fv-amber">${d2.lbl}</strong> at <strong class="fv-amber">${d2.pct.toFixed(1)}%</strong>${haStr2}</div>`;
+            } else if (s.p10 != null && s.p90 != null) {
+              findingItems += `<div class="concl-finding-item">Spatial range: P10 = <strong class="fv-amber">${s.p10.toFixed(4)}</strong> → P90 = <strong class="fv-green">${s.p90.toFixed(4)}</strong></div>`;
+            }
+          } else {
+            if (s.p10 != null && s.p90 != null) findingItems += `<div class="concl-finding-item">Spatial range: P10 = <strong class="fv-amber">${s.p10.toFixed(4)}</strong> → P90 = <strong class="fv-green">${s.p90.toFixed(4)}</strong></div>`;
+            if (s.std != null) findingItems += `<div class="concl-finding-item">Std deviation of <strong class="fv-cyan">${s.std.toFixed(4)}</strong> indicates ${s.std > 0.1 ? 'significant spatial contrast across the region' : 'relatively uniform surface conditions'}</div>`;
+          }
+        } else if (['NO2','CO','SO2','CH4','O3','AER'].includes(vUp) && s.mean != null) {
+          // ── Air quality index chips & findings ───────────────────────────────
+          const unit    = vUp === 'CO' ? 'mol/m²' : (vUp === 'NO2' ? 'mol/m²' : 'mol/m²');
+          const digFmt  = v => v < 0.001 ? v.toExponential(3) : v.toFixed(5);
+          let aqClass, aqColor;
+          if (vUp === 'NO2') {
+            if      (s.mean < 0.0001) { aqClass = 'Clean';    aqColor = 'cv-green'; }
+            else if (s.mean < 0.0003) { aqClass = 'Low';      aqColor = 'cv-cyan';  }
+            else if (s.mean < 0.001)  { aqClass = 'Moderate'; aqColor = 'cv-amber'; }
+            else                      { aqClass = 'High';      aqColor = 'cv-pink';  }
+          } else {
+            aqClass = 'Measured'; aqColor = 'cv-cyan';
+          }
+          // ── 4 chips ─────────────────────────────────────────────────────────
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value cv-cyan">${digFmt(s.mean)}</div></div>`;
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Air Quality</div><div class="concl-chip-value ${aqColor}">${aqClass}</div></div>`;
+          if (s.max != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Peak ${vUp}</div><div class="concl-chip-value cv-pink">${digFmt(s.max)}</div></div>`;
+          if (s.p10 != null) chips += `<div class="concl-chip"><div class="concl-chip-label">P10 (Low)</div><div class="concl-chip-value cv-green">${digFmt(s.p10)}</div></div>`;
+          // ── 4 findings ───────────────────────────────────────────────────────
+          findingItems += `<div class="concl-finding-item">Mean ${vUp} across the ROI: <strong class="fv-cyan">${digFmt(s.mean)} ${unit}</strong></div>`;
+          findingItems += `<div class="concl-finding-item">Air quality classified as <strong class="f${aqColor.slice(1)}">${aqClass}</strong> based on mean concentration</div>`;
+          if (s.max != null) findingItems += `<div class="concl-finding-item">Peak ${vUp} concentration: <strong class="fv-pink">${digFmt(s.max)} ${unit}</strong> — indicating localised pollution hotspots</div>`;
+          if (s.p90 != null) findingItems += `<div class="concl-finding-item">P90 concentration: <strong class="fv-amber">${digFmt(s.p90)} ${unit}</strong> — upper-bound exposure in the region</div>`;
+          else if (s.std != null) findingItems += `<div class="concl-finding-item">Std deviation of <strong class="fv-amber">${digFmt(s.std)}</strong> indicates ${s.std / (s.mean || 1) > 0.5 ? 'significant spatial variation in pollution levels' : 'relatively uniform distribution across the area'}</div>`;
+        } else if (s.mean != null) {
+          // ── Generic fallback ──────────────────────────────────────────────────
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value cv-cyan">${s.mean.toFixed(4)}</div></div>`;
+          if (s.p10 != null) chips += `<div class="concl-chip"><div class="concl-chip-label">P10</div><div class="concl-chip-value cv-amber">${s.p10.toFixed(4)}</div></div>`;
+          if (s.p90 != null) chips += `<div class="concl-chip"><div class="concl-chip-label">P90</div><div class="concl-chip-value cv-green">${s.p90.toFixed(4)}</div></div>`;
+          if (s.std != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Std Dev</div><div class="concl-chip-value cv-purple">${s.std.toFixed(4)}</div></div>`;
           findingItems += `<div class="concl-finding-item">Mean ${vUp}: <strong class="fv-cyan">${s.mean.toFixed(4)}</strong></div>`;
+          if (s.p10 != null && s.p90 != null) findingItems += `<div class="concl-finding-item">Spatial range: P10 = <strong class="fv-amber">${s.p10.toFixed(4)}</strong> → P90 = <strong class="fv-green">${s.p90.toFixed(4)}</strong></div>`;
+          if (s.std != null) findingItems += `<div class="concl-finding-item">Std deviation: <strong class="fv-cyan">${s.std.toFixed(4)}</strong></div>`;
+          if (s.max != null) findingItems += `<div class="concl-finding-item">Maximum recorded value: <strong class="fv-pink">${s.max.toFixed(4)}</strong></div>`;
         }
       }
     }
