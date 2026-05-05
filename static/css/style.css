@@ -1830,7 +1830,7 @@ html, body {
   position: fixed;
   left: var(--nav-w);
   top: 0; right: 0; bottom: 0;
-  background: #000;
+  background: var(--bg);
   z-index: 300;
   display: flex;
   flex-direction: row;
@@ -1841,7 +1841,7 @@ html, body {
 .kp-sidebar {
   width: 260px;
   flex-shrink: 0;
-  background: #0a0a0b;
+  background: var(--bg2);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -1887,7 +1887,7 @@ html, body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.09em;
-  color: var(--text3);
+  color: var(--yellow);
   padding: 12px 14px 4px;
 }
 
@@ -1901,7 +1901,7 @@ html, body {
   transition: background 0.12s, border-color 0.12s;
 }
 .kp-nav-item:hover { background: var(--bg3); }
-.kp-nav-item.active { background: var(--bg3); border-left-color: var(--accent); }
+.kp-nav-item.active { background: var(--bg3); border-left-color: var(--yellow); }
 
 .kp-nav-dot {
   width: 8px; height: 8px;
@@ -1909,7 +1909,7 @@ html, body {
   flex-shrink: 0;
 }
 .kp-nav-name { font-size: 12.5px; font-weight: 600; color: var(--text); }
-.kp-nav-item.active .kp-nav-name { color: var(--accent); }
+.kp-nav-item.active .kp-nav-name { color: var(--yellow); }
 .kp-nav-full { font-size: 10px; color: var(--text3); margin-top: 1px; }
 
 /* ── Main content ──────────────────────────────────────── */
@@ -1996,7 +1996,7 @@ html, body {
 }
 .kpd-command-label {
   font-size: 9.5px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--text3); margin-bottom: 5px;
+  letter-spacing: 0.08em; color: var(--yellow); margin-bottom: 5px;
 }
 .kpd-command-code {
   font-family: var(--font-mono); font-size: 15px;
@@ -2030,7 +2030,7 @@ html, body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.09em;
-  color: var(--text3);
+  color: var(--yellow);
   margin-bottom: 10px;
 }
 
@@ -2143,32 +2143,32 @@ html, body {
   white-space: nowrap; flex-shrink: 0; display: inline-block;
 }
 .kp-tag-vegetation  { background: rgba(34,139,34,0.18); color: #4ade80; }
-.kp-tag-urban       { background: var(--bg4);   color: #ff6666; }
+.kp-tag-urban       { background: rgba(249,115,22,0.18); color: #fb923c; }
 .kp-tag-water       { background: rgba(0,100,255,0.15); color: #60a5fa; }
 .kp-tag-thermal     { background: rgba(245,168,0,0.15); color: #f5a800; }
 .kp-tag-atmospheric { background: rgba(160,80,255,0.15);color: #c084fc; }
-.kp-tag-landcover   { background: var(--bg3);   color: var(--text2); }
+.kp-tag-landcover   { background: rgba(234,179,8,0.18); color: #facc15; }
 
 /* ── Formula paper style ───────────────────────────────── */
 .kpd-formula-paper-section { }
 
 .kpd-formula-paper {
-  background: #ffffff;
+  background: var(--bg2);
   border-radius: var(--radius);
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--border2);
   overflow: hidden;
 }
 
 .kpd-formula-paper-inner {
   padding: 28px 32px 20px;
-  color: #1a1a1a;
+  color: var(--text);
 }
 
 .kpd-formula-render {
   font-size: 18px;
   text-align: center;
   margin-bottom: 24px;
-  color: #111;
+  color: var(--text);
   min-height: 60px;
   display: flex;
   align-items: center;
@@ -2178,18 +2178,18 @@ html, body {
 /* MathJax output forced to dark color on white background */
 .kpd-formula-paper .MathJax,
 .kpd-formula-paper mjx-container {
-  color: #111 !important;
+  color: var(--text) !important;
 }
 
 .kpd-where-title {
   font-size: 12px;
   font-weight: 700;
-  color: #555;
+  color: var(--text2);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 10px;
   padding-top: 16px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border);
 }
 
 .kpd-vars-list { display: flex; flex-direction: column; gap: 6px; }
@@ -2199,44 +2199,43 @@ html, body {
   align-items: flex-start;
   gap: 10px;
   font-size: 13px;
-  color: #333;
+  color: var(--text);
   padding: 4px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border);
 }
 .kpd-var-row:last-child { border-bottom: none; }
 
 .kpd-var-sym-plain {
-  font-family: 'Georgia', 'Times New Roman', serif;
-  font-style: italic;
-  font-size: 14px;
-  color: #c0392b;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--yellow);
   min-width: 80px;
   flex-shrink: 0;
   font-weight: 600;
 }
 .kpd-var-eq {
-  color: #888;
+  color: var(--text3);
   flex-shrink: 0;
   font-size: 13px;
   padding-top: 1px;
 }
-.kpd-var-desc { color: #444; line-height: 1.5; }
+.kpd-var-desc { color: var(--text2); line-height: 1.5; }
 
 .kpd-formula-bands-label {
   font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #888;
-  background: #f5f5f5;
+  color: var(--text3);
+  background: var(--bg3);
   padding: 7px 16px 4px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border);
 }
 .kpd-formula-bands-box {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 12px;
-  color: #333;
-  background: #f9f9f9;
+  color: var(--text2);
+  background: var(--bg3);
   padding: 8px 16px 12px;
   line-height: 1.6;
 }
@@ -2258,7 +2257,7 @@ html, body {
   border-radius: 8px;
   transition: border-color 0.15s;
 }
-.kpd-viz-step:hover { border-color: var(--border2); }
+.kpd-viz-step:hover { border-color: var(--border2); background: var(--bg4); }
 
 .kpd-viz-icon {
   font-size: 22px;
