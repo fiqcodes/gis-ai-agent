@@ -3653,43 +3653,23 @@ function openKnowledgeDetail(id) {
   // Palette gradient
   const paletteStops = k.palette.map((c,i) => `${c} ${Math.round(i/(k.palette.length-1)*100)}%`).join(', ');
 
-  // Category color map for scorecards
-  const catColorMap = {
-    vegetation: 'green', water: 'blue', urban: 'red',
-    thermal: 'yellow', atmospheric: 'purple', landcover: 'cyan'
-  };
+  const catColorMap = { vegetation:'green', water:'blue', urban:'red', thermal:'yellow', atmospheric:'purple', landcover:'cyan' };
   const cardColor = catColorMap[k.category] || 'green';
-
-  // Range low/high
   const rangeParts = k.range.split(' to ');
   const rangeMin = rangeParts[0] || '—';
   const rangeMax = rangeParts[1] || '—';
 
-  // Key Metrics scorecards
   const keyMetricsHtml = `
     <div class="kpd-km-section">
       <div class="kpd-section-title">Key Metrics</div>
       <div class="kpd-scorecard-row">
-        <div class="kpd-scorecard kpd-scorecard-${cardColor}">
-          <div class="kpd-scorecard-label">Min Value</div>
-          <div class="kpd-scorecard-value">${rangeMin}</div>
-        </div>
-        <div class="kpd-scorecard kpd-scorecard-${cardColor}">
-          <div class="kpd-scorecard-label">Max Value</div>
-          <div class="kpd-scorecard-value">${rangeMax}</div>
-        </div>
-        <div class="kpd-scorecard kpd-scorecard-${cardColor}">
-          <div class="kpd-scorecard-label">Category</div>
-          <div class="kpd-scorecard-value" style="font-size:13px;font-family:var(--font-body);font-weight:700">${k.tag}</div>
-        </div>
-        <div class="kpd-scorecard kpd-scorecard-${cardColor}">
-          <div class="kpd-scorecard-label">Resolution</div>
-          <div class="kpd-scorecard-value" style="font-size:13px;font-family:var(--font-body);font-weight:700">${k.scale.replace(' spatial resolution','')}</div>
-        </div>
+        <div class="kpd-scorecard kpd-scorecard-${cardColor}"><div class="kpd-scorecard-label">Min Value</div><div class="kpd-scorecard-value">${rangeMin}</div></div>
+        <div class="kpd-scorecard kpd-scorecard-${cardColor}"><div class="kpd-scorecard-label">Max Value</div><div class="kpd-scorecard-value">${rangeMax}</div></div>
+        <div class="kpd-scorecard kpd-scorecard-${cardColor}"><div class="kpd-scorecard-label">Category</div><div class="kpd-scorecard-value" style="font-size:13px;font-family:var(--font-body);font-weight:700">${k.tag}</div></div>
+        <div class="kpd-scorecard kpd-scorecard-${cardColor}"><div class="kpd-scorecard-label">Resolution</div><div class="kpd-scorecard-value" style="font-size:13px;font-family:var(--font-body);font-weight:700">${k.scale.replace(' spatial resolution','')}</div></div>
       </div>
     </div>`;
 
-  // Findings from interpretation data
   const findingsHtml = k.interpretation && k.interpretation.length ? `
     <div class="kpd-findings-section">
       <div class="kpd-section-title">Findings & Interpretation</div>
@@ -3729,10 +3709,8 @@ function openKnowledgeDetail(id) {
         </div>
       </div>
 
-      <!-- Key Metrics -->
       ${keyMetricsHtml}
 
-      <!-- Formula (paper style) -->
       <div class="kpd-formula-paper-section">
         <div class="kpd-section-title">Formula</div>
         <div class="kpd-formula-paper">
@@ -3754,7 +3732,6 @@ function openKnowledgeDetail(id) {
         </div>
       </div>
 
-      <!-- Color scale -->
       <div class="kpd-scale-section">
         <div class="kpd-section-title">Color Scale (${k.range})</div>
         <div class="kpd-gradient" style="background:linear-gradient(to right, ${paletteStops})"></div>
@@ -3765,13 +3742,9 @@ function openKnowledgeDetail(id) {
         </div>
       </div>
 
-      <!-- Findings -->
       ${findingsHtml}
-
-      <!-- Visualization / Interpretation -->
       ${vizHtml}
 
-      <!-- Use cases -->
       <div class="kpd-full-block">
         <div class="kpd-section-title">Use Cases &amp; Applications</div>
         <div class="kpd-usecases-grid">
@@ -3782,7 +3755,6 @@ function openKnowledgeDetail(id) {
         </div>
       </div>
 
-      <!-- Data source -->
       <div class="kpd-two-col">
         <div class="kpd-block">
           <div class="kpd-section-title">Satellite Platform</div>

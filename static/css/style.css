@@ -1905,7 +1905,6 @@ html, body {
 .kp-nav-item:hover { background: var(--bg3); border-color: var(--border2); }
 .kp-nav-item.active { border-color: var(--border2); }
 
-/* Category-themed nav items */
 .kp-nav-item[data-cat="vegetation"]        { background: rgba(74,222,128,0.07); border-color: rgba(74,222,128,0.18); }
 .kp-nav-item[data-cat="vegetation"]:hover  { background: rgba(74,222,128,0.13); border-color: rgba(74,222,128,0.35); }
 .kp-nav-item[data-cat="vegetation"].active { background: rgba(74,222,128,0.15); border-color: rgba(74,222,128,0.45); }
@@ -1943,7 +1942,7 @@ html, body {
 }
 .kp-nav-name { font-size: 12.5px; font-weight: 600; color: var(--text); }
 .kp-nav-item.active .kp-nav-name { color: var(--accent); }
-.kp-nav-full { font-size: 10px; color: var(--text3); margin-top: 1px; }
+.kp-nav-full { font-size: 10px; color: var(--text); margin-top: 1px; }
 
 /* ── Main content ──────────────────────────────────────── */
 .kp-main {
@@ -2329,78 +2328,42 @@ html, body {
 /* ══════════════════════════════════════════════════════════
    KNOWLEDGE BASE — CATEGORY THEMES, SCORECARDS & FINDINGS
 ══════════════════════════════════════════════════════════ */
-
-/* ── Category themed detail page ──────────────────────── */
 .kpd-page.theme-vegetation .kpd-section-title { color: #4ade80; }
 .kpd-page.theme-vegetation .kpd-big-name { color: #4ade80; }
 .kpd-page.theme-vegetation .kpd-command-code { color: #4ade80; }
-.kpd-page.theme-vegetation .kpd-block,
-.kpd-page.theme-vegetation .kpd-full-block { border-color: rgba(74,222,128,0.2); }
+.kpd-page.theme-vegetation .kpd-block,.kpd-page.theme-vegetation .kpd-full-block { border-color: rgba(74,222,128,0.2); }
 .kpd-page.theme-vegetation .kpd-usecase-item svg { color: #4ade80; }
-
 .kpd-page.theme-water .kpd-section-title { color: #60a5fa; }
 .kpd-page.theme-water .kpd-big-name { color: #60a5fa; }
 .kpd-page.theme-water .kpd-command-code { color: #60a5fa; }
-.kpd-page.theme-water .kpd-block,
-.kpd-page.theme-water .kpd-full-block { border-color: rgba(96,165,250,0.2); }
+.kpd-page.theme-water .kpd-block,.kpd-page.theme-water .kpd-full-block { border-color: rgba(96,165,250,0.2); }
 .kpd-page.theme-water .kpd-usecase-item svg { color: #60a5fa; }
-
 .kpd-page.theme-urban .kpd-section-title { color: #ff6666; }
 .kpd-page.theme-urban .kpd-big-name { color: #ff6666; }
 .kpd-page.theme-urban .kpd-command-code { color: #ff6666; }
-.kpd-page.theme-urban .kpd-block,
-.kpd-page.theme-urban .kpd-full-block { border-color: rgba(255,102,102,0.2); }
+.kpd-page.theme-urban .kpd-block,.kpd-page.theme-urban .kpd-full-block { border-color: rgba(255,102,102,0.2); }
 .kpd-page.theme-urban .kpd-usecase-item svg { color: #ff6666; }
-
 .kpd-page.theme-thermal .kpd-section-title { color: #f5a800; }
 .kpd-page.theme-thermal .kpd-big-name { color: #f5a800; }
 .kpd-page.theme-thermal .kpd-command-code { color: #f5a800; }
-.kpd-page.theme-thermal .kpd-block,
-.kpd-page.theme-thermal .kpd-full-block { border-color: rgba(245,168,0,0.2); }
+.kpd-page.theme-thermal .kpd-block,.kpd-page.theme-thermal .kpd-full-block { border-color: rgba(245,168,0,0.2); }
 .kpd-page.theme-thermal .kpd-usecase-item svg { color: #f5a800; }
-
 .kpd-page.theme-atmospheric .kpd-section-title { color: #c084fc; }
 .kpd-page.theme-atmospheric .kpd-big-name { color: #c084fc; }
 .kpd-page.theme-atmospheric .kpd-command-code { color: #c084fc; }
-.kpd-page.theme-atmospheric .kpd-block,
-.kpd-page.theme-atmospheric .kpd-full-block { border-color: rgba(192,132,252,0.2); }
+.kpd-page.theme-atmospheric .kpd-block,.kpd-page.theme-atmospheric .kpd-full-block { border-color: rgba(192,132,252,0.2); }
 .kpd-page.theme-atmospheric .kpd-usecase-item svg { color: #c084fc; }
-
 .kpd-page.theme-landcover .kpd-section-title { color: var(--cyan); }
 .kpd-page.theme-landcover .kpd-big-name { color: var(--cyan); }
 .kpd-page.theme-landcover .kpd-command-code { color: var(--cyan); }
-.kpd-page.theme-landcover .kpd-block,
-.kpd-page.theme-landcover .kpd-full-block { border-color: rgba(0,212,255,0.18); }
+.kpd-page.theme-landcover .kpd-block,.kpd-page.theme-landcover .kpd-full-block { border-color: rgba(0,212,255,0.18); }
 .kpd-page.theme-landcover .kpd-usecase-item svg { color: var(--cyan); }
 
-/* ── Key Metrics section ────────────────────────────────── */
 .kpd-km-section { display: flex; flex-direction: column; gap: 10px; }
-
-.kpd-scorecard-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.kpd-scorecard {
-  flex: 1;
-  min-width: 100px;
-  padding: 13px 15px;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  transition: border-color 0.15s;
-}
-.kpd-scorecard-label {
-  font-size: 9px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.1em; opacity: 0.65;
-}
-.kpd-scorecard-value {
-  font-size: 20px; font-weight: 700;
-  font-family: var(--font-mono); line-height: 1.1;
-}
+.kpd-scorecard-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.kpd-scorecard { flex:1; min-width:100px; padding:13px 15px; border-radius:var(--radius-sm); border:1px solid transparent; display:flex; flex-direction:column; gap:6px; transition:border-color 0.15s; }
+.kpd-scorecard-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; opacity:0.65; }
+.kpd-scorecard-value { font-size:20px; font-weight:700; font-family:var(--font-mono); line-height:1.1; }
 .kpd-scorecard-green  { background:rgba(34,197,94,0.09);  border-color:rgba(74,222,128,0.22);  color:#4ade80; }
 .kpd-scorecard-blue   { background:rgba(59,130,246,0.09); border-color:rgba(96,165,250,0.22);  color:#60a5fa; }
 .kpd-scorecard-red    { background:rgba(255,102,102,0.09);border-color:rgba(255,102,102,0.22); color:#ff6666; }
@@ -2414,24 +2377,11 @@ html, body {
 .kpd-scorecard-purple:hover { border-color:rgba(192,132,252,0.4); }
 .kpd-scorecard-cyan:hover   { border-color:rgba(0,212,255,0.35); }
 
-/* ── Findings & Interpretation section ─────────────────── */
-.kpd-findings-section { display: flex; flex-direction: column; gap: 10px; }
-.kpd-findings-list    { display: flex; flex-direction: column; gap: 6px; }
-
-.kpd-finding-item {
-  display: flex; align-items: center; gap: 14px;
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 13px 16px;
-  transition: border-color 0.15s, background 0.15s;
-}
-.kpd-finding-item:hover { background: var(--bg3); border-color: var(--border2); }
-
-.kpd-finding-bar { width: 4px; height: 36px; border-radius: 3px; flex-shrink: 0; }
-
-.kpd-finding-body { display: flex; align-items: center; gap: 14px; flex: 1; }
-
-.kpd-finding-range {
-  font-family: var(--font-mono); font-size: 11.5px;
-  color: var(--text3); min-width: 80px; flex-shrink: 0;
-}
-.kpd-finding-label { font-size: 13.5px; color: var(--text); font-weight: 500; line-height: 1.4; }
+.kpd-findings-section { display:flex; flex-direction:column; gap:10px; }
+.kpd-findings-list    { display:flex; flex-direction:column; gap:6px; }
+.kpd-finding-item { display:flex; align-items:center; gap:14px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:13px 16px; transition:border-color 0.15s,background 0.15s; }
+.kpd-finding-item:hover { background:var(--bg3); border-color:var(--border2); }
+.kpd-finding-bar { width:4px; height:36px; border-radius:3px; flex-shrink:0; }
+.kpd-finding-body { display:flex; align-items:center; gap:14px; flex:1; }
+.kpd-finding-range { font-family:var(--font-mono); font-size:11.5px; color:var(--text3); min-width:80px; flex-shrink:0; }
+.kpd-finding-label { font-size:13.5px; color:var(--text); font-weight:500; line-height:1.4; }
