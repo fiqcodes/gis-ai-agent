@@ -2417,7 +2417,7 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           const num = parseInt(m.slice(5), 10);
           return _MON_NAMES[num - 1] || m.slice(5);
         });
-        const yLabel   = isLST ? `${vUp} (°C)` : vUp;
+        const yLabel   = vUp.includes('UHI') ? `${vUp} (z-score)` : isLST ? `${vUp} (°C)` : vUp;
         // For all-negative series (e.g. NDBI), place baseline at the min so fill
         // shades the area BELOW the line (toward the min), not above it toward 0.
         const allNeg   = vals.every(v => v <= 0);
@@ -2450,10 +2450,10 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
     }
 
     // ── 2. Distribution histogram ──────────────────────────────────────────
-    if (hist && s && s.mean != null) {
+    if (hist && s && (s.mean != null || vUp.includes('UHI'))) {
       const el = scope.querySelector(`[id^="plotly_hist_${safeId}_"]`);
       if (el) {
-        const mean  = s.mean, std = Math.max(s.std || 0.1, 0.001);
+        const mean  = s.mean ?? 0, std = Math.max(s.std != null ? s.std : 0.1, 0.001);
         const lo    = s.min ?? mean - 4*std;
         const hi    = s.max ?? mean + 4*std;
         const nBins = 40;
@@ -2480,7 +2480,7 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           shapes.push({ type:'line', x0:mean, x1:mean, y0:0, y1:1, yref:'paper', line:{ color:'#C0392B', width:1.5, dash:'solid' } });
         }
 
-        const xLabel = isLST ? `${vUp} (°C)` : vUp;
+        const xLabel = vUp.includes('UHI') ? `${vUp} (z-score)` : isLST ? `${vUp} (°C)` : vUp;
         Plotly.newPlot(el, [{
           x:binX, y:counts, type:'bar',
           marker:{ color:'rgba(91,155,213,0.85)', line:{ color:'white', width:0.4 } },
@@ -2495,7 +2495,7 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
     }
 
     // ── 3. Class bar chart ─────────────────────────────────────────────────
-    if (classBar && s && s.mean != null) {
+    if (classBar && s && (s.mean != null || vUp.includes('UHI'))) {
       const el = scope.querySelector(`[id^="plotly_classbar_${safeId}_"]`);
       if (el) {
         const defEntry = Object.entries(_CLASS_DEFS).find(([k]) => vUp.includes(k));
@@ -2538,7 +2538,8 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
             }
           } else {
             // Monte Carlo fallback when backend didn't return class_pcts
-            const mean    = s.mean, std = Math.max(s.std || 0.1, 0.001);
+            const mean    = s.mean ?? 0;
+            const std = Math.max(s.std != null ? s.std : 0.1, 0.001);
             const sLo     = s.min ?? mean - 5*std;
             const sHi     = s.max ?? mean + 5*std;
             const samples = _sampleNormal(mean, std, 20000, sLo, sHi);

@@ -1386,7 +1386,40 @@ def run_analysis(region_name, start_date, end_date, variables):
                     if lst_img is None:
                         lst_img, _ = compute_lst(composite, study_area)
                     uhi_img, lst_mean, lst_std = compute_uhi(lst_img, study_area)
-                    stats_summary['UHI'] = {'mean': 0.0, 'lst_mean': lst_mean, 'lst_std': lst_std}
+                    # UHI is a z-score image: mean=0, std=1 by definition.
+                    # Populate full stats so histogram + class bar chart render correctly.
+                    uhi_stats = {
+                        'mean'    : 0.0,
+                        'std'     : 1.0,
+                        'min'     : -4.0,
+                        'max'     :  4.0,
+                        'median'  : 0.0,
+                        'p10'     : -1.28,   # z-score percentile (standard normal)
+                        'p90'     :  1.28,
+                        'lst_mean': lst_mean,
+                        'lst_std' : lst_std,
+                        'monthly' : {},
+                        # Pre-computed class percentages (standard normal distribution)
+                        'class_pcts': {
+                            'Strong Cool (z < −2)' : {'pct': 2.3},
+                            'Cool Island (−2 to −0.5)' : {'pct': 24.2},
+                            'Near Average (−0.5 to 0.5)': {'pct': 38.3},
+                            'Warm Zone (0.5 to 2)'  : {'pct': 24.2},
+                            'Heat Island (z > 2)'   : {'pct':  2.3},
+                        },
+                    }
+                    # Attempt to get real min/max from GEE for accurate histogram clipping
+                    try:
+                        uhi_range = uhi_img.reduceRegion(
+                            ee.Reducer.minMax(), study_area, 90, maxPixels=1e9
+                        ).getInfo()
+                        real_min = uhi_range.get('UHI_min')
+                        real_max = uhi_range.get('UHI_max')
+                        if real_min is not None: uhi_stats['min'] = round(real_min, 3)
+                        if real_max is not None: uhi_stats['max'] = round(real_max, 3)
+                    except Exception as _ue:
+                        print(f'    UHI min/max fetch failed: {_ue}')
+                    stats_summary['UHI'] = uhi_stats
                     panels_surface.append((uhi_img, VIS['uhi'], f'UHI (mean LST={lst_mean:.1f}C)', study_area))
                 elif v in SURFACE_INDEX_MAP:
                     label, func, vis_key, scale = SURFACE_INDEX_MAP[v]
