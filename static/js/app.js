@@ -2417,7 +2417,7 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           const num = parseInt(m.slice(5), 10);
           return _MON_NAMES[num - 1] || m.slice(5);
         });
-        const yLabel   = vUp.includes('UHI') ? `${vUp} (z-score)` : isLST ? `${vUp} (°C)` : vUp;
+        const yLabel   = vUp.includes('UHI') ? 'LST (°C)' : isLST ? `${vUp} (°C)` : vUp;
         // For all-negative series (e.g. NDBI), place baseline at the min so fill
         // shades the area BELOW the line (toward the min), not above it toward 0.
         const allNeg   = vals.every(v => v <= 0);
@@ -2450,10 +2450,10 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
     }
 
     // ── 2. Distribution histogram ──────────────────────────────────────────
-    if (hist && s && (s.mean != null || vUp.includes('UHI'))) {
+    if (hist && s && s.mean != null) {
       const el = scope.querySelector(`[id^="plotly_hist_${safeId}_"]`);
       if (el) {
-        const mean  = s.mean ?? 0, std = Math.max(s.std != null ? s.std : 0.1, 0.001);
+        const mean  = s.mean, std = Math.max(s.std || 0.1, 0.001);
         const lo    = s.min ?? mean - 4*std;
         const hi    = s.max ?? mean + 4*std;
         const nBins = 40;
@@ -2480,7 +2480,7 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           shapes.push({ type:'line', x0:mean, x1:mean, y0:0, y1:1, yref:'paper', line:{ color:'#C0392B', width:1.5, dash:'solid' } });
         }
 
-        const xLabel = vUp.includes('UHI') ? `${vUp} (z-score)` : isLST ? `${vUp} (°C)` : vUp;
+        const xLabel = vUp.includes('UHI') ? 'LST (°C)' : isLST ? `${vUp} (°C)` : vUp;
         Plotly.newPlot(el, [{
           x:binX, y:counts, type:'bar',
           marker:{ color:'rgba(91,155,213,0.85)', line:{ color:'white', width:0.4 } },
@@ -2506,29 +2506,34 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
 
           // Prefer exact backend class_pcts; fall back to Monte Carlo approximation
           if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
-            // Build a label→index map so colors and order stay aligned with _CLASS_DEFS
-            const _normLbl = s => s.replace(/\n/g, ' ').replace(/\u2013|\u2014/g, '-').replace(/\s+/g, ' ').trim().toLowerCase();
+            // Normalize labels: collapse whitespace, unify all minus/dash variants, lowercase
+            const _normLbl = s => s
+              .replace(/\n/g, ' ')
+              .replace(/[\u2212\u2013\u2014\u2010\u2011]/g, '-')  // all minus/dash → hyphen
+              .replace(/\s*(<|>|–|-)\s*/g, '$1')                  // strip spaces around operators
+              .replace(/\s+/g, ' ')
+              .trim()
+              .toLowerCase();
             const labelToIdx = {};
             def.labels.forEach((lbl, i) => { labelToIdx[_normLbl(lbl)] = i; });
 
-            // Collect entries first, then sort by canonical class index (ascending) so
-            // bars always render in natural class order (e.g. Moderate→Warm→Hot→Extreme)
             const cpEntries = [];
             for (const [lbl, val] of Object.entries(s.class_pcts)) {
               let pct = typeof val === 'object' && val !== null ? parseFloat((val.pct || 0).toFixed(1)) : parseFloat(parseFloat(val).toFixed(1));
               if (pct < 0.5) continue;
               const cleanLbl = lbl.replace(/\n/g, ' ');
-              const idx = labelToIdx[_normLbl(lbl)] ?? 999;
+              const normKey  = _normLbl(lbl);
+              const idx      = labelToIdx[normKey] ?? 999;
               cpEntries.push({ cleanLbl, pct, idx });
             }
-            // Sort by class index ascending = left-to-right natural order
-            cpEntries.sort((a, b) => a.idx - b.idx);
+            // Sort DESCENDING by class index so Heat Island (highest intensity) is leftmost
+            cpEntries.sort((a, b) => b.idx - a.idx);
 
             for (const { cleanLbl, pct, idx } of cpEntries) {
               classPcts.push(pct);
               classLabels.push(cleanLbl);
-              if (def.colors) {
-                classColors.push(def.colors[idx < def.colors.length ? idx : 0] || '#aaa');
+              if (def.colors && idx < def.colors.length) {
+                classColors.push(def.colors[idx]);
               } else {
                 const lo2 = idx < def.bounds.length - 1 ? def.bounds[idx] : def.bounds[0];
                 const hi2 = idx < def.bounds.length - 1 ? def.bounds[idx + 1] : def.bounds[1];
@@ -2537,25 +2542,35 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
               }
             }
           } else {
-            // Monte Carlo fallback when backend didn't return class_pcts
-            const mean    = s.mean ?? 0;
-            const std = Math.max(s.std != null ? s.std : 0.1, 0.001);
-            const sLo     = s.min ?? mean - 5*std;
-            const sHi     = s.max ?? mean + 5*std;
+            // Monte Carlo fallback — for UHI use z-score fields (z_mean/z_std/z_min/z_max)
+            // to avoid sampling in LST °C space against z-score bounds.
+            const isUHIvar = vUp.includes('UHI');
+            const mean    = isUHIvar ? (s.z_mean ?? 0)   : (s.mean ?? 0);
+            const std     = Math.max(isUHIvar ? (s.z_std  != null ? s.z_std  : 1.0) : (s.std != null ? s.std : 0.1), 0.001);
+            const sLo     = isUHIvar ? (s.z_min ?? mean - 5*std) : (s.min ?? mean - 5*std);
+            const sHi     = isUHIvar ? (s.z_max ?? mean + 5*std) : (s.max ?? mean + 5*std);
             const samples = _sampleNormal(mean, std, 20000, sLo, sHi);
 
+            const mcEntries = [];
             for (let i = 0; i < nC; i++) {
               const lo2 = def.bounds[i], hi2 = def.bounds[i+1];
               const pct = (samples.filter(v => v >= lo2 && v < hi2).length / samples.length) * 100;
               if (pct < 0.5) continue;
-              classPcts.push(parseFloat(pct.toFixed(1)));
-              classLabels.push(def.labels[i].replace(/\n/g, ' '));
+              let color;
               if (def.colors) {
-                classColors.push(def.colors[i] || '#aaa');
+                color = def.colors[i] || '#aaa';
               } else {
                 const vis = _VIS_PAL[def.visKey];
-                classColors.push(vis ? _palColor(vis.pal, vis.min, vis.max, (lo2+hi2)/2) : '#5B9BD5');
+                color = vis ? _palColor(vis.pal, vis.min, vis.max, (lo2+hi2)/2) : '#5B9BD5';
               }
+              mcEntries.push({ lbl: def.labels[i].replace(/\n/g, ' '), pct: parseFloat(pct.toFixed(1)), color, idx: i });
+            }
+            // Sort descending by index so highest-intensity class is leftmost
+            mcEntries.sort((a, b) => b.idx - a.idx);
+            for (const { lbl, pct, color } of mcEntries) {
+              classPcts.push(pct);
+              classLabels.push(lbl);
+              classColors.push(color);
             }
           }
 

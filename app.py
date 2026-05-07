@@ -630,6 +630,33 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 print(f'  UHI z-score stats failed: {_ze}')
 
                             # Store enriched stats — lst_mean is the real temp; z_* are UHI image stats
+                            # class_pcts uses z-score bounds to match _CLASS_DEFS.UHI on the frontend.
+                            # We pre-compute them here from z-score stats so frontend skips Monte Carlo.
+                            _z_mean = uhi_zstats.get('mean', 0.0)
+                            _z_std  = uhi_zstats.get('std',  1.0) or 1.0
+                            _z_min  = uhi_zstats.get('min',  -4.0)
+                            _z_max  = uhi_zstats.get('max',   4.0)
+                            try:
+                                import numpy as _np_uhi
+                                _rng_uhi = _np_uhi.random.default_rng(42)
+                                _z_samp  = _np_uhi.clip(
+                                    _rng_uhi.normal(_z_mean, _z_std, 100000), _z_min, _z_max)
+                                _uhi_class_pcts = {
+                                    'Strong Cool (z < −2)'      : {'pct': round(float(_np_uhi.mean(_z_samp < -2)           * 100), 1)},
+                                    'Cool Island (−2 to −0.5)'  : {'pct': round(float(_np_uhi.mean((_z_samp >= -2)  & (_z_samp < -0.5)) * 100), 1)},
+                                    'Near Average (−0.5 to 0.5)': {'pct': round(float(_np_uhi.mean((_z_samp >= -0.5) & (_z_samp < 0.5))  * 100), 1)},
+                                    'Warm Zone (0.5 to 2)'      : {'pct': round(float(_np_uhi.mean((_z_samp >= 0.5)  & (_z_samp < 2))    * 100), 1)},
+                                    'Heat Island (z > 2)'       : {'pct': round(float(_np_uhi.mean(_z_samp >= 2)             * 100), 1)},
+                                }
+                            except Exception as _cpz_err:
+                                print(f'  UHI class_pcts failed: {_cpz_err}')
+                                _uhi_class_pcts = {
+                                    'Strong Cool (z < −2)'      : {'pct': 2.3},
+                                    'Cool Island (−2 to −0.5)'  : {'pct': 24.2},
+                                    'Near Average (−0.5 to 0.5)': {'pct': 38.3},
+                                    'Warm Zone (0.5 to 2)'      : {'pct': 24.2},
+                                    'Heat Island (z > 2)'       : {'pct': 2.3},
+                                }
                             all_stats['UHI'] = {
                                 'mean'    : lst_mean,
                                 'std'     : lst_std,
@@ -642,12 +669,14 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                 'lst_mean': lst_mean,
                                 'lst_std' : lst_std,
                                 # Actual UHI z-score image statistics (used for zone class chart)
-                                'z_mean'  : uhi_zstats.get('mean',   0.0),
-                                'z_std'   : uhi_zstats.get('std',    1.0),
-                                'z_min'   : uhi_zstats.get('min',   -4.0),
-                                'z_max'   : uhi_zstats.get('max',    4.0),
-                                'z_p10'   : uhi_zstats.get('p10',   -1.3),
-                                'z_p90'   : uhi_zstats.get('p90',    1.3),
+                                'z_mean'  : _z_mean,
+                                'z_std'   : _z_std,
+                                'z_min'   : _z_min,
+                                'z_max'   : _z_max,
+                                'z_p10'   : uhi_zstats.get('p10', -1.3),
+                                'z_p90'   : uhi_zstats.get('p90',  1.3),
+                                # Pre-computed z-score class percentages — consumed by frontend class bar
+                                'class_pcts': _uhi_class_pcts,
                             }
                             map_id   = uhi_img.clip(study_area_surf).getMapId(VIS['uhi'])
                             tile_url = map_id['tile_fetcher'].url_format
