@@ -2367,7 +2367,7 @@ const _CLASS_DEFS = {
   NDSI:    { bounds:[-1,0.0,0.4,1],        labels:['No snow\n(<0)','Possible\n(0–0.4)','Snow\n(>0.4)'],                                    xlabel:'Snow class',           visKey:'ndsi' },
   NBI:     { bounds:[0,0.1,0.25,0.5],      labels:['Low\n(<0.1)','Moderate\n(0.1–0.25)','High\n(>0.25)'],                                  xlabel:'Built-up class',       visKey:'nbi'  },
   LST:     { bounds:[0,30,35,40,45,100],   labels:['Cool\n(<30°C)','Moderate\n(30–35°C)','Warm\n(35–40°C)','Hot\n(40–45°C)','Extreme\n(>45°C)'], xlabel:'Temperature class', colors:['#0502b8','#269db1','#3be285','#f5a800','#ff500d'] },
-  UHI:     { bounds:[-10,-2,-0.5,0.5,2,10], labels:['Strong Cool\n(z<−2)','Cool Island\n(−2–−0.5)','Near Average\n(−0.5–0.5)','Warm Zone\n(0.5–2)','Heat Island\n(z>2)'], xlabel:'UHI z-score class', colors:['#313695','#74add1','#fed976','#fd8d3c','#b10026'] },
+  UHI:     { bounds:[-10,-2,-0.5,0.5,2,10], labels:['Strong Cool\n(z<−2)','Cool Island\n(−2–−0.5)','Near Average\n(−0.5–0.5)','Warm Zone\n(0.5–2)','Heat Island\n(z>2)'], xlabel:'UHI z-score class', colors:['#0502b8','#269db1','#3be285','#f5a800','#ff500d'] },
   NO2:     { bounds:[0,8e-5,1.5e-4,2.5e-4,0.0002], labels:['Clean\n(<8×10⁻⁵)','Moderate\n(8–15×10⁻⁵)','High\n(15–25×10⁻⁵)','Severe\n(>25×10⁻⁵)'], xlabel:'NO₂ concentration class', visKey:'no2' },
   CO:      { bounds:[0.02,0.035,0.055,0.07,0.08],  labels:['Low\n(<0.035)','Moderate\n(0.035–0.055)','High\n(0.055–0.07)','Severe\n(>0.07)'],      xlabel:'CO column density class', visKey:'co'  },
   SO2:     { bounds:[0,1e-4,5e-4,1e-3,0.001],      labels:['Clean\n(<1×10⁻⁴)','Moderate\n(1–5×10⁻⁴)','High\n(5×10⁻⁴–10⁻³)','Severe\n(>10⁻³)'], xlabel:'SO₂ column density class',visKey:'so2' },
@@ -2506,27 +2506,50 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
 
           // Prefer exact backend class_pcts; fall back to Monte Carlo approximation
           if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
-            // Normalize labels: collapse whitespace, unify all minus/dash variants, lowercase
-            const _normLbl = s => s
-              .replace(/\n/g, ' ')
-              .replace(/[\u2212\u2013\u2014\u2010\u2011]/g, '-')  // all minus/dash → hyphen
-              .replace(/\s*(<|>|–|-)\s*/g, '$1')                  // strip spaces around operators
-              .replace(/\s+/g, ' ')
-              .trim()
-              .toLowerCase();
-            const labelToIdx = {};
-            def.labels.forEach((lbl, i) => { labelToIdx[_normLbl(lbl)] = i; });
+            // Map class_pcts entries to def colors by matching label keywords,
+            // falling back to insertion order if keyword match fails.
+            // We avoid string normalization entirely — too fragile across unicode variants.
+
+            // Keyword fingerprints that uniquely identify each class index in _CLASS_DEFS
+            const _fingerprints = [
+              // idx 0 = lowest intensity
+              ['strong cool', 'very low', 'background', 'no snow', 'non-built', 'vegetat', 'dry\n',
+               'sparse', 'clean\n(<', 'clean\n(0', 'cool\n(<', 'bare\n('],
+              // idx 1
+              ['cool island', 'stressed', 'transition\n(', 'possible', 'elevated', 'low built',
+               'moderate\n(30', 'low\n(<0.035)', 'low\n(<8', 'clean\n(<1\u00d710', 'low\n(220',
+               'mixed\n('],
+              // idx 2
+              ['near average', 'moist', 'normal\n', 'warm\n(35', 'moderate\n(0.3',
+               'moderate\n(8', 'moderate\n(1\u20135)', 'low\n(220\u2013280)', 'moderate\n(0.035',
+               'moderate\n(0\u20130.1)', 'urban\n(>', 'bare soil\n(>'],
+              // idx 3
+              ['warm zone', 'water\n(>', 'dense\n', 'polluted\n', 'healthy\n',
+               'hot\n(40', 'high built\n(>0.1)', 'high\n(15\u201325)', 'high\n(0.055', 'high\n(5\u00d7',
+               'high\n(>340)', 'high\n(1900', 'moderate\n(1\u20132)'],
+              // idx 4 = highest intensity
+              ['heat island', 'extreme\n', 'severe\n', 'snow\n(>', 'very high\n'],
+            ];
+
+            const _guessIdx = lbl => {
+              const lo = lbl.toLowerCase();
+              for (let i = 0; i < _fingerprints.length; i++) {
+                if (_fingerprints[i].some(kw => lo.includes(kw.toLowerCase()))) return i;
+              }
+              return 999;
+            };
 
             const cpEntries = [];
-            for (const [lbl, val] of Object.entries(s.class_pcts)) {
+            Object.entries(s.class_pcts).forEach(([lbl, val], orderIdx) => {
               let pct = typeof val === 'object' && val !== null ? parseFloat((val.pct || 0).toFixed(1)) : parseFloat(parseFloat(val).toFixed(1));
-              if (pct < 0.5) continue;
+              if (pct < 0.5) return;
               const cleanLbl = lbl.replace(/\n/g, ' ');
-              const normKey  = _normLbl(lbl);
-              const idx      = labelToIdx[normKey] ?? 999;
+              let idx = _guessIdx(lbl);
+              // Fallback: use insertion order mapped to def length
+              if (idx === 999) idx = Math.min(orderIdx, def.bounds.length - 2);
               cpEntries.push({ cleanLbl, pct, idx });
-            }
-            // Sort DESCENDING by class index so Heat Island (highest intensity) is leftmost
+            });
+            // Sort DESCENDING — highest intensity class leftmost
             cpEntries.sort((a, b) => b.idx - a.idx);
 
             for (const { cleanLbl, pct, idx } of cpEntries) {
