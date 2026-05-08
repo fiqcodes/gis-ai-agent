@@ -2367,7 +2367,7 @@ const _CLASS_DEFS = {
   NDSI:    { bounds:[-1,0.0,0.4,1],        labels:['No snow\n(<0)','Possible\n(0–0.4)','Snow\n(>0.4)'],                                    xlabel:'Snow class',           visKey:'ndsi' },
   NBI:     { bounds:[0,0.1,0.25,0.5],      labels:['Low\n(<0.1)','Moderate\n(0.1–0.25)','High\n(>0.25)'],                                  xlabel:'Built-up class',       visKey:'nbi'  },
   LST:     { bounds:[0,30,35,40,45,100],   labels:['Cool\n(<30°C)','Moderate\n(30–35°C)','Warm\n(35–40°C)','Hot\n(40–45°C)','Extreme\n(>45°C)'], xlabel:'Temperature class', colors:['#0502b8','#269db1','#3be285','#f5a800','#ff500d'] },
-  UHI:     { bounds:[-10,-2,-0.5,0.5,2,10], labels:['Strong Cool\n(z<−2)','Cool Island\n(−2–−0.5)','Near Average\n(−0.5–0.5)','Warm Zone\n(0.5–2)','Heat Island\n(z>2)'], xlabel:'UHI z-score class', colors:['#0502b8','#269db1','#3be285','#f5a800','#ff500d'] },
+  UHI:     { bounds:[-10,-2,-0.5,0.5,2,10], labels:['Strong Cool\n(z<−2)','Cool Island\n(−2–−0.5)','Near Average\n(−0.5–0.5)','Warm Zone\n(0.5–2)','Heat Island\n(z>2)'], xlabel:'UHI z-score class', colors:['#313695','#74add1','#fed976','#fd8d3c','#b10026'] },
   NO2:     { bounds:[0,8e-5,1.5e-4,2.5e-4,0.0002], labels:['Clean\n(<8×10⁻⁵)','Moderate\n(8–15×10⁻⁵)','High\n(15–25×10⁻⁵)','Severe\n(>25×10⁻⁵)'], xlabel:'NO₂ concentration class', visKey:'no2' },
   CO:      { bounds:[0.02,0.035,0.055,0.07,0.08],  labels:['Low\n(<0.035)','Moderate\n(0.035–0.055)','High\n(0.055–0.07)','Severe\n(>0.07)'],      xlabel:'CO column density class', visKey:'co'  },
   SO2:     { bounds:[0,1e-4,5e-4,1e-3,0.001],      labels:['Clean\n(<1×10⁻⁴)','Moderate\n(1–5×10⁻⁴)','High\n(5×10⁻⁴–10⁻³)','Severe\n(>10⁻³)'], xlabel:'SO₂ column density class',visKey:'so2' },
