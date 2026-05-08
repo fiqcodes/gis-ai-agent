@@ -839,11 +839,11 @@ def make_stats_charts(stats, var_name, label):
 
             # Label → (display, color)
             _lst_display = {
-                'Cool (<30°C)'       : ('Cool\n(<30°C)',        '#0502b8'),
-                'Moderate (30–35°C)' : ('Moderate\n(30–35°C)', '#269db1'),
-                'Warm (35–40°C)'     : ('Warm\n(35–40°C)',      '#3be285'),
-                'Hot (40–45°C)'      : ('Hot\n(40–45°C)',       '#f5a800'),
-                'Extreme (>45°C)'    : ('Extreme\n(>45°C)',     '#ff500d'),
+                'Cool (<30°C)'       : ('Cool\n(<30°C)',        '#0502c3'),
+                'Moderate (30–35°C)' : ('Moderate\n(30–35°C)', '#2895c1'),
+                'Warm (35–40°C)'     : ('Warm\n(35–40°C)',      '#3ce687'),
+                'Hot (40–45°C)'      : ('Hot\n(40–45°C)',       '#96e230'),
+                'Extreme (>45°C)'    : ('Extreme\n(>45°C)',     '#ff570b'),
             }
 
             real_cp = s.get('class_pcts') or {}
@@ -873,7 +873,7 @@ def make_stats_charts(stats, var_name, label):
                     float(np.mean((samples >= 40) & (samples < 45)) * 100),
                     float(np.mean(samples >= 45) * 100),
                 ]
-                colors  = ['#0502b8', '#269db1', '#3be285', '#f5a800', '#ff500d']
+                colors  = ['#0502c3', '#2895c1', '#3ce687', '#96e230', '#ff570b']
                 pairs   = [(c, p, col) for c, p, col in zip(classes, pcts, colors) if p > 0.1]
 
             if pairs:

@@ -1902,7 +1902,6 @@ function buildDistClassExplanation(varLabel, s) {
       const _normLbl = s => s.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
       const labelToIdx = {};
       def.labels.forEach((lbl, i) => { labelToIdx[_normLbl(lbl)] = i; });
-      // Also index exact backend labels for robust matching
       if (def.backendLabels) {
         def.backendLabels.forEach((lbl, i) => { labelToIdx[lbl.toLowerCase()] = i; });
       }
@@ -2361,7 +2360,7 @@ const _VIS_PAL = {
 
 // Per-variable class definitions — mirrors make_stats_charts() in gis_functions.py exactly
 const _CLASS_DEFS = {
-  // backendLabels: exact strings from gis_functions.py _CLASS_BOUNDS (no \n, may differ in dash/unicode)
+  // backendLabels: exact strings from gis_functions.py _CLASS_BOUNDS (no \n)
   NDVI:    { bounds:[-1,0.1,0.3,0.6,1],    labels:['Bare\n(<0.1)','Stressed\n(0.1–0.3)','Moderate\n(0.3–0.6)','Healthy\n(>0.6)'],
              backendLabels:['Bare (<0.1)','Stressed (0.1–0.3)','Moderate (0.3–0.6)','Healthy (>0.6)'],
              xlabel:'NDVI class',           visKey:'ndvi' },
@@ -2394,7 +2393,7 @@ const _CLASS_DEFS = {
              xlabel:'Built-up class',       visKey:'nbi'  },
   LST:     { bounds:[0,30,35,40,45,100],   labels:['Cool\n(<30°C)','Moderate\n(30–35°C)','Warm\n(35–40°C)','Hot\n(40–45°C)','Extreme\n(>45°C)'],
              backendLabels:['Cool (<30°C)','Moderate (30–35°C)','Warm (35–40°C)','Hot (40–45°C)','Extreme (>45°C)'],
-             xlabel:'Temperature class',   colors:['#0502b8','#269db1','#3be285','#f5a800','#ff500d'] },
+             xlabel:'Temperature class',   colors:['#0502c3','#2895c1','#3ce687','#96e230','#ff570b'] },
   UHI:     { bounds:[-10,-2,-0.5,0.5,2,10], labels:['Strong Cool\n(z<−2)','Cool Island\n(−2–−0.5)','Near Average\n(−0.5–0.5)','Warm Zone\n(0.5–2)','Heat Island\n(z>2)'],
              backendLabels:['Strong Cool (z < −2)','Cool Island (−2 to −0.5)','Near Average (−0.5 to 0.5)','Warm Zone (0.5 to 2)','Heat Island (z > 2)'],
              xlabel:'UHI z-score class',   colors:['#313695','#74add1','#fed976','#fd8d3c','#b10026'] },
@@ -2550,22 +2549,17 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
 
           // Prefer exact backend class_pcts; fall back to Monte Carlo approximation
           if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
-            // Build a direct label→index lookup from _CLASS_DEFS labels,
-            // normalizing away \n so backend labels (no newlines) match display labels.
+            // Direct label→index lookup from _CLASS_DEFS labels + backendLabels
             const _labelToIdx = {};
             def.labels.forEach((lbl, i) => {
-              const norm = lbl.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-              _labelToIdx[norm] = i;
+              _labelToIdx[lbl.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()] = i;
             });
-            // Also index exact backend labels (may differ slightly in dashes/unicode)
             if (def.backendLabels) {
               def.backendLabels.forEach((lbl, i) => { _labelToIdx[lbl.toLowerCase()] = i; });
             }
-
             const _guessIdx = (lbl, orderIdx) => {
               const norm = lbl.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-              if (_labelToIdx[norm] !== undefined) return _labelToIdx[norm];
-              return Math.min(orderIdx, def.bounds.length - 2);
+              return _labelToIdx[norm] ?? _labelToIdx[lbl.toLowerCase()] ?? Math.min(orderIdx, def.bounds.length - 2);
             };
 
             const cpEntries = [];
@@ -2576,7 +2570,7 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
               const idx = _guessIdx(lbl, orderIdx);
               cpEntries.push({ cleanLbl, pct, idx });
             });
-            // Sort ASCENDING — lowest to highest intensity (matches colorbar order)
+            // Sort ASCENDING — lowest to highest intensity (matches colorbar)
             cpEntries.sort((a, b) => a.idx - b.idx);
 
             for (const { cleanLbl, pct, idx } of cpEntries) {
@@ -3231,10 +3225,10 @@ const KNOWLEDGE = [
     range: 'Typically 15–65°C for land surfaces',
     interpretation: [
       { range: '< 30°C',   label: 'Cool (vegetation, water)', color: '#307ef3' },
-      { range: '30–35°C',  label: 'Moderate', color: '#269db1' },
-      { range: '35–40°C',  label: 'Warm', color: '#3be285' },
-      { range: '40–45°C',  label: 'Hot (urban, bare soil)', color: '#f5a800' },
-      { range: '> 45°C',   label: 'Extreme heat', color: '#ff500d' },
+      { range: '30–35°C',  label: 'Moderate', color: '#2895c1' },
+      { range: '35–40°C',  label: 'Warm', color: '#3ce687' },
+      { range: '40–45°C',  label: 'Hot (urban, bare soil)', color: '#96e230' },
+      { range: '> 45°C',   label: 'Extreme heat', color: '#ff570b' },
     ],
     datasource: 'Landsat 8/9 Collection 2 Level-2 (ST_B10 thermal band)',
     scale: '90 m spatial resolution (resampled from 100 m)',
@@ -3552,10 +3546,10 @@ const KNOWLEDGE_EXTRA = {
     viz_type: 'thermal_scale',
     viz_steps: [
       { range: '< 30°C',   label: 'Cool (vegetation, water bodies)', color: '#307ef3', icon: '🌊' },
-      { range: '30–35°C',  label: 'Moderate temperature', color: '#269db1', icon: '🌿' },
-      { range: '35–40°C',  label: 'Warm (mixed surfaces)', color: '#3be285', icon: '🌾' },
-      { range: '40–45°C',  label: 'Hot (bare soil, roads)', color: '#f5a800', icon: '🏙️' },
-      { range: '> 45°C',   label: 'Extreme heat (industrial, asphalt)', color: '#ff500d', icon: '🔥' },
+      { range: '30–35°C',  label: 'Moderate temperature', color: '#2895c1', icon: '🌿' },
+      { range: '35–40°C',  label: 'Warm (mixed surfaces)', color: '#3ce687', icon: '🌾' },
+      { range: '40–45°C',  label: 'Hot (bare soil, roads)', color: '#96e230', icon: '🏙️' },
+      { range: '> 45°C',   label: 'Extreme heat (industrial, asphalt)', color: '#ff570b', icon: '🔥' },
     ],
   },
   uhi: {
