@@ -1899,9 +1899,13 @@ function buildDistClassExplanation(varLabel, s) {
     if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
       // Backend provided exact percentages — new format: {pct, ha, total_ha} or legacy number
       // Build label->index map so we can sort by canonical class order (matches bar chart)
-      const _normLbl = s => s.replace(/\n/g, ' ').replace(/\u2013|\u2014/g, '-').replace(/\s+/g, ' ').trim().toLowerCase();
+      const _normLbl = s => s.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
       const labelToIdx = {};
       def.labels.forEach((lbl, i) => { labelToIdx[_normLbl(lbl)] = i; });
+      // Also index exact backend labels for robust matching
+      if (def.backendLabels) {
+        def.backendLabels.forEach((lbl, i) => { labelToIdx[lbl.toLowerCase()] = i; });
+      }
       const cpEntries = [];
       for (const [lbl, val] of Object.entries(s.class_pcts)) {
         let pct, ha;
@@ -1915,7 +1919,8 @@ function buildDistClassExplanation(varLabel, s) {
         }
         if (pct < 0.5) continue;
         const cleanLbl = lbl.replace(/\n/g, ' ');
-        cpEntries.push({ lbl: cleanLbl, pct, ha, idx: labelToIdx[_normLbl(lbl)] ?? 999 });
+        const _idx = labelToIdx[_normLbl(lbl)] ?? labelToIdx[lbl.toLowerCase()] ?? 999;
+        cpEntries.push({ lbl: cleanLbl, pct, ha, idx: _idx });
       }
       // Sort ascending by class index = natural left-to-right order (matches bar chart)
       cpEntries.sort((a, b) => a.idx - b.idx);
@@ -2356,25 +2361,64 @@ const _VIS_PAL = {
 
 // Per-variable class definitions — mirrors make_stats_charts() in gis_functions.py exactly
 const _CLASS_DEFS = {
-  NDVI:    { bounds:[-1,0.1,0.3,0.6,1],    labels:['Bare\n(<0.1)','Stressed\n(0.1–0.3)','Moderate\n(0.3–0.6)','Healthy\n(>0.6)'],           xlabel:'NDVI class',           visKey:'ndvi' },
-  EVI:     { bounds:[-1,0.1,0.3,0.5,1],    labels:['Sparse\n(<0.1)','Low\n(0.1–0.3)','Moderate\n(0.3–0.5)','Dense\n(>0.5)'],               xlabel:'Vegetation class',     visKey:'evi'  },
-  SAVI:    { bounds:[-1,0.1,0.3,0.5,1],    labels:['Sparse\n(<0.1)','Low\n(0.1–0.3)','Moderate\n(0.3–0.5)','Dense\n(>0.5)'],               xlabel:'Vegetation class',     visKey:'savi' },
-  NDBI:    { bounds:[-1,-0.1,0.0,0.1,1],   labels:['Non-built\n(<–0.1)','Low built\n(–0.1–0)','Moderate\n(0–0.1)','High built\n(>0.1)'],   xlabel:'Built-up class',       visKey:'ndbi' },
-  NDWI:    { bounds:[-1,-0.3,0.0,0.3,1],   labels:['Dry\n(<–0.3)','Transition\n(–0.3–0)','Moist\n(0–0.3)','Water\n(>0.3)'],               xlabel:'Water class',          visKey:'ndwi' },
-  MNDWI:   { bounds:[-1,-0.3,0.0,0.3,1],   labels:['Dry\n(<–0.3)','Transition\n(–0.3–0)','Moist\n(0–0.3)','Water\n(>0.3)'],               xlabel:'Water class',          visKey:'mndwi'},
-  BSI:     { bounds:[-1,-0.1,0.1,1],       labels:['Vegetated\n(<–0.1)','Mixed\n(–0.1–0.1)','Bare soil\n(>0.1)'],                          xlabel:'Bare soil class',      visKey:'bsi'  },
-  UI:      { bounds:[-1,-0.1,0.1,1],       labels:['Vegetation\n(<–0.1)','Transition\n(–0.1–0.1)','Urban\n(>0.1)'],                        xlabel:'Urban class',          visKey:'ui'   },
-  NDSI:    { bounds:[-1,0.0,0.4,1],        labels:['No snow\n(<0)','Possible\n(0–0.4)','Snow\n(>0.4)'],                                    xlabel:'Snow class',           visKey:'ndsi' },
-  NBI:     { bounds:[0,0.1,0.25,0.5],      labels:['Low\n(<0.1)','Moderate\n(0.1–0.25)','High\n(>0.25)'],                                  xlabel:'Built-up class',       visKey:'nbi'  },
-  LST:     { bounds:[0,30,35,40,45,100],   labels:['Cool\n(<30°C)','Moderate\n(30–35°C)','Warm\n(35–40°C)','Hot\n(40–45°C)','Extreme\n(>45°C)'], xlabel:'Temperature class', colors:['#0502b8','#269db1','#3be285','#f5a800','#ff500d'] },
-  UHI:     { bounds:[-10,-2,-0.5,0.5,2,10], labels:['Strong Cool\n(z<−2)','Cool Island\n(−2–−0.5)','Near Average\n(−0.5–0.5)','Warm Zone\n(0.5–2)','Heat Island\n(z>2)'], xlabel:'UHI z-score class', colors:['#313695','#74add1','#fed976','#fd8d3c','#b10026'] },
-  NO2:     { bounds:[0,8e-5,1.5e-4,2.5e-4,0.0002], labels:['Clean\n(<8×10⁻⁵)','Moderate\n(8–15×10⁻⁵)','High\n(15–25×10⁻⁵)','Severe\n(>25×10⁻⁵)'], xlabel:'NO₂ concentration class', visKey:'no2' },
-  CO:      { bounds:[0.02,0.035,0.055,0.07,0.08],  labels:['Low\n(<0.035)','Moderate\n(0.035–0.055)','High\n(0.055–0.07)','Severe\n(>0.07)'],      xlabel:'CO column density class', visKey:'co'  },
-  SO2:     { bounds:[0,1e-4,5e-4,1e-3,0.001],      labels:['Clean\n(<1×10⁻⁴)','Moderate\n(1–5×10⁻⁴)','High\n(5×10⁻⁴–10⁻³)','Severe\n(>10⁻³)'], xlabel:'SO₂ column density class',visKey:'so2' },
-  CH4:     { bounds:[1750,1850,1900,1950,2000],     labels:['Background\n(<1850)','Elevated\n(1850–1900)','High\n(1900–1950)','Very high\n(>1950)'], xlabel:'CH₄ mixing ratio (ppb)',  visKey:'ch4' },
-  O3:      { bounds:[200,220,280,340,380],          labels:['Very low\n(<220 DU)','Low\n(220–280 DU)','Normal\n(280–340 DU)','High\n(>340 DU)'],    xlabel:'O₃ column class',         visKey:'o3'  },
-  AEROSOL: { bounds:[-1,0,1,2,3],                  labels:['Clean\n(<0)','Low\n(0–1)','Moderate\n(1–2)','High\n(>2)'],                             xlabel:'Aerosol index class',     visKey:'aerosol' },
-  FFPI:    { bounds:[0,0.3,0.6,0.8,1],             labels:['Clean\n(0–0.3)','Moderate\n(0.3–0.6)','Polluted\n(0.6–0.8)','Severe\n(>0.8)'],        xlabel:'Pollution class',         visKey:'ffpi' },
+  // backendLabels: exact strings from gis_functions.py _CLASS_BOUNDS (no \n, may differ in dash/unicode)
+  NDVI:    { bounds:[-1,0.1,0.3,0.6,1],    labels:['Bare\n(<0.1)','Stressed\n(0.1–0.3)','Moderate\n(0.3–0.6)','Healthy\n(>0.6)'],
+             backendLabels:['Bare (<0.1)','Stressed (0.1–0.3)','Moderate (0.3–0.6)','Healthy (>0.6)'],
+             xlabel:'NDVI class',           visKey:'ndvi' },
+  EVI:     { bounds:[-1,0.1,0.3,0.5,1],    labels:['Sparse\n(<0.1)','Low\n(0.1–0.3)','Moderate\n(0.3–0.5)','Dense\n(>0.5)'],
+             backendLabels:['Sparse (<0.1)','Low (0.1–0.3)','Moderate (0.3–0.5)','Dense (>0.5)'],
+             xlabel:'Vegetation class',     visKey:'evi'  },
+  SAVI:    { bounds:[-1,0.1,0.3,0.5,1],    labels:['Sparse\n(<0.1)','Low\n(0.1–0.3)','Moderate\n(0.3–0.5)','Dense\n(>0.5)'],
+             backendLabels:['Sparse (<0.1)','Low (0.1–0.3)','Moderate (0.3–0.5)','Dense (>0.5)'],
+             xlabel:'Vegetation class',     visKey:'savi' },
+  NDBI:    { bounds:[-1,-0.1,0.0,0.1,1],   labels:['Non-built\n(<–0.1)','Low built\n(–0.1–0)','Moderate\n(0–0.1)','High built\n(>0.1)'],
+             backendLabels:['Non-built (<-0.1)','Low built (-0.1–0)','Moderate (0–0.1)','High built (>0.1)'],
+             xlabel:'Built-up class',       visKey:'ndbi' },
+  NDWI:    { bounds:[-1,-0.3,0.0,0.3,1],   labels:['Dry\n(<–0.3)','Transition\n(–0.3–0)','Moist\n(0–0.3)','Water\n(>0.3)'],
+             backendLabels:['Dry (<-0.3)','Transition (-0.3–0)','Moist (0–0.3)','Water (>0.3)'],
+             xlabel:'Water class',          visKey:'ndwi' },
+  MNDWI:   { bounds:[-1,-0.3,0.0,0.3,1],   labels:['Dry\n(<–0.3)','Transition\n(–0.3–0)','Moist\n(0–0.3)','Water\n(>0.3)'],
+             backendLabels:['Dry (<-0.3)','Transition (-0.3–0)','Moist (0–0.3)','Water (>0.3)'],
+             xlabel:'Water class',          visKey:'mndwi'},
+  BSI:     { bounds:[-1,-0.1,0.1,1],       labels:['Vegetated\n(<–0.1)','Mixed\n(–0.1–0.1)','Bare soil\n(>0.1)'],
+             backendLabels:['Vegetated (<-0.1)','Mixed (-0.1–0.1)','Bare soil (>0.1)'],
+             xlabel:'Bare soil class',      visKey:'bsi'  },
+  UI:      { bounds:[-1,-0.1,0.1,1],       labels:['Vegetation\n(<–0.1)','Transition\n(–0.1–0.1)','Urban\n(>0.1)'],
+             backendLabels:['Vegetation (<-0.1)','Transition (-0.1–0.1)','Urban (>0.1)'],
+             xlabel:'Urban class',          visKey:'ui'   },
+  NDSI:    { bounds:[-1,0.0,0.4,1],        labels:['No snow\n(<0)','Possible\n(0–0.4)','Snow\n(>0.4)'],
+             backendLabels:['No snow (<0)','Possible (0–0.4)','Snow (>0.4)'],
+             xlabel:'Snow class',           visKey:'ndsi' },
+  NBI:     { bounds:[0,0.1,0.25,0.5],      labels:['Low\n(<0.1)','Moderate\n(0.1–0.25)','High\n(>0.25)'],
+             backendLabels:['Low (<0.1)','Moderate (0.1–0.25)','High (>0.25)'],
+             xlabel:'Built-up class',       visKey:'nbi'  },
+  LST:     { bounds:[0,30,35,40,45,100],   labels:['Cool\n(<30°C)','Moderate\n(30–35°C)','Warm\n(35–40°C)','Hot\n(40–45°C)','Extreme\n(>45°C)'],
+             backendLabels:['Cool (<30°C)','Moderate (30–35°C)','Warm (35–40°C)','Hot (40–45°C)','Extreme (>45°C)'],
+             xlabel:'Temperature class',   colors:['#0502b8','#269db1','#3be285','#f5a800','#ff500d'] },
+  UHI:     { bounds:[-10,-2,-0.5,0.5,2,10], labels:['Strong Cool\n(z<−2)','Cool Island\n(−2–−0.5)','Near Average\n(−0.5–0.5)','Warm Zone\n(0.5–2)','Heat Island\n(z>2)'],
+             backendLabels:['Strong Cool (z < −2)','Cool Island (−2 to −0.5)','Near Average (−0.5 to 0.5)','Warm Zone (0.5 to 2)','Heat Island (z > 2)'],
+             xlabel:'UHI z-score class',   colors:['#313695','#74add1','#fed976','#fd8d3c','#b10026'] },
+  NO2:     { bounds:[0,8e-5,1.5e-4,2.5e-4,0.0002], labels:['Clean\n(<8×10⁻⁵)','Moderate\n(8–15×10⁻⁵)','High\n(15–25×10⁻⁵)','Severe\n(>25×10⁻⁵)'],
+             backendLabels:['Clean (<8e-5)','Moderate (8–15e-5)','High (15–25e-5)','Severe (>25e-5)'],
+             xlabel:'NO₂ concentration class', visKey:'no2' },
+  CO:      { bounds:[0.02,0.035,0.055,0.07,0.08],  labels:['Low\n(<0.035)','Moderate\n(0.035–0.055)','High\n(0.055–0.07)','Severe\n(>0.07)'],
+             backendLabels:['Low (<0.035)','Moderate (0.035–0.055)','High (0.055–0.07)','Severe (>0.07)'],
+             xlabel:'CO column density class', visKey:'co'  },
+  SO2:     { bounds:[0,1e-4,5e-4,1e-3,0.001],      labels:['Clean\n(<1×10⁻⁴)','Moderate\n(1–5×10⁻⁴)','High\n(5×10⁻⁴–10⁻³)','Severe\n(>10⁻³)'],
+             backendLabels:['Clean (<1e-4)','Moderate (1–5e-4)','High (5e-4–1e-3)','Severe (>1e-3)'],
+             xlabel:'SO₂ column density class',visKey:'so2' },
+  CH4:     { bounds:[1750,1850,1900,1950,2000],     labels:['Background\n(<1850)','Elevated\n(1850–1900)','High\n(1900–1950)','Very high\n(>1950)'],
+             backendLabels:['Background (<1850)','Elevated (1850–1900)','High (1900–1950)','Very high (>1950)'],
+             xlabel:'CH₄ mixing ratio (ppb)',  visKey:'ch4' },
+  O3:      { bounds:[200,220,280,340,380],          labels:['Very low\n(<220 DU)','Low\n(220–280 DU)','Normal\n(280–340 DU)','High\n(>340 DU)'],
+             backendLabels:['Very low (<220 DU)','Low (220–280 DU)','Normal (280–340 DU)','High (>340 DU)'],
+             xlabel:'O₃ column class',         visKey:'o3'  },
+  AEROSOL: { bounds:[-1,0,1,2,3],                  labels:['Clean\n(<0)','Low\n(0–1)','Moderate\n(1–2)','High\n(>2)'],
+             backendLabels:['Clean (<0)','Low (0–1)','Moderate (1–2)','High (>2)'],
+             xlabel:'Aerosol index class',     visKey:'aerosol' },
+  FFPI:    { bounds:[0,0.3,0.6,0.8,1],             labels:['Clean\n(0–0.3)','Moderate\n(0.3–0.6)','Polluted\n(0.6–0.8)','Severe\n(>0.8)'],
+             backendLabels:['Clean (0–0.3)','Moderate (0.3–0.6)','Polluted (0.6–0.8)','Severe (>0.8)'],
+             xlabel:'Pollution class',         visKey:'ffpi' },
 };
 
 function _sampleNormal(mean, std, n=50000, lo=-Infinity, hi=Infinity) {
@@ -2506,37 +2550,22 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
 
           // Prefer exact backend class_pcts; fall back to Monte Carlo approximation
           if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
-            // Map class_pcts entries to def colors by matching label keywords,
-            // falling back to insertion order if keyword match fails.
-            // We avoid string normalization entirely — too fragile across unicode variants.
+            // Build a direct label→index lookup from _CLASS_DEFS labels,
+            // normalizing away \n so backend labels (no newlines) match display labels.
+            const _labelToIdx = {};
+            def.labels.forEach((lbl, i) => {
+              const norm = lbl.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+              _labelToIdx[norm] = i;
+            });
+            // Also index exact backend labels (may differ slightly in dashes/unicode)
+            if (def.backendLabels) {
+              def.backendLabels.forEach((lbl, i) => { _labelToIdx[lbl.toLowerCase()] = i; });
+            }
 
-            // Keyword fingerprints that uniquely identify each class index in _CLASS_DEFS
-            const _fingerprints = [
-              // idx 0 = lowest intensity
-              ['strong cool', 'very low', 'background', 'no snow', 'non-built', 'vegetat', 'dry\n',
-               'sparse', 'clean\n(<', 'clean\n(0', 'cool\n(<', 'bare\n('],
-              // idx 1
-              ['cool island', 'stressed', 'transition\n(', 'possible', 'elevated', 'low built',
-               'moderate\n(30', 'low\n(<0.035)', 'low\n(<8', 'clean\n(<1\u00d710', 'low\n(220',
-               'mixed\n('],
-              // idx 2
-              ['near average', 'moist', 'normal\n', 'warm\n(35', 'moderate\n(0.3',
-               'moderate\n(8', 'moderate\n(1\u20135)', 'low\n(220\u2013280)', 'moderate\n(0.035',
-               'moderate\n(0\u20130.1)', 'urban\n(>', 'bare soil\n(>'],
-              // idx 3
-              ['warm zone', 'water\n(>', 'dense\n', 'polluted\n', 'healthy\n',
-               'hot\n(40', 'high built\n(>0.1)', 'high\n(15\u201325)', 'high\n(0.055', 'high\n(5\u00d7',
-               'high\n(>340)', 'high\n(1900', 'moderate\n(1\u20132)'],
-              // idx 4 = highest intensity
-              ['heat island', 'extreme\n', 'severe\n', 'snow\n(>', 'very high\n'],
-            ];
-
-            const _guessIdx = lbl => {
-              const lo = lbl.toLowerCase();
-              for (let i = 0; i < _fingerprints.length; i++) {
-                if (_fingerprints[i].some(kw => lo.includes(kw.toLowerCase()))) return i;
-              }
-              return 999;
+            const _guessIdx = (lbl, orderIdx) => {
+              const norm = lbl.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+              if (_labelToIdx[norm] !== undefined) return _labelToIdx[norm];
+              return Math.min(orderIdx, def.bounds.length - 2);
             };
 
             const cpEntries = [];
@@ -2544,13 +2573,11 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
               let pct = typeof val === 'object' && val !== null ? parseFloat((val.pct || 0).toFixed(1)) : parseFloat(parseFloat(val).toFixed(1));
               if (pct < 0.5) return;
               const cleanLbl = lbl.replace(/\n/g, ' ');
-              let idx = _guessIdx(lbl);
-              // Fallback: use insertion order mapped to def length
-              if (idx === 999) idx = Math.min(orderIdx, def.bounds.length - 2);
+              const idx = _guessIdx(lbl, orderIdx);
               cpEntries.push({ cleanLbl, pct, idx });
             });
-            // Sort DESCENDING — highest intensity class leftmost
-            cpEntries.sort((a, b) => b.idx - a.idx);
+            // Sort ASCENDING — lowest to highest intensity (matches colorbar order)
+            cpEntries.sort((a, b) => a.idx - b.idx);
 
             for (const { cleanLbl, pct, idx } of cpEntries) {
               classPcts.push(pct);
