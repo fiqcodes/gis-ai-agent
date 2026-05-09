@@ -228,7 +228,15 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             'UI':    ([-1, -0.1, 0.1, 1],             ['Vegetation (<-0.1)', 'Transition (-0.1–0.1)', 'Urban (>0.1)']),
             'NDSI':  ([-1, 0.0, 0.4, 1],              ['No snow (<0)', 'Possible (0–0.4)', 'Snow (>0.4)']),
             'NBI':   ([0, 0.1, 0.25, 0.5],            ['Low (<0.1)', 'Moderate (0.1–0.25)', 'High (>0.25)']),
-            'LST':   ([0, 30, 35, 40, 45, 100],        ['Cool (<30°C)', 'Moderate (30–35°C)', 'Warm (35–40°C)', 'Hot (40–45°C)', 'Extreme (>45°C)']),
+            'LST':     ([0, 30, 35, 40, 45, 100],          ['Cool (<30°C)', 'Moderate (30–35°C)', 'Warm (35–40°C)', 'Hot (40–45°C)', 'Extreme (>45°C)']),
+            # Atmospheric — labels MUST match gis_functions._CLASS_BOUNDS exactly (en-dash –)
+            'NO2':     ([0, 8e-5, 1.5e-4, 2.5e-4, 1],        ['Clean (<8e-5)', 'Moderate (8–15e-5)', 'High (15–25e-5)', 'Severe (>25e-5)']),
+            'CO':      ([0.02, 0.035, 0.055, 0.07, 0.08],    ['Low (<0.035)', 'Moderate (0.035–0.055)', 'High (0.055–0.07)', 'Severe (>0.07)']),
+            'SO2':     ([0, 1e-4, 5e-4, 1e-3, 0.01],         ['Clean (<1e-4)', 'Moderate (1–5e-4)', 'High (5e-4–1e-3)', 'Severe (>1e-3)']),
+            'CH4':     ([1750, 1850, 1900, 1950, 2100],       ['Background (<1850)', 'Elevated (1850–1900)', 'High (1900–1950)', 'Very high (>1950)']),
+            'O3':      ([200, 220, 280, 340, 400],             ['Very low (<220 DU)', 'Low (220–280 DU)', 'Normal (280–340 DU)', 'High (>340 DU)']),
+            'AEROSOL': ([-1, 0, 1, 2, 4],                     ['Clean (<0)', 'Low (0–1)', 'Moderate (1–2)', 'High (>2)']),
+            'FFPI':    ([0, 0.3, 0.6, 0.8, 1],                ['Clean (0–0.3)', 'Moderate (0.3–0.6)', 'Polluted (0.6–0.8)', 'Severe (>0.8)']),
         }
 
         def _compute_area_stats(ee_image, band_name, study_area, var_label, scale):
@@ -271,14 +279,55 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 import matplotlib.pyplot as _plt
                 import io as _io, base64 as _b64
                 _COLOR_MAP = {
+                    # LST
                     'Cool (<30°C)': '#0502b8', 'Moderate (30–35°C)': '#269db1',
                     'Warm (35–40°C)': '#3be285', 'Hot (40–45°C)': '#f5a800',
-                    'Extreme (>45°C)': '#ff500d', 'Bare (<0.1)': '#d4a96a',
-                    'Stressed (0.1–0.3)': '#a8c97f', 'Moderate (0.3–0.6)': '#5aaa4f',
-                    'Healthy (>0.6)': '#1a6e1a', 'Non-built (<-0.1)': '#4fc3f7',
-                    'Low built (-0.1–0)': '#b0bec5', 'High built (>0.1)': '#e53935',
+                    'Extreme (>45°C)': '#ff500d',
+                    # NDVI
+                    'Bare (<0.1)': '#d4a96a', 'Stressed (0.1–0.3)': '#a8c97f',
+                    'Moderate (0.3–0.6)': '#5aaa4f', 'Healthy (>0.6)': '#1a6e1a',
+                    # NDBI
+                    'Non-built (<-0.1)': '#4fc3f7', 'Low built (-0.1–0)': '#b0bec5',
+                    'High built (>0.1)': '#e53935',
+                    # NDWI / MNDWI
                     'Dry (<-0.3)': '#bf8c4c', 'Transition (-0.3–0)': '#a5d6a7',
                     'Moist (0–0.3)': '#42a5f5', 'Water (>0.3)': '#0d47a1',
+                    # NO2  (VIS: #000033→#0000ff→#00ffff→#ffff00→#ff0000, min=0 max=0.0002)
+                    # Labels use en-dash – to match gis_functions._CLASS_BOUNDS exactly
+                    'Clean (<8e-5)': '#0000cc',
+                    'Moderate (8–15e-5)': '#00ffff',
+                    'High (15–25e-5)': '#ffff00',
+                    'Severe (>25e-5)': '#ff0000',
+                    # CO  (same VIS palette, min=0.02 max=0.08)
+                    'Low (<0.035)': '#0000ff',
+                    'Moderate (0.035–0.055)': '#00ffff',
+                    'High (0.055–0.07)': '#ffff00',
+                    'Severe (>0.07)': '#ff0000',
+                    # SO2  (VIS: #0000ff→#ffff00→#ff0000→#8b0000)
+                    'Clean (<1e-4)': '#0000ff',
+                    'Moderate (1–5e-4)': '#ffff00',
+                    'High (5e-4–1e-3)': '#ff0000',
+                    'Severe (>1e-3)': '#8b0000',
+                    # CH4  (VIS: #0000ff→#008000→#ffa500→#ff0000)
+                    'Background (<1850)': '#0000ff',
+                    'Elevated (1850–1900)': '#008000',
+                    'High (1900–1950)': '#ffa500',
+                    'Very high (>1950)': '#ff0000',
+                    # O3  (VIS: #800080→#0000ff→#008000→#ff0000)
+                    'Very low (<220 DU)': '#800080',
+                    'Low (220–280 DU)': '#0000ff',
+                    'Normal (280–340 DU)': '#008000',
+                    'High (>340 DU)': '#ff0000',
+                    # Aerosol  (VIS: #0000ff→#ffff00→#ffa500→#ff0000)
+                    'Clean (<0)': '#0000ff',
+                    'Low (0–1)': '#ffff00',
+                    'Moderate (1–2)': '#ffa500',
+                    'High (>2)': '#ff0000',
+                    # FFPI  (VIS: #313695→#74add1→#fdae61→#d73027)
+                    'Clean (0–0.3)': '#313695',
+                    'Moderate (0.3–0.6)': '#74add1',
+                    'Polluted (0.6–0.8)': '#fdae61',
+                    'Severe (>0.8)': '#d73027',
                 }
                 _FALLBACK = ['#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f','#edc948']
                 pairs = []
@@ -878,18 +927,76 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             img, col = func(study_area_atmo, start_date, end_date)
                             c = col.size().getInfo()
                             if c > 0:
-                                band_name = img.bandNames().getInfo()[0]
+                                band_name = img.bandNames().getInfo()[0]  # renamed, e.g. 'NO2'
+                                # Original band name in collection before rename (e.g. 'tropospheric_NO2_column_number_density')
+                                orig_band_name = col.first().bandNames().getInfo()[0]
                                 s = get_stats(img, band_name, study_area_atmo, scale=3500)
+
+                                # ── Monthly stats — same pattern as LST ──────
+                                try:
+                                    import datetime as _dt_a
+                                    atmo_monthly = {}
+                                    start_dt_a = _dt_a.datetime.strptime(start_date, '%Y-%m-%d').replace(day=1)
+                                    end_dt_a   = _dt_a.datetime.strptime(end_date,   '%Y-%m-%d')
+                                    cur_a = start_dt_a
+                                    while cur_a <= end_dt_a:
+                                        m_s_a = cur_a.strftime('%Y-%m-%d')
+                                        nxt = (cur_a.replace(year=cur_a.year+1, month=1, day=1)
+                                               if cur_a.month == 12
+                                               else cur_a.replace(month=cur_a.month+1, day=1))
+                                        m_e_a = nxt.strftime('%Y-%m-%d')
+                                        try:
+                                            m_col_a = col.filterDate(m_s_a, m_e_a)
+                                            if m_col_a.size().getInfo() > 0:
+                                                # Select orig band then rename — col images are pre-rename
+                                                m_img_a   = m_col_a.mean().select(orig_band_name).rename(band_name)
+                                                m_stats_a = m_img_a.reduceRegion(
+                                                    reducer=ee.Reducer.mean(),
+                                                    geometry=study_area_atmo,
+                                                    scale=3500, maxPixels=1e9
+                                                ).getInfo()
+                                                val_a = m_stats_a.get(band_name)
+                                                if val_a is not None:
+                                                    atmo_monthly[cur_a.strftime('%Y-%m')] = round(float(val_a), 8)
+                                        except: pass
+                                        cur_a = nxt
+                                    s['monthly'] = atmo_monthly
+                                    print(f'  ✓ {label} monthly: {len(atmo_monthly)} months')
+                                except Exception as _atmo_me:
+                                    s['monthly'] = {}
+                                    print(f'  {label} monthly failed: {_atmo_me}')
+
                                 all_stats[label] = s
+
+                                # ── Real per-class area (ha) — same as LST ───
+                                _total_ha_a, _class_pcts_a = _compute_area_stats(
+                                    img, band_name, study_area_atmo, label, scale=3500)
+                                if _total_ha_a:
+                                    all_stats[label]['total_ha']   = _total_ha_a
+                                    all_stats[label]['class_pcts'] = _class_pcts_a
+                                    print(f'  {label} class_pcts: {list(_class_pcts_a.keys())}')
+
                                 map_id   = img.clip(study_area_atmo).getMapId(VIS[vis_key])
                                 tile_url = map_id['tile_fetcher'].url_format
-                                layers.append({'name': _layer_label(label, region_name, start_date, end_date), 'tile_url': tile_url,
-                                               'type': 'tile', 'bbox': bbox})
+                                layers.append({'name': _layer_label(label, region_name, start_date, end_date),
+                                               'tile_url': tile_url, 'type': 'tile', 'bbox': bbox})
                                 if bbox:
-                                    arr = get_thumb(img.clip(study_area_atmo), VIS[vis_key], study_area_atmo, dim=512)
+                                    arr    = get_thumb(img.clip(study_area_atmo), VIS[vis_key], study_area_atmo, dim=512)
+                                    charts = make_stats_charts(all_stats, v, label)
+                                    # Replace class bar with real GEE data — same as LST
+                                    _cp_a = all_stats[label].get('class_pcts') or {}
+                                    if _cp_a:
+                                        real_bar_a = _make_class_bar_b64(
+                                            _cp_a,
+                                            f'{label} class composition',
+                                            f'{label} concentration class')
+                                        if real_bar_a:
+                                            charts = [(t, d) for t, d in charts if t != 'class_bar']
+                                            charts.insert(0, ('class_bar', real_bar_a))
+                                            print(f'  ✓ {label} class bar: real GEE data')
                                     figures[label] = {
                                         'analysis_map': make_analysis_map(arr, VIS[vis_key], f'{label} ({unit})', region_name, bbox),
-                                        'charts'      : make_stats_charts(all_stats, v, label),
+                                        'charts'      : charts,
                                         'rgb_overview': atmo_rgb_overview if atmo_first_var else None,
                                     }
                                     atmo_first_var = False

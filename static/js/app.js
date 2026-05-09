@@ -1412,33 +1412,36 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           chips += `<div class="concl-chip"><div class="concl-chip-label">Air Quality</div><div class="concl-chip-value ${aqColor}">${aqClass}</div></div>`;
           if (s.max != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Peak ${vUp}</div><div class="concl-chip-value cv-pink">${digFmt(s.max)}</div></div>`;
           if (s.p10 != null) chips += `<div class="concl-chip"><div class="concl-chip-label">P10 (Low)</div><div class="concl-chip-value cv-green">${digFmt(s.p10)}</div></div>`;
-          // ── findings ─────────────────────────────────────────────────────────
+          // ── 4 findings ───────────────────────────────────────────────────────
           findingItems += `<div class="concl-finding-item">Mean ${vUp} across the ROI: <strong class="fv-cyan">${digFmt(s.mean)} ${unit}</strong></div>`;
           findingItems += `<div class="concl-finding-item">Air quality classified as <strong class="f${aqColor.slice(1)}">${aqClass}</strong> based on mean concentration</div>`;
           if (s.max != null) findingItems += `<div class="concl-finding-item">Peak ${vUp} concentration: <strong class="fv-pink">${digFmt(s.max)} ${unit}</strong> — indicating localised pollution hotspots</div>`;
-          // ── ha-aware class breakdown (matches LST/NDVI pattern) ──────────────
-          if (s.class_pcts && typeof s.class_pcts === 'object' && Object.keys(s.class_pcts).length > 0) {
-            const cpArr = Object.entries(s.class_pcts)
+          // ── class_pcts breakdown with ha — same pattern as LST ───────────────
+          if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
+            // Color by pollution intensity — clean=green, moderate=amber, high/severe=pink
+            const _aqBulletColor = (lbl) => {
+              const l = lbl.toLowerCase();
+              if (l.includes('clean') || l.includes('low') || l.includes('background') || l.includes('very low')) return 'fv-green';
+              if (l.includes('moderate') || l.includes('elevated') || l.includes('normal')) return 'fv-amber';
+              return 'fv-pink'; // high, severe, very high, polluted
+            };
+            // Sort by class index (natural scale order: clean → severe)
+            const _aqSorted = Object.entries(s.class_pcts)
               .map(([lbl, val]) => ({
                 lbl,
                 pct: typeof val === 'object' ? val.pct : parseFloat(val),
-                ha : typeof val === 'object' ? val.ha  : (s.total_ha ? Math.round(s.total_ha * (typeof val === 'object' ? val.pct : parseFloat(val)) / 100) : null)
+                ha : typeof val === 'object' ? val.ha  : null
               }))
-              .filter(e => e.pct >= 0.5)
-              .sort((a, b) => b.pct - a.pct);
-            if (cpArr[0]) {
-              const d = cpArr[0];
-              const haStr = d.ha != null ? ` (~<strong class="fv-pink">${d.ha.toLocaleString()} ha</strong>)` : '';
-              findingItems += `<div class="concl-finding-item">Dominant pollution class: <strong class="f${aqColor.slice(1)}">${d.lbl}</strong> at <strong class="fv-pink">${d.pct.toFixed(1)}%</strong>${haStr}</div>`;
+              .filter(e => e.pct >= 0.5);
+            // Show highest intensity first (mirrors LST: extreme first)
+            _aqSorted.reverse();
+            for (const d of _aqSorted) {
+              const col   = _aqBulletColor(d.lbl);
+              const haStr = d.ha != null ? ` (~<strong class="${col}">${Math.round(d.ha).toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item"><strong>${d.lbl}</strong>: <strong class="${col}">${d.pct.toFixed(1)}%</strong>${haStr}</div>`;
             }
-            if (cpArr[1]) {
-              const d2 = cpArr[1];
-              const haStr2 = d2.ha != null ? ` (~<strong class="fv-amber">${d2.ha.toLocaleString()} ha</strong>)` : '';
-              findingItems += `<div class="concl-finding-item">Second class: <strong class="fv-amber">${d2.lbl}</strong> at <strong class="fv-amber">${d2.pct.toFixed(1)}%</strong>${haStr2}</div>`;
-            }
-          } else {
-            if (s.p90 != null) findingItems += `<div class="concl-finding-item">P90 concentration: <strong class="fv-amber">${digFmt(s.p90)} ${unit}</strong> — upper-bound exposure in the region</div>`;
-            else if (s.std != null) findingItems += `<div class="concl-finding-item">Std deviation of <strong class="fv-amber">${digFmt(s.std)}</strong> indicates ${s.std / (s.mean || 1) > 0.5 ? 'significant spatial variation in pollution levels' : 'relatively uniform distribution across the area'}</div>`;
+          } else if (s.p90 != null) {
+            findingItems += `<div class="concl-finding-item">P90 concentration: <strong class="fv-amber">${digFmt(s.p90)} ${unit}</strong> — upper-bound exposure in the region</div>`;
           }
         } else if (s.mean != null) {
           // ── Generic fallback ──────────────────────────────────────────────────
@@ -1781,6 +1784,47 @@ function buildDistClassExplanation(varLabel, s) {
   }
 
   // ── Atmospheric class notes ──────────────────────────────────────────────
+
+  // ── Atmospheric leading class paragraph — mirrors LST block ─────────────────
+  const _atmoVarUp = varLabel.toUpperCase();
+  const _isAtmoClass = ['NO2','CO','SO2','CH4','O3','AEROSOL','FFPI'].some(a => _atmoVarUp.includes(a));
+  if (_isAtmoClass && s.class_pcts && Object.keys(s.class_pcts).length > 0) {
+    const _cpAtmo = Object.entries(s.class_pcts)
+      .map(([lbl, val]) => ({
+        lbl,
+        pct: typeof val === 'object' && val !== null ? (val.pct || 0) : parseFloat(val || 0),
+        ha : typeof val === 'object' && val !== null ? (val.ha  || null) : null,
+      }))
+      .filter(e => e.pct >= 0.5)
+      .sort((a, b) => b.pct - a.pct);
+
+    if (_cpAtmo.length > 0) {
+      const _dom = _cpAtmo[0];
+      const _sec = _cpAtmo[1];
+      let _atmoIntro = `The ${_atmoVarUp} concentration landscape is dominated by the <strong>${_dom.lbl}</strong> class`;
+      if (_dom.ha != null) {
+        _atmoIntro += `, covering <strong>${_dom.pct.toFixed(1)}%</strong> of the area (~${Math.round(_dom.ha).toLocaleString()} ha)`;
+      } else {
+        _atmoIntro += ` at <strong>${_dom.pct.toFixed(1)}%</strong> of the area`;
+      }
+      _atmoIntro += '. ';
+      if (_sec) {
+        _atmoIntro += `<strong>${_sec.lbl}</strong> accounts for an additional <strong>${_sec.pct.toFixed(1)}%</strong>`;
+        if (_sec.ha != null) _atmoIntro += ` (~${Math.round(_sec.ha).toLocaleString()} ha)`;
+        _atmoIntro += '. ';
+      }
+      const _pollutedEntries = _cpAtmo.filter(e =>
+        ['high','severe','polluted','very high'].some(w => e.lbl.toLowerCase().includes(w)));
+      const _pollutedPct = _pollutedEntries.reduce((sum, e) => sum + e.pct, 0);
+      if (_pollutedPct > 50) {
+        _atmoIntro += 'Combined high and severe classes cover more than half the region, pointing to widespread emission sources — traffic corridors, industrial zones, and built-up areas act as primary contributors. ';
+      } else if (_pollutedPct > 20) {
+        _atmoIntro += `Elevated and severe zones together represent a significant <strong>${_pollutedPct.toFixed(1)}%</strong> of the area, concentrated over built-up and industrial surfaces. `;
+      }
+      text += _atmoIntro;
+    }
+  }
+
   if (varLabel.toUpperCase().includes('NO2') && s.mean != null) {
     const m = s.mean;
     const p90 = s.p90 || m;
@@ -1980,9 +2024,10 @@ function buildDistClassExplanation(varLabel, s) {
       const domPct   = classPcts[0];
       const domHa    = classHas[0];
 
-      // For LST with real class_pcts, the leading paragraph already introduced the dominant class.
-      // Skip the redundant summary sentence; only show the bullet breakdown.
-      const skipSummary = isLST && s.class_pcts && Object.keys(s.class_pcts).length > 0;
+      // For LST and atmospheric vars with real class_pcts, the leading paragraph
+      // already introduced the dominant class — skip the redundant intro sentence.
+      const _isAtmoVar = ['NO2','CO','SO2','CH4','O3','AEROSOL','GPP','BURNED','FFPI'].some(a => varLabel.toUpperCase().includes(a));
+      const skipSummary = (isLST || _isAtmoVar) && s.class_pcts && Object.keys(s.class_pcts).length > 0;
 
       let classText = '';
       if (!skipSummary) {
@@ -2427,27 +2472,27 @@ const _CLASS_DEFS = {
   UHI:     { bounds:[-10,-2,-0.5,0.5,2,10], labels:['Strong Cool\n(z<−2)','Cool Island\n(−2–−0.5)','Near Average\n(−0.5–0.5)','Warm Zone\n(0.5–2)','Heat Island\n(z>2)'],
              backendLabels:['Strong Cool (z < −2)','Cool Island (−2 to −0.5)','Near Average (−0.5 to 0.5)','Warm Zone (0.5 to 2)','Heat Island (z > 2)'],
              xlabel:'UHI z-score class',   colors:['#313695','#74add1','#fed976','#fd8d3c','#b10026'] },
-  NO2:     { bounds:[0,8e-5,1.5e-4,2.5e-4,0.0002], labels:['Clean\n(<8×10⁻⁵)','Moderate\n(8–15×10⁻⁵)','High\n(15–25×10⁻⁵)','Severe\n(>25×10⁻⁵)'],
+  NO2:     { bounds:[0,8e-5,1.5e-4,2.5e-4,1],      labels:['Clean\n(<8×10⁻⁵)','Moderate\n(8–15×10⁻⁵)','High\n(15–25×10⁻⁵)','Severe\n(>25×10⁻⁵)'],
              backendLabels:['Clean (<8e-5)','Moderate (8–15e-5)','High (15–25e-5)','Severe (>25e-5)'],
-             xlabel:'NO₂ concentration class', visKey:'no2' },
+             xlabel:'NO₂ concentration class', visKey:'no2', visMin:0, visMax:0.0002 },
   CO:      { bounds:[0.02,0.035,0.055,0.07,0.08],  labels:['Low\n(<0.035)','Moderate\n(0.035–0.055)','High\n(0.055–0.07)','Severe\n(>0.07)'],
              backendLabels:['Low (<0.035)','Moderate (0.035–0.055)','High (0.055–0.07)','Severe (>0.07)'],
-             xlabel:'CO column density class', visKey:'co'  },
-  SO2:     { bounds:[0,1e-4,5e-4,1e-3,0.001],      labels:['Clean\n(<1×10⁻⁴)','Moderate\n(1–5×10⁻⁴)','High\n(5×10⁻⁴–10⁻³)','Severe\n(>10⁻³)'],
+             xlabel:'CO column density class', visKey:'co',  visMin:0.02,  visMax:0.08 },
+  SO2:     { bounds:[0,1e-4,5e-4,1e-3,0.01],       labels:['Clean\n(<1×10⁻⁴)','Moderate\n(1–5×10⁻⁴)','High\n(5×10⁻⁴–10⁻³)','Severe\n(>10⁻³)'],
              backendLabels:['Clean (<1e-4)','Moderate (1–5e-4)','High (5e-4–1e-3)','Severe (>1e-3)'],
-             xlabel:'SO₂ column density class',visKey:'so2' },
-  CH4:     { bounds:[1750,1850,1900,1950,2000],     labels:['Background\n(<1850)','Elevated\n(1850–1900)','High\n(1900–1950)','Very high\n(>1950)'],
+             xlabel:'SO₂ column density class',visKey:'so2', visMin:0,     visMax:0.001 },
+  CH4:     { bounds:[1750,1850,1900,1950,2100],     labels:['Background\n(<1850)','Elevated\n(1850–1900)','High\n(1900–1950)','Very high\n(>1950)'],
              backendLabels:['Background (<1850)','Elevated (1850–1900)','High (1900–1950)','Very high (>1950)'],
-             xlabel:'CH₄ mixing ratio (ppb)',  visKey:'ch4' },
-  O3:      { bounds:[200,220,280,340,380],          labels:['Very low\n(<220 DU)','Low\n(220–280 DU)','Normal\n(280–340 DU)','High\n(>340 DU)'],
+             xlabel:'CH₄ mixing ratio (ppb)',  visKey:'ch4', visMin:1750,  visMax:1950 },
+  O3:      { bounds:[200,220,280,340,400],          labels:['Very low\n(<220 DU)','Low\n(220–280 DU)','Normal\n(280–340 DU)','High\n(>340 DU)'],
              backendLabels:['Very low (<220 DU)','Low (220–280 DU)','Normal (280–340 DU)','High (>340 DU)'],
-             xlabel:'O₃ column class',         visKey:'o3'  },
-  AEROSOL: { bounds:[-1,0,1,2,3],                  labels:['Clean\n(<0)','Low\n(0–1)','Moderate\n(1–2)','High\n(>2)'],
+             xlabel:'O₃ column class',         visKey:'o3',  visMin:200,   visMax:380 },
+  AEROSOL: { bounds:[-1,0,1,2,4],                  labels:['Clean\n(<0)','Low\n(0–1)','Moderate\n(1–2)','High\n(>2)'],
              backendLabels:['Clean (<0)','Low (0–1)','Moderate (1–2)','High (>2)'],
-             xlabel:'Aerosol index class',     visKey:'aerosol' },
+             xlabel:'Aerosol index class',     visKey:'aerosol', visMin:-1, visMax:3 },
   FFPI:    { bounds:[0,0.3,0.6,0.8,1],             labels:['Clean\n(0–0.3)','Moderate\n(0.3–0.6)','Polluted\n(0.6–0.8)','Severe\n(>0.8)'],
              backendLabels:['Clean (0–0.3)','Moderate (0.3–0.6)','Polluted (0.6–0.8)','Severe (>0.8)'],
-             xlabel:'Pollution class',         visKey:'ffpi' },
+             xlabel:'Pollution class',         visKey:'ffpi', visMin:0,    visMax:1 },
 };
 
 function _sampleNormal(mean, std, n=50000, lo=-Infinity, hi=Infinity) {
@@ -2480,11 +2525,12 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
     const isLST  = vUp.includes('LST') || vUp.includes('UHI');
 
     // ── 1. Monthly trend ───────────────────────────────────────────────────
-    if (monthly && s && s.monthly) {
+    if (monthly && s) {
       const el = scope.querySelector(`[id^="plotly_monthly_${safeId}_"]`);
-      if (el && Object.keys(s.monthly).length >= 2) {
-        const months   = Object.keys(s.monthly).sort();
-        const vals     = months.map(m => s.monthly[m]);
+      const monthlyData = s.monthly && typeof s.monthly === 'object' ? s.monthly : {};
+      if (el && Object.keys(monthlyData).length >= 2) {
+        const months   = Object.keys(monthlyData).sort();
+        const vals     = months.map(m => monthlyData[m]);
         const _MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         const shortM   = months.map(m => {
           const num = parseInt(m.slice(5), 10);
@@ -2526,11 +2572,30 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
     if (hist && s && s.mean != null) {
       const el = scope.querySelector(`[id^="plotly_hist_${safeId}_"]`);
       if (el) {
-        const mean  = s.mean, std = Math.max(s.std || 0.1, 0.001);
-        const lo    = s.min ?? mean - 4*std;
-        const hi    = s.max ?? mean + 4*std;
+        const mean  = s.mean;
+        // For atmospheric vars, std can be extremely small relative to mean.
+        // Use max(std, mean*0.05) so sampling produces a visible spread.
+        const _ATMO_HIST_VARS = ['NO2','CO','SO2','CH4','O3','AEROSOL','GPP','BURNED','FFPI'];
+        const isAtmoHist = _ATMO_HIST_VARS.includes(vUp);
+        const std   = Math.max(s.std || Math.abs(mean) * 0.1, Math.abs(mean) * (isAtmoHist ? 0.05 : 0.001), 1e-30);
+
+        // For atmospheric vars: restrict display window to p10–p90 zone (mirrors gis_functions.py)
+        let lo, hi;
+        if (isAtmoHist && s.p10 != null && s.p90 != null) {
+          const spread = Math.max(s.p90 - s.p10, Math.abs(mean) * 0.1, 1e-30);
+          lo = Math.max(s.min ?? mean - 4*std, s.p10 - spread * 0.5);
+          hi = Math.min(s.max ?? mean + 4*std, s.p90 + spread * 0.5);
+        } else {
+          lo = s.min ?? mean - 4*std;
+          hi = s.max ?? mean + 4*std;
+        }
+        // Guard: if window is still degenerate, fall back to ±3 std around mean
+        if (!isFinite(lo) || !isFinite(hi) || hi - lo < 1e-40) {
+          lo = mean - 3*std; hi = mean + 3*std;
+        }
+
         const nBins = 40;
-        const binW  = (hi - lo) / nBins || 0.01;
+        const binW  = (hi - lo) / nBins || Math.abs(mean) * 0.01 || 0.01;
         const counts = new Array(nBins).fill(0);
         const binX   = Array.from({length:nBins}, (_,i) => lo + (i+0.5)*binW);
 
@@ -2606,13 +2671,18 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
             for (const { cleanLbl, pct, idx } of cpEntries) {
               classPcts.push(pct);
               classLabels.push(cleanLbl);
+              const vis = _VIS_PAL[def.visKey];
+              const vMin = def.visMin ?? vis?.min ?? def.bounds[0];
+              const vMax = def.visMax ?? vis?.max ?? def.bounds[def.bounds.length-1];
               if (def.colors && idx < def.colors.length) {
                 classColors.push(def.colors[idx]);
+              } else if (vis) {
+                const midpoint = idx < def.bounds.length - 1
+                  ? (def.bounds[idx] + def.bounds[idx+1]) / 2
+                  : (def.bounds[0] + def.bounds[1]) / 2;
+                classColors.push(_palColor(vis.pal, vMin, vMax, midpoint));
               } else {
-                const lo2 = idx < def.bounds.length - 1 ? def.bounds[idx] : def.bounds[0];
-                const hi2 = idx < def.bounds.length - 1 ? def.bounds[idx + 1] : def.bounds[1];
-                const vis = _VIS_PAL[def.visKey];
-                classColors.push(vis ? _palColor(vis.pal, vis.min, vis.max, (lo2 + hi2) / 2) : '#5B9BD5');
+                classColors.push('#5B9BD5');
               }
             }
           } else {
@@ -2635,7 +2705,9 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
                 color = def.colors[i] || '#aaa';
               } else {
                 const vis = _VIS_PAL[def.visKey];
-                color = vis ? _palColor(vis.pal, vis.min, vis.max, (lo2+hi2)/2) : '#5B9BD5';
+                const vMin2 = def.visMin ?? vis?.min ?? def.bounds[0];
+                const vMax2 = def.visMax ?? vis?.max ?? def.bounds[def.bounds.length-1];
+                color = vis ? _palColor(vis.pal, vMin2, vMax2, (lo2+hi2)/2) : '#5B9BD5';
               }
               mcEntries.push({ lbl: def.labels[i].replace(/\n/g, ' '), pct: parseFloat(pct.toFixed(1)), color, idx: i });
             }

@@ -448,7 +448,7 @@ _CLASS_BOUNDS = {
 }
 
 def get_class_pcts(image, band, study_area, var_label, scale=1000):
-    """Compute real per-class pixel percentages and hectares via GEE for a given variable."""
+    """Compute real per-class pixel percentages via GEE for a given variable."""
     key = var_label.upper()
     if key not in _CLASS_BOUNDS:
         return {}
@@ -461,7 +461,6 @@ def get_class_pcts(image, band, study_area, var_label, scale=1000):
         if not total_pixels:
             return {}
         pixel_area_ha = (scale ** 2) / 10000.0
-        total_ha = round(total_pixels * pixel_area_ha, 1)
         result = {}
         for i in range(len(bounds) - 1):
             lo, hi = bounds[i], bounds[i+1]
@@ -688,21 +687,18 @@ def make_stats_charts(stats, var_name, label):
             samples = rng.normal(mean_v, std_v, n_pts)
             samples = np.clip(samples, min_v, max_v)
 
-            # For atmospheric vars, restrict display range to p10–p90 to avoid
-            # a collapsed histogram where nearly all samples pile at the edges
+            # Atmospheric vars: restrict display to p10–p90 zone so histogram isn't collapsed
+            label_up  = label.upper()
             ATMO_HIST = ('NO2','CO','SO2','CH4','O3','AEROSOL','GPP','BURNED','FFPI')
             if any(av in label_up for av in ATMO_HIST) and p10_v is not None and p90_v is not None:
-                spread   = p90_v - p10_v
-                hist_min = max(min_v, p10_v - spread * 0.5)
-                hist_max = min(max_v, p90_v + spread * 0.5)
-                if hist_max <= hist_min:
-                    hist_min, hist_max = min_v, max_v
-                display_samples = samples[(samples >= hist_min) & (samples <= hist_max)]
-                if len(display_samples) < 100:
+                spread = max(p90_v - p10_v, abs(mean_v) * 0.05, 1e-30)
+                h_min  = max(min_v, p10_v - spread * 0.5)
+                h_max  = min(max_v, p90_v + spread * 0.5)
+                display_samples = samples[(samples >= h_min) & (samples <= h_max)]
+                if len(display_samples) < 500:
                     display_samples = samples
             else:
                 display_samples = samples
-                hist_min, hist_max = min_v, max_v
 
             fig, ax = plt.subplots(figsize=(6, 4))
             ax.hist(display_samples, bins=40, color='#5B9BD5', edgecolor='white',
@@ -731,7 +727,6 @@ def make_stats_charts(stats, var_name, label):
 
     # ── Generic index class bar (NDVI, NDBI, NDWI, EVI, SAVI, BSI, UI, NBI, NDSI, MNDWI) ──
     INDEX_VARS = ('NDVI','NDBI','NDWI','EVI','SAVI','BSI','UI','NBI','NDSI','MNDWI')
-    label_up   = label.upper()
 
     if mean_v is not None and any(iv in label_up for iv in INDEX_VARS):
         try:
@@ -994,138 +989,117 @@ def make_stats_charts(stats, var_name, label):
         try:
             import matplotlib.colors as _mc
 
-            def _palette_color(palette, vmin, vmax, value):
-                """Sample a hex color from a palette list at a given value."""
-                cmap = _mc.LinearSegmentedColormap.from_list('_', palette)
-                pos  = np.clip((value - vmin) / (vmax - vmin + 1e-30), 0, 1)
-                rgba = cmap(pos)
-                return _mc.to_hex(rgba)
+            # Hardcoded label → (display_label, hex_color) maps — same pattern as LST
+            _ATMO_DISPLAY = {
+                'NO2': {
+                    # VIS no2 palette: #000033 → #0000ff → #8000ff → #00ffff → #008000 → #ffff00 → #ff0000
+                    'Clean (<8e-5)'      : ('Clean\n(<8×10⁻⁵)',     '#0000cc'),
+                    'Moderate (8–15e-5)' : ('Moderate\n(8–15×10⁻⁵)','#00ffff'),
+                    'High (15–25e-5)'    : ('High\n(15–25×10⁻⁵)',   '#ffff00'),
+                    'Severe (>25e-5)'    : ('Severe\n(>25×10⁻⁵)',   '#ff0000'),
+                },
+                'CO': {
+                    # VIS co palette: same as no2
+                    'Low (<0.035)'           : ('Low\n(<0.035)',           '#0000ff'),
+                    'Moderate (0.035–0.055)' : ('Moderate\n(0.035–0.055)','#00ffff'),
+                    'High (0.055–0.07)'      : ('High\n(0.055–0.07)',      '#ffff00'),
+                    'Severe (>0.07)'         : ('Severe\n(>0.07)',         '#ff0000'),
+                },
+                'SO2': {
+                    # VIS so2 palette: #0000ff #008000 #ffff00 #ffa500 #ff0000 #8b0000
+                    'Clean (<1e-4)'      : ('Clean\n(<1×10⁻⁴)',      '#0000ff'),
+                    'Moderate (1–5e-4)'  : ('Moderate\n(1–5×10⁻⁴)', '#ffff00'),
+                    'High (5e-4–1e-3)'   : ('High\n(5–10×10⁻⁴)',    '#ff0000'),
+                    'Severe (>1e-3)'     : ('Severe\n(>10⁻³)',       '#8b0000'),
+                },
+                'CH4': {
+                    # VIS ch4 palette: #0000ff #00ffff #008000 #ffff00 #ffa500 #ff0000
+                    'Background (<1850)'    : ('Background\n(<1850)',    '#0000ff'),
+                    'Elevated (1850–1900)'  : ('Elevated\n(1850–1900)', '#008000'),
+                    'High (1900–1950)'      : ('High\n(1900–1950)',      '#ffa500'),
+                    'Very high (>1950)'     : ('Very high\n(>1950)',     '#ff0000'),
+                },
+                'O3': {
+                    'Very low (<220 DU)' : ('Very low\n(<220 DU)', '#800080'),
+                    'Low (220–280 DU)'   : ('Low\n(220–280 DU)',   '#0000ff'),
+                    'Normal (280–340 DU)': ('Normal\n(280–340 DU)','#008000'),
+                    'High (>340 DU)'     : ('High\n(>340 DU)',     '#ff0000'),
+                },
+                'AEROSOL': {
+                    # VIS aerosol palette: #0000ff #ffffff #ffff00 #ffa500 #ff0000
+                    'Clean (<0)'    : ('Clean\n(<0)',    '#0000ff'),
+                    'Low (0–1)'     : ('Low\n(0–1)',     '#ffff00'),
+                    'Moderate (1–2)': ('Moderate\n(1–2)','#ffa500'),
+                    'High (>2)'     : ('High\n(>2)',     '#ff0000'),
+                },
+                'FFPI': {
+                    'Clean (0–0.3)'      : ('Clean\n(0–0.3)',      '#313695'),
+                    'Moderate (0.3–0.6)' : ('Moderate\n(0.3–0.6)', '#74add1'),
+                    'Polluted (0.6–0.8)' : ('Polluted\n(0.6–0.8)', '#fdae61'),
+                    'Severe (>0.8)'      : ('Severe\n(>0.8)',       '#d73027'),
+                },
+            }
 
-            std_v   = s.get('std', abs(mean_v) * 0.2 + 1e-10) or abs(mean_v) * 0.2 + 1e-10
-            rng     = np.random.default_rng(42)
-            samples = rng.normal(mean_v, std_v, 50000)
-            samples = np.clip(samples, min_v if min_v is not None else 0,
-                                       max_v if max_v is not None else mean_v * 3)
+            # Pick the right display map
+            atmo_key = next((k for k in _ATMO_DISPLAY if k in label_up), None)
+            display_map = _ATMO_DISPLAY.get(atmo_key, {})
 
-            if 'NO2' in label_up:
-                pal  = VIS['no2']['palette']
-                vmin, vmax = VIS['no2']['min'], VIS['no2']['max']
-                # Absolute thresholds (mol/m²): clean/moderate/high/severe
-                bounds = [0, 8e-5, 1.5e-4, 2.5e-4, vmax]
-                labels = ['Clean\n(<8×10⁻⁵)', 'Moderate\n(8–15×10⁻⁵)',
-                          'High\n(15–25×10⁻⁵)', 'Severe\n(>25×10⁻⁵)']
-                xlabel = 'NO₂ concentration class'
+            real_cp = s.get('class_pcts') or {}
 
-            elif 'CO' in label_up:
-                pal  = VIS['co']['palette']
-                vmin, vmax = VIS['co']['min'], VIS['co']['max']
-                bounds = [vmin, 0.035, 0.055, 0.07, vmax]
-                labels = ['Low\n(<0.035)', 'Moderate\n(0.035–0.055)',
-                          'High\n(0.055–0.07)', 'Severe\n(>0.07)']
-                xlabel = 'CO column density class'
-
-            elif 'SO2' in label_up:
-                pal  = VIS['so2']['palette']
-                vmin, vmax = VIS['so2']['min'], VIS['so2']['max']
-                bounds = [vmin, 1e-4, 5e-4, 1e-3, vmax]
-                labels = ['Clean\n(<1×10⁻⁴)', 'Moderate\n(1–5×10⁻⁴)',
-                          'High\n(5×10⁻⁴–10⁻³)', 'Severe\n(>10⁻³)']
-                xlabel = 'SO₂ column density class'
-
-            elif 'CH4' in label_up:
-                pal  = VIS['ch4']['palette']
-                vmin, vmax = VIS['ch4']['min'], VIS['ch4']['max']
-                bounds = [vmin, 1850, 1900, 1950, vmax]
-                labels = ['Background\n(<1850)', 'Elevated\n(1850–1900)',
-                          'High\n(1900–1950)', 'Very high\n(>1950)']
-                xlabel = 'CH₄ mixing ratio class (ppb)'
-
-            elif 'O3' in label_up:
-                pal  = VIS['o3']['palette']
-                vmin, vmax = VIS['o3']['min'], VIS['o3']['max']
-                bounds = [vmin, 220, 280, 340, vmax]
-                labels = ['Very low\n(<220 DU)', 'Low\n(220–280 DU)',
-                          'Normal\n(280–340 DU)', 'High\n(>340 DU)']
-                xlabel = 'O₃ column class'
-
-            elif 'AEROSOL' in label_up:
-                pal  = VIS['aerosol']['palette']
-                vmin, vmax = VIS['aerosol']['min'], VIS['aerosol']['max']
-                bounds = [vmin, 0, 1, 2, vmax]
-                labels = ['Clean\n(<0)', 'Low\n(0–1)',
-                          'Moderate\n(1–2)', 'High\n(>2)']
-                xlabel = 'Aerosol index class'
-
-            elif 'FFPI' in label_up:
-                pal  = VIS['ffpi']['palette']
-                vmin, vmax = VIS['ffpi']['min'], VIS['ffpi']['max']
-                bounds = [vmin, 0.3, 0.6, 0.8, vmax]
-                labels = ['Clean\n(0–0.3)', 'Moderate\n(0.3–0.6)',
-                          'Polluted\n(0.6–0.8)', 'Severe\n(>0.8)']
-                xlabel = 'Pollution class'
-
+            if real_cp and display_map:
+                # ── Same as LST: iterate class_pcts, look up display label + color ──
+                pairs = []
+                for lbl, val in real_cp.items():
+                    pct = val['pct'] if isinstance(val, dict) else float(val)
+                    if pct <= 0.1:
+                        continue
+                    disp, color = display_map.get(lbl, (lbl, '#5B9BD5'))
+                    pairs.append((disp, pct, color))
             else:
-                pal, vmin, vmax, bounds, labels = None, 0, 1, [], []
-                xlabel = label
-
-            if pal and len(bounds) >= 2:
-                real_cp = s.get('class_pcts') or {}
-                if real_cp:
-                    # Use real GEE-computed class percentages (same as NDVI/LST)
-                    class_defs = []
-                    for i in range(len(bounds) - 1):
-                        lo_b, hi_b = bounds[i], bounds[i + 1]
-                        midpoint   = (lo_b + hi_b) / 2
-                        color      = _palette_color(pal, vmin, vmax, midpoint)
-                        class_defs.append((labels[i], bounds[i], bounds[i + 1], color))
-
-                    pairs = []
-                    for name, lo_b, hi_b, color in class_defs:
-                        # Match by label (strip newlines for comparison)
-                        val = real_cp.get(name.replace('\n', ' '))
-                        if val is None:
-                            # Try matching without the newline-split label format
-                            for k, v in real_cp.items():
-                                if k.replace('\n', ' ').strip() == name.replace('\n', ' ').strip():
-                                    val = v
-                                    break
-                        if val is not None:
-                            pct = val['pct'] if isinstance(val, dict) else float(val)
-                            if pct > 0.5:
-                                pairs.append((name, pct, color))
+                # ── Fallback: simulate (same as LST fallback) ──────────────────
+                std_v   = s.get('std', abs(mean_v) * 0.2 + 1e-10) or abs(mean_v) * 0.2 + 1e-10
+                rng     = np.random.default_rng(42)
+                cb_key  = next((k for k in _CLASS_BOUNDS if k in label_up), None)
+                if cb_key:
+                    cb_bounds, cb_labels = _CLASS_BOUNDS[cb_key]
+                    samples = rng.normal(mean_v, std_v, 50000)
+                    samples = np.clip(samples, cb_bounds[0], cb_bounds[-1])
+                    pairs   = []
+                    for i in range(len(cb_bounds) - 1):
+                        lo_b, hi_b = cb_bounds[i], cb_bounds[i+1]
+                        pct = float(np.mean((samples >= lo_b) & (samples < hi_b)) * 100)
+                        if pct <= 0.1: continue
+                        disp_lbl = list(display_map.values())[i][0] if display_map and i < len(display_map) else cb_labels[i]
+                        color    = list(display_map.values())[i][1] if display_map and i < len(display_map) else '#5B9BD5'
+                        pairs.append((disp_lbl, pct, color))
                 else:
-                    # Fallback: simulate from normal distribution
-                    class_defs = []
-                    for i in range(len(bounds) - 1):
-                        lo_b, hi_b = bounds[i], bounds[i + 1]
-                        mask       = (samples >= lo_b) & (samples < hi_b)
-                        midpoint   = (lo_b + hi_b) / 2
-                        color      = _palette_color(pal, vmin, vmax, midpoint)
-                        class_defs.append((labels[i], mask, color))
+                    pairs = []
 
-                    pairs = [(name, float(np.mean(mask) * 100), col)
-                             for name, mask, col in class_defs
-                             if float(np.mean(mask) * 100) > 0.5]
-
-                if pairs:
-                    cls, pct_vals, col_vals = zip(*pairs)
-                    fig, ax = plt.subplots(figsize=(max(5, len(pairs) * 1.4), 3.5))
-                    bars = ax.bar(cls, pct_vals, color=col_vals, edgecolor='white',
-                                  linewidth=0.5, width=0.5)
-                    for bar, pct in zip(bars, pct_vals):
-                        ax.text(bar.get_x() + bar.get_width() / 2,
-                                bar.get_height() + 0.5,
-                                f'{pct:.1f}%', ha='center', fontsize=9,
-                                fontweight='bold', color='#333')
-                    ax.set_xlabel(xlabel, fontsize=9)
-                    ax.set_ylabel('Area share (%)', fontsize=9)
-                    ax.set_title(f'{label} class composition', fontsize=10, fontweight='bold')
-                    ax.set_ylim(0, max(pct_vals) * 1.25)
-                    ax.spines['top'].set_visible(False)
-                    ax.spines['right'].set_visible(False)
-                    fig.tight_layout()
-                    charts.append(('class_bar', fig_to_base64(fig)))
-                    print(f'  ✓ {label} class chart: {len(pairs)} classes')
+            if pairs:
+                xlabel_map = {
+                    'NO2': 'NO₂ concentration class', 'CO': 'CO column density class',
+                    'SO2': 'SO₂ column density class', 'CH4': 'CH₄ mixing ratio class (ppb)',
+                    'O3': 'O₃ column class', 'AEROSOL': 'Aerosol index class', 'FFPI': 'Pollution class',
+                }
+                xlabel = xlabel_map.get(atmo_key, label)
+                cls, pct_vals, col_vals = zip(*pairs)
+                fig, ax = plt.subplots(figsize=(max(5, len(pairs) * 1.4), 3.5))
+                bars = ax.bar(cls, pct_vals, color=col_vals, edgecolor='white',
+                              linewidth=0.5, width=0.5)
+                ax.set_ylim(0, max(pct_vals) * 1.3)
+                for bar, pct in zip(bars, pct_vals):
+                    ax.text(bar.get_x() + bar.get_width() / 2,
+                            bar.get_height() + max(pct_vals) * 0.02,
+                            f'{pct:.1f}%', ha='center', va='bottom', fontsize=9,
+                            fontweight='bold', color='#333')
+                ax.set_xlabel(xlabel, fontsize=9)
+                ax.set_ylabel('Area share (%)', fontsize=9)
+                ax.set_title(f'{label} class composition', fontsize=10, fontweight='bold')
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                fig.tight_layout()
+                charts.append(('class_bar', fig_to_base64(fig)))
+                print(f'  ✓ {label} class chart: {len(pairs)} classes')
         except Exception as e:
             print(f'  Atmo class chart failed: {e}')
 
@@ -1523,18 +1497,7 @@ def run_analysis(region_name, start_date, end_date, variables):
                 ffpi_img, ffpi_class = compute_ffpi(study_area, start_date, end_date)
                 stats_summary['FFPI'] = get_stats(ffpi_img, 'FFPI', study_area, scale=3500)
                 try:
-                    cp = get_class_pcts(ffpi_img, 'FFPI', study_area, 'FFPI', scale=3500)
-                    stats_summary['FFPI']['class_pcts'] = cp
-                    if cp:
-                        try:
-                            pixel_area_ha = (3500 ** 2) / 10000.0
-                            px_total = ffpi_img.select('FFPI').reduceRegion(
-                                reducer=ee.Reducer.count(),
-                                geometry=study_area, scale=3500, maxPixels=1e9
-                            ).getInfo().get('FFPI', 0)
-                            stats_summary['FFPI']['total_ha'] = round(px_total * pixel_area_ha, 1)
-                        except:
-                            pass
+                    stats_summary['FFPI']['class_pcts'] = get_class_pcts(ffpi_img, 'FFPI', study_area, 'FFPI', scale=3500)
                 except:
                     stats_summary['FFPI']['class_pcts'] = {}
                 panels_atmo.append((ffpi_img,   VIS['ffpi'],       'FFPI Score',          study_area))
@@ -1581,24 +1544,7 @@ def run_analysis(region_name, start_date, end_date, variables):
                         s['monthly'] = {}
                     # Real class percentages from GEE
                     try:
-                        cp = get_class_pcts(img, band_name, study_area, label, scale=3500)
-                        s['class_pcts'] = cp
-                        # Derive total_ha from class_pcts sum
-                        if cp:
-                            total_ha = round(sum(
-                                v['ha'] if isinstance(v, dict) else 0
-                                for v in cp.values()
-                            ), 1)
-                            # Re-derive from pixel count for accuracy
-                            try:
-                                pixel_area_ha = (3500 ** 2) / 10000.0
-                                px_total = img.select(band_name).reduceRegion(
-                                    reducer=ee.Reducer.count(),
-                                    geometry=study_area, scale=3500, maxPixels=1e9
-                                ).getInfo().get(band_name, 0)
-                                s['total_ha'] = round(px_total * pixel_area_ha, 1)
-                            except:
-                                s['total_ha'] = total_ha
+                        s['class_pcts'] = get_class_pcts(img, band_name, study_area, label, scale=3500)
                     except Exception as ce:
                         print(f'    class_pcts failed: {ce}')
                         s['class_pcts'] = {}
