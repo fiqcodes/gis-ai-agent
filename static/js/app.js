@@ -1893,7 +1893,7 @@ function buildDistClassExplanation(varLabel, s) {
 
   if (def) {
     // Prefer real class_pcts from backend; fall back to normal approx
-    let classPcts = [], classLabels = [], classHas = [];
+    let classPcts = [], classLabels = [], classHas = [], classIdxs = [];
     let totalHa = s.total_ha || null;
 
     if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
@@ -1921,12 +1921,13 @@ function buildDistClassExplanation(varLabel, s) {
         const _idx = labelToIdx[_normLbl(lbl)] ?? labelToIdx[lbl.toLowerCase()] ?? 999;
         cpEntries.push({ lbl: cleanLbl, pct, ha, idx: _idx });
       }
-      // Sort ascending by class index = natural left-to-right order (matches bar chart)
-      cpEntries.sort((a, b) => b.pct - a.pct);
+      // Sort ascending by class index = natural scale order (bar chart: low → high left → right)
+      cpEntries.sort((a, b) => a.idx - b.idx);
       for (const e of cpEntries) {
         classPcts.push(e.pct);
         classLabels.push(e.lbl);
         classHas.push(e.ha);
+        classIdxs.push(e.idx);
       }
     } else if (s.mean != null && s.std != null) {
       // Approximation fallback
@@ -1941,14 +1942,21 @@ function buildDistClassExplanation(varLabel, s) {
         classPcts.push(parseFloat(pct.toFixed(1)));
         classLabels.push(def.labels[i].replace(/\n/g, ' '));
         classHas.push(totalHa ? Math.round(totalHa * pct / 100) : null);
+        classIdxs.push(i);
       }
     }
 
     if (classPcts.length > 0) {
-      const maxIdx   = classPcts.indexOf(Math.max(...classPcts));
-      const dominant = classLabels[maxIdx];
-      const domPct   = classPcts[maxIdx];
-      const domHa    = classHas[maxIdx];
+      // Sort bullets highest intensity → lowest (by class index descending = hottest/most extreme on top)
+      const _combined = classPcts.map((pct, i) => ({ pct, lbl: classLabels[i], ha: classHas[i], idx: classIdxs[i] }));
+      _combined.sort((a, b) => b.idx - a.idx);
+      classPcts   = _combined.map(e => e.pct);
+      classLabels = _combined.map(e => e.lbl);
+      classHas    = _combined.map(e => e.ha);
+
+      const dominant = classLabels[0];
+      const domPct   = classPcts[0];
+      const domHa    = classHas[0];
 
       // For LST with real class_pcts, the leading paragraph already introduced the dominant class.
       // Skip the redundant summary sentence; only show the bullet breakdown.
