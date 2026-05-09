@@ -1412,12 +1412,34 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           chips += `<div class="concl-chip"><div class="concl-chip-label">Air Quality</div><div class="concl-chip-value ${aqColor}">${aqClass}</div></div>`;
           if (s.max != null) chips += `<div class="concl-chip"><div class="concl-chip-label">Peak ${vUp}</div><div class="concl-chip-value cv-pink">${digFmt(s.max)}</div></div>`;
           if (s.p10 != null) chips += `<div class="concl-chip"><div class="concl-chip-label">P10 (Low)</div><div class="concl-chip-value cv-green">${digFmt(s.p10)}</div></div>`;
-          // ── 4 findings ───────────────────────────────────────────────────────
+          // ── findings ─────────────────────────────────────────────────────────
           findingItems += `<div class="concl-finding-item">Mean ${vUp} across the ROI: <strong class="fv-cyan">${digFmt(s.mean)} ${unit}</strong></div>`;
           findingItems += `<div class="concl-finding-item">Air quality classified as <strong class="f${aqColor.slice(1)}">${aqClass}</strong> based on mean concentration</div>`;
           if (s.max != null) findingItems += `<div class="concl-finding-item">Peak ${vUp} concentration: <strong class="fv-pink">${digFmt(s.max)} ${unit}</strong> — indicating localised pollution hotspots</div>`;
-          if (s.p90 != null) findingItems += `<div class="concl-finding-item">P90 concentration: <strong class="fv-amber">${digFmt(s.p90)} ${unit}</strong> — upper-bound exposure in the region</div>`;
-          else if (s.std != null) findingItems += `<div class="concl-finding-item">Std deviation of <strong class="fv-amber">${digFmt(s.std)}</strong> indicates ${s.std / (s.mean || 1) > 0.5 ? 'significant spatial variation in pollution levels' : 'relatively uniform distribution across the area'}</div>`;
+          // ── ha-aware class breakdown (matches LST/NDVI pattern) ──────────────
+          if (s.class_pcts && typeof s.class_pcts === 'object' && Object.keys(s.class_pcts).length > 0) {
+            const cpArr = Object.entries(s.class_pcts)
+              .map(([lbl, val]) => ({
+                lbl,
+                pct: typeof val === 'object' ? val.pct : parseFloat(val),
+                ha : typeof val === 'object' ? val.ha  : (s.total_ha ? Math.round(s.total_ha * (typeof val === 'object' ? val.pct : parseFloat(val)) / 100) : null)
+              }))
+              .filter(e => e.pct >= 0.5)
+              .sort((a, b) => b.pct - a.pct);
+            if (cpArr[0]) {
+              const d = cpArr[0];
+              const haStr = d.ha != null ? ` (~<strong class="fv-pink">${d.ha.toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item">Dominant pollution class: <strong class="f${aqColor.slice(1)}">${d.lbl}</strong> at <strong class="fv-pink">${d.pct.toFixed(1)}%</strong>${haStr}</div>`;
+            }
+            if (cpArr[1]) {
+              const d2 = cpArr[1];
+              const haStr2 = d2.ha != null ? ` (~<strong class="fv-amber">${d2.ha.toLocaleString()} ha</strong>)` : '';
+              findingItems += `<div class="concl-finding-item">Second class: <strong class="fv-amber">${d2.lbl}</strong> at <strong class="fv-amber">${d2.pct.toFixed(1)}%</strong>${haStr2}</div>`;
+            }
+          } else {
+            if (s.p90 != null) findingItems += `<div class="concl-finding-item">P90 concentration: <strong class="fv-amber">${digFmt(s.p90)} ${unit}</strong> — upper-bound exposure in the region</div>`;
+            else if (s.std != null) findingItems += `<div class="concl-finding-item">Std deviation of <strong class="fv-amber">${digFmt(s.std)}</strong> indicates ${s.std / (s.mean || 1) > 0.5 ? 'significant spatial variation in pollution levels' : 'relatively uniform distribution across the area'}</div>`;
+          }
         } else if (s.mean != null) {
           // ── Generic fallback ──────────────────────────────────────────────────
           chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value cv-cyan">${s.mean.toFixed(4)}</div></div>`;
@@ -3707,51 +3729,62 @@ function openKnowledgeDetail(id) {
   // Build visualization block
   const vizHtml = buildKnowledgeViz(ex);
 
-  // Variable definitions
-  const varsHtml = ex.variables ? `
-    <div class="kpd-vars-table">
-      ${ex.variables.map(v => `
-        <div class="kpd-var-row">
-          <div class="kpd-var-sym">\\(${v.sym.replace(/_/g,'_{').replace(/([^_{}]+)$/,'$1}').replace(/\{([^{}])\}/g,'$1')}\\)</div>
-          <div class="kpd-var-eq">=</div>
-          <div class="kpd-var-desc">${v.desc}</div>
-        </div>`).join('')}
-    </div>` : '';
-
-  // Palette gradient
-  const paletteStops = k.palette.map((c,i) => `${c} ${Math.round(i/(k.palette.length-1)*100)}%`).join(', ');
-
   const catColorMap = { vegetation:'green', water:'blue', urban:'red', thermal:'yellow', atmospheric:'purple', landcover:'cyan' };
   const cardColor = catColorMap[k.category] || 'green';
   const rangeParts = k.range.split(' to ');
   const rangeMin = rangeParts[0] || '—';
   const rangeMax = rangeParts[1] || '—';
 
+  // Theme per category
+  const _themeMap = { vegetation:{chips:'green',findings:'blue'}, water:{chips:'blue',findings:'green'}, urban:{chips:'red',findings:'amber'}, thermal:{chips:'amber',findings:'red'}, atmospheric:{chips:'blue',findings:'amber'}, landcover:{chips:'green',findings:'blue'} };
+  const _theme = _themeMap[k.category] || { chips:'blue', findings:'green' };
+
+  // Extract bands used from formula_bands
+  const _bandsMatch = k.formula_bands.match(/SR_B\d+|ST_B\d+/g);
+  const _bandsUsed = _bandsMatch ? [...new Set(_bandsMatch)].join(', ') : k.tag;
+  const _resShort = k.scale.replace(' spatial resolution','');
+
+  // Chip colors per category
+  const _ccMap = { vegetation:['cv-green','cv-cyan','cv-blue','cv-purple'], water:['cv-cyan','cv-blue','cv-green','cv-purple'], urban:['cv-pink','cv-amber','cv-cyan','cv-purple'], thermal:['cv-amber','cv-pink','cv-cyan','cv-blue'], atmospheric:['cv-purple','cv-cyan','cv-blue','cv-amber'], landcover:['cv-cyan','cv-green','cv-blue','cv-purple'] };
+  const _cc = _ccMap[k.category] || ['cv-cyan','cv-green','cv-blue','cv-purple'];
+
+  const _chipsHtml = `
+    <div class="concl-chip"><div class="concl-chip-label">Min Value</div><div class="concl-chip-value ${_cc[0]}">${rangeMin}</div></div>
+    <div class="concl-chip"><div class="concl-chip-label">Max Value</div><div class="concl-chip-value ${_cc[1]}">${rangeMax}</div></div>
+    <div class="concl-chip"><div class="concl-chip-label">Resolution</div><div class="concl-chip-value ${_cc[2]}" style="font-size:13px;font-family:var(--font-body)">${_resShort}</div></div>
+    <div class="concl-chip"><div class="concl-chip-label">Bands Used</div><div class="concl-chip-value ${_cc[3]}" style="font-size:11px;font-family:var(--font-mono);line-height:1.5">${_bandsUsed}</div></div>`;
+
+  const _interpHtml = k.interpretation && k.interpretation.length
+    ? k.interpretation.map(it => `
+        <div class="concl-finding-item" style="display:flex;align-items:center;gap:10px">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${it.color};flex-shrink:0"></span>
+          <strong>${it.range}</strong><span style="opacity:0.75"> — ${it.label}</span>
+        </div>`).join('')
+    : '';
+
   const keyMetricsHtml = `
-    <div class="kpd-km-section">
-      <div class="kpd-section-title">Key Metrics</div>
-      <div class="kpd-scorecard-row">
-        <div class="kpd-scorecard kpd-scorecard-${cardColor}"><div class="kpd-scorecard-label">Min Value</div><div class="kpd-scorecard-value">${rangeMin}</div></div>
-        <div class="kpd-scorecard kpd-scorecard-${cardColor}"><div class="kpd-scorecard-label">Max Value</div><div class="kpd-scorecard-value">${rangeMax}</div></div>
-        <div class="kpd-scorecard kpd-scorecard-${cardColor}"><div class="kpd-scorecard-label">Category</div><div class="kpd-scorecard-value" style="font-size:13px;font-family:var(--font-body);font-weight:700">${k.tag}</div></div>
-        <div class="kpd-scorecard kpd-scorecard-${cardColor}"><div class="kpd-scorecard-label">Resolution</div><div class="kpd-scorecard-value" style="font-size:13px;font-family:var(--font-body);font-weight:700">${k.scale.replace(' spatial resolution','')}</div></div>
+    <div class="concl-card expanded" data-chips-theme="${_theme.chips}" data-findings-theme="${_theme.findings}" style="margin-bottom:0;border-radius:var(--radius-sm)">
+      <div class="concl-header" onclick="this.closest('.concl-card').classList.toggle('expanded')" style="cursor:pointer">
+        <div class="concl-header-left">
+          <div class="concl-header-title">Index Summary</div>
+          <div class="concl-header-preview">${k.range} · ${_resShort} · ${k.tag}</div>
+        </div>
+        <svg class="concl-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="concl-body">
+        <div class="concl-chips-section">
+          <div class="concl-chips-label">Key Metrics</div>
+          <div class="concl-chips-row">${_chipsHtml}</div>
+        </div>
+        ${_interpHtml ? `
+        <div class="concl-findings-section">
+          <div class="concl-section-label">Value Ranges & Interpretation</div>
+          <div class="concl-findings-list">${_interpHtml}</div>
+        </div>` : ''}
       </div>
     </div>`;
 
-  const findingsHtml = k.interpretation && k.interpretation.length ? `
-    <div class="kpd-findings-section">
-      <div class="kpd-section-title">Findings & Interpretation</div>
-      <div class="kpd-findings-list">
-        ${k.interpretation.map(it => `
-          <div class="kpd-finding-item">
-            <div class="kpd-finding-bar" style="background:${it.color}"></div>
-            <div class="kpd-finding-body">
-              <span class="kpd-finding-range">${it.range}</span>
-              <span class="kpd-finding-label">${it.label}</span>
-            </div>
-          </div>`).join('')}
-      </div>
-    </div>` : '';
+  const findingsHtml = '';
 
   document.getElementById('kpDetailContent').innerHTML = `
     <div class="kpd-page theme-${k.category}">
@@ -3777,8 +3810,6 @@ function openKnowledgeDetail(id) {
         </div>
       </div>
 
-      ${keyMetricsHtml}
-
       <div class="kpd-formula-paper-section">
         <div class="kpd-section-title">Formula</div>
         <div class="kpd-formula-paper">
@@ -3800,15 +3831,7 @@ function openKnowledgeDetail(id) {
         </div>
       </div>
 
-      <div class="kpd-scale-section">
-        <div class="kpd-section-title">Color Scale (${k.range})</div>
-        <div class="kpd-gradient" style="background:linear-gradient(to right, ${paletteStops})"></div>
-        <div class="kpd-gradient-labels">
-          <span>${k.range.split(' to ')[0] || 'Low'}</span>
-          <span style="color:var(--text3);font-size:11px">${k.palette_label}</span>
-          <span>${k.range.split(' to ')[1] || 'High'}</span>
-        </div>
-      </div>
+      ${keyMetricsHtml}
 
       ${findingsHtml}
       ${vizHtml}

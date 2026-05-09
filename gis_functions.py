@@ -448,7 +448,7 @@ _CLASS_BOUNDS = {
 }
 
 def get_class_pcts(image, band, study_area, var_label, scale=1000):
-    """Compute real per-class pixel percentages via GEE for a given variable."""
+    """Compute real per-class pixel percentages and hectares via GEE for a given variable."""
     key = var_label.upper()
     if key not in _CLASS_BOUNDS:
         return {}
@@ -460,6 +460,8 @@ def get_class_pcts(image, band, study_area, var_label, scale=1000):
         ).getInfo().get(band, 0)
         if not total_pixels:
             return {}
+        pixel_area_ha = (scale ** 2) / 10000.0
+        total_ha = round(total_pixels * pixel_area_ha, 1)
         result = {}
         for i in range(len(bounds) - 1):
             lo, hi = bounds[i], bounds[i+1]
@@ -469,8 +471,9 @@ def get_class_pcts(image, band, study_area, var_label, scale=1000):
                 geometry=study_area, scale=scale, maxPixels=1e9
             ).getInfo().get(band, 0)
             pct = round((count / total_pixels) * 100, 1) if total_pixels else 0
+            ha  = round(count * pixel_area_ha, 1)
             if pct > 0:
-                result[labels[i]] = pct
+                result[labels[i]] = {'pct': pct, 'ha': ha}
         return result
     except Exception as e:
         print(f'  class_pcts failed for {var_label}: {e}')
@@ -685,8 +688,24 @@ def make_stats_charts(stats, var_name, label):
             samples = rng.normal(mean_v, std_v, n_pts)
             samples = np.clip(samples, min_v, max_v)
 
+            # For atmospheric vars, restrict display range to p10–p90 to avoid
+            # a collapsed histogram where nearly all samples pile at the edges
+            ATMO_HIST = ('NO2','CO','SO2','CH4','O3','AEROSOL','GPP','BURNED','FFPI')
+            if any(av in label_up for av in ATMO_HIST) and p10_v is not None and p90_v is not None:
+                spread   = p90_v - p10_v
+                hist_min = max(min_v, p10_v - spread * 0.5)
+                hist_max = min(max_v, p90_v + spread * 0.5)
+                if hist_max <= hist_min:
+                    hist_min, hist_max = min_v, max_v
+                display_samples = samples[(samples >= hist_min) & (samples <= hist_max)]
+                if len(display_samples) < 100:
+                    display_samples = samples
+            else:
+                display_samples = samples
+                hist_min, hist_max = min_v, max_v
+
             fig, ax = plt.subplots(figsize=(6, 4))
-            ax.hist(samples, bins=40, color='#5B9BD5', edgecolor='white',
+            ax.hist(display_samples, bins=40, color='#5B9BD5', edgecolor='white',
                     linewidth=0.4, alpha=0.85)
 
             if p10_v is not None:
@@ -1050,17 +1069,43 @@ def make_stats_charts(stats, var_name, label):
                 xlabel = label
 
             if pal and len(bounds) >= 2:
-                class_defs = []
-                for i in range(len(bounds) - 1):
-                    lo_b, hi_b = bounds[i], bounds[i + 1]
-                    mask       = (samples >= lo_b) & (samples < hi_b)
-                    midpoint   = (lo_b + hi_b) / 2
-                    color      = _palette_color(pal, vmin, vmax, midpoint)
-                    class_defs.append((labels[i], mask, color))
+                real_cp = s.get('class_pcts') or {}
+                if real_cp:
+                    # Use real GEE-computed class percentages (same as NDVI/LST)
+                    class_defs = []
+                    for i in range(len(bounds) - 1):
+                        lo_b, hi_b = bounds[i], bounds[i + 1]
+                        midpoint   = (lo_b + hi_b) / 2
+                        color      = _palette_color(pal, vmin, vmax, midpoint)
+                        class_defs.append((labels[i], bounds[i], bounds[i + 1], color))
 
-                pairs = [(name, float(np.mean(mask) * 100), col)
-                         for name, mask, col in class_defs
-                         if float(np.mean(mask) * 100) > 0.5]
+                    pairs = []
+                    for name, lo_b, hi_b, color in class_defs:
+                        # Match by label (strip newlines for comparison)
+                        val = real_cp.get(name.replace('\n', ' '))
+                        if val is None:
+                            # Try matching without the newline-split label format
+                            for k, v in real_cp.items():
+                                if k.replace('\n', ' ').strip() == name.replace('\n', ' ').strip():
+                                    val = v
+                                    break
+                        if val is not None:
+                            pct = val['pct'] if isinstance(val, dict) else float(val)
+                            if pct > 0.5:
+                                pairs.append((name, pct, color))
+                else:
+                    # Fallback: simulate from normal distribution
+                    class_defs = []
+                    for i in range(len(bounds) - 1):
+                        lo_b, hi_b = bounds[i], bounds[i + 1]
+                        mask       = (samples >= lo_b) & (samples < hi_b)
+                        midpoint   = (lo_b + hi_b) / 2
+                        color      = _palette_color(pal, vmin, vmax, midpoint)
+                        class_defs.append((labels[i], mask, color))
+
+                    pairs = [(name, float(np.mean(mask) * 100), col)
+                             for name, mask, col in class_defs
+                             if float(np.mean(mask) * 100) > 0.5]
 
                 if pairs:
                     cls, pct_vals, col_vals = zip(*pairs)
@@ -1478,7 +1523,18 @@ def run_analysis(region_name, start_date, end_date, variables):
                 ffpi_img, ffpi_class = compute_ffpi(study_area, start_date, end_date)
                 stats_summary['FFPI'] = get_stats(ffpi_img, 'FFPI', study_area, scale=3500)
                 try:
-                    stats_summary['FFPI']['class_pcts'] = get_class_pcts(ffpi_img, 'FFPI', study_area, 'FFPI', scale=3500)
+                    cp = get_class_pcts(ffpi_img, 'FFPI', study_area, 'FFPI', scale=3500)
+                    stats_summary['FFPI']['class_pcts'] = cp
+                    if cp:
+                        try:
+                            pixel_area_ha = (3500 ** 2) / 10000.0
+                            px_total = ffpi_img.select('FFPI').reduceRegion(
+                                reducer=ee.Reducer.count(),
+                                geometry=study_area, scale=3500, maxPixels=1e9
+                            ).getInfo().get('FFPI', 0)
+                            stats_summary['FFPI']['total_ha'] = round(px_total * pixel_area_ha, 1)
+                        except:
+                            pass
                 except:
                     stats_summary['FFPI']['class_pcts'] = {}
                 panels_atmo.append((ffpi_img,   VIS['ffpi'],       'FFPI Score',          study_area))
@@ -1525,7 +1581,24 @@ def run_analysis(region_name, start_date, end_date, variables):
                         s['monthly'] = {}
                     # Real class percentages from GEE
                     try:
-                        s['class_pcts'] = get_class_pcts(img, band_name, study_area, label, scale=3500)
+                        cp = get_class_pcts(img, band_name, study_area, label, scale=3500)
+                        s['class_pcts'] = cp
+                        # Derive total_ha from class_pcts sum
+                        if cp:
+                            total_ha = round(sum(
+                                v['ha'] if isinstance(v, dict) else 0
+                                for v in cp.values()
+                            ), 1)
+                            # Re-derive from pixel count for accuracy
+                            try:
+                                pixel_area_ha = (3500 ** 2) / 10000.0
+                                px_total = img.select(band_name).reduceRegion(
+                                    reducer=ee.Reducer.count(),
+                                    geometry=study_area, scale=3500, maxPixels=1e9
+                                ).getInfo().get(band_name, 0)
+                                s['total_ha'] = round(px_total * pixel_area_ha, 1)
+                            except:
+                                s['total_ha'] = total_ha
                     except Exception as ce:
                         print(f'    class_pcts failed: {ce}')
                         s['class_pcts'] = {}
