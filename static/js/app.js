@@ -1922,7 +1922,7 @@ function buildDistClassExplanation(varLabel, s) {
         cpEntries.push({ lbl: cleanLbl, pct, ha, idx: _idx });
       }
       // Sort ascending by class index = natural left-to-right order (matches bar chart)
-      cpEntries.sort((a, b) => a.idx - b.idx);
+      cpEntries.sort((a, b) => b.pct - a.pct);
       for (const e of cpEntries) {
         classPcts.push(e.pct);
         classLabels.push(e.lbl);
@@ -2570,7 +2570,7 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
               const idx = _guessIdx(lbl, orderIdx);
               cpEntries.push({ cleanLbl, pct, idx });
             });
-            // Sort ASCENDING — lowest to highest intensity (matches colorbar)
+            // Sort ASCENDING — lowest to highest intensity (left = lowest value, right = highest value)
             cpEntries.sort((a, b) => a.idx - b.idx);
 
             for (const { cleanLbl, pct, idx } of cpEntries) {
@@ -2609,8 +2609,8 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
               }
               mcEntries.push({ lbl: def.labels[i].replace(/\n/g, ' '), pct: parseFloat(pct.toFixed(1)), color, idx: i });
             }
-            // Sort descending by index so highest-intensity class is leftmost
-            mcEntries.sort((a, b) => b.idx - a.idx);
+            // Sort ascending by index so lowest value is leftmost, highest is rightmost
+            mcEntries.sort((a, b) => a.idx - b.idx);
             for (const { lbl, pct, color } of mcEntries) {
               classPcts.push(pct);
               classLabels.push(lbl);
