@@ -292,38 +292,42 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     # NDWI / MNDWI
                     'Dry (<-0.3)': '#bf8c4c', 'Transition (-0.3–0)': '#a5d6a7',
                     'Moist (0–0.3)': '#42a5f5', 'Water (>0.3)': '#0d47a1',
-                    # NO2  (VIS: #000033→#0000ff→#00ffff→#ffff00→#ff0000, min=0 max=0.0002)
-                    # Labels use en-dash – to match gis_functions._CLASS_BOUNDS exactly
-                    'Clean (<8e-5)': '#0000cc',
-                    'Moderate (8–15e-5)': '#00ffff',
-                    'High (15–25e-5)': '#ffff00',
-                    'Severe (>25e-5)': '#ff0000',
-                    # CO  (same VIS palette, min=0.02 max=0.08)
-                    'Low (<0.035)': '#0000ff',
-                    'Moderate (0.035–0.055)': '#00ffff',
-                    'High (0.055–0.07)': '#ffff00',
-                    'Severe (>0.07)': '#ff0000',
-                    # SO2  (VIS: #0000ff→#ffff00→#ff0000→#8b0000)
+                    # NO2  VIS palette: #000033→#0000ff→#8000ff→#00ffff→#008000→#ffff00→#ff0000 (min=0, max=0.0002)
+                    # Colors sampled at midpoint of each class range within the 0–0.0002 span
+                    # Clean  0–8e-5   midpoint≈25% → dark navy/blue
+                    # Moderate 8–15e-5 midpoint≈58% → cyan/teal (matches dominant map color)
+                    # High  15–25e-5  midpoint≈100% → green-yellow
+                    # Severe >25e-5   → red
+                    'Clean (<8e-5)': '#1a00aa',
+                    'Moderate (8–15e-5)': '#00dddd',
+                    'High (15–25e-5)': '#66cc00',
+                    'Severe (>25e-5)': '#ffdd00',
+                    # CO  VIS: same 7-stop palette, min=0.02 max=0.08
+                    'Low (<0.035)': '#1a00aa',
+                    'Moderate (0.035–0.055)': '#00dddd',
+                    'High (0.055–0.07)': '#66cc00',
+                    'Severe (>0.07)': '#ffdd00',
+                    # SO2  VIS: #0000ff→#008000→#ffff00→#ffa500→#ff0000→#8b0000 (min=0, max=0.001)
                     'Clean (<1e-4)': '#0000ff',
-                    'Moderate (1–5e-4)': '#ffff00',
-                    'High (5e-4–1e-3)': '#ff0000',
-                    'Severe (>1e-3)': '#8b0000',
-                    # CH4  (VIS: #0000ff→#008000→#ffa500→#ff0000)
+                    'Moderate (1–5e-4)': '#008000',
+                    'High (5e-4–1e-3)': '#ffa500',
+                    'Severe (>1e-3)': '#ff0000',
+                    # CH4  VIS: #0000ff→#00ffff→#008000→#ffff00→#ffa500→#ff0000 (min=1750, max=1950)
                     'Background (<1850)': '#0000ff',
-                    'Elevated (1850–1900)': '#008000',
+                    'Elevated (1850–1900)': '#00bbbb',
                     'High (1900–1950)': '#ffa500',
                     'Very high (>1950)': '#ff0000',
-                    # O3  (VIS: #800080→#0000ff→#008000→#ff0000)
+                    # O3  VIS: #800080→#0000ff→#00ffff→#008000→#ffff00→#ff0000 (min=200, max=380)
                     'Very low (<220 DU)': '#800080',
-                    'Low (220–280 DU)': '#0000ff',
-                    'Normal (280–340 DU)': '#008000',
-                    'High (>340 DU)': '#ff0000',
-                    # Aerosol  (VIS: #0000ff→#ffff00→#ffa500→#ff0000)
-                    'Clean (<0)': '#0000ff',
-                    'Low (0–1)': '#ffff00',
+                    'Low (220–280 DU)': '#0044ff',
+                    'Normal (280–340 DU)': '#00cc88',
+                    'High (>340 DU)': '#ffaa00',
+                    # Aerosol  VIS: #0000ff→#ffffff→#ffff00→#ffa500→#ff0000 (min=-1, max=3)
+                    'Clean (<0)': '#4488ff',
+                    'Low (0–1)': '#ffff44',
                     'Moderate (1–2)': '#ffa500',
                     'High (>2)': '#ff0000',
-                    # FFPI  (VIS: #313695→#74add1→#fdae61→#d73027)
+                    # FFPI  VIS: #313695→#74add1→#fdae61→#d73027
                     'Clean (0–0.3)': '#313695',
                     'Moderate (0.3–0.6)': '#74add1',
                     'Polluted (0.6–0.8)': '#fdae61',
