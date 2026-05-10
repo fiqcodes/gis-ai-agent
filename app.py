@@ -310,12 +310,22 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     'Clean (0–0.3)': '#313695', 'Moderate (0.3–0.6)': '#74add1',
                     'Polluted (0.6–0.8)': '#fdae61', 'Severe (>0.8)': '#d73027',
                 }
-                _FALLBACK = ['#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f','#edc948']
+                _FALLBACK = ['#1a00aa','#00dddd','#66cc00','#ffdd00','#74add1','#fdae61']
                 pairs = []
                 for lbl, val in class_pcts.items():
                     pct = val['pct'] if isinstance(val, dict) else float(val)
                     if pct <= 0.1: continue
-                    color = _COLOR_MAP.get(lbl, _FALLBACK[len(pairs) % len(_FALLBACK)])
+                    # Normalize: try exact, then en-dash, then hyphen variants
+                    _lbl_norm_en  = lbl.replace('-', '\u2013').replace('\u2014', '\u2013')
+                    _lbl_norm_hyp = lbl.replace('\u2013', '-').replace('\u2014', '-')
+                    color = (_COLOR_MAP.get(lbl)
+                             or _COLOR_MAP.get(_lbl_norm_en)
+                             or _COLOR_MAP.get(_lbl_norm_hyp)
+                             or next((v for k, v in _COLOR_MAP.items()
+                                      if k.replace('\u2013','-').replace('\u2014','-') ==
+                                         lbl.replace('\u2013','-').replace('\u2014','-')), None)
+                             or _FALLBACK[len(pairs) % len(_FALLBACK)])
+                    print(f'  [bar] lbl={repr(lbl)} matched={lbl in _COLOR_MAP} color={color}')
                     disp  = lbl.replace(' (', '\n(') if ' (' in lbl else lbl
                     pairs.append((disp, pct, color))
                 if not pairs:
