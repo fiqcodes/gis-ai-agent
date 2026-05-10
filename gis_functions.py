@@ -992,29 +992,24 @@ def make_stats_charts(stats, var_name, label):
             # Hardcoded label → (display_label, hex_color) maps — same pattern as LST
             _ATMO_DISPLAY = {
                 'NO2': {
-                    # VIS no2 palette: #000033→#0000ff→#8000ff→#00ffff→#008000→#ffff00→#ff0000 (min=0, max=0.0002)
-                    # Colors sampled at midpoint of each class within the full range
-                    'Clean (<8e-5)'      : ('Clean\n(<8×10⁻⁵)',     '#1a00aa'),
-                    'Moderate (8–15e-5)' : ('Moderate\n(8–15×10⁻⁵)','#00dddd'),
+                    'Clean (<8e-5)'      : ('Clean\n(<8×10⁻⁵)',     '#000033'),
+                    'Moderate (8–15e-5)' : ('Moderate\n(8–15×10⁻⁵)','#00ffff'),
                     'High (15–25e-5)'    : ('High\n(15–25×10⁻⁵)',   '#66cc00'),
                     'Severe (>25e-5)'    : ('Severe\n(>25×10⁻⁵)',   '#ffdd00'),
                 },
                 'CO': {
-                    # VIS co palette: same 7-stop palette, min=0.02 max=0.08
-                    'Low (<0.035)'           : ('Low\n(<0.035)',           '#1a00aa'),
-                    'Moderate (0.035–0.055)' : ('Moderate\n(0.035–0.055)','#00dddd'),
+                    'Low (<0.035)'           : ('Low\n(<0.035)',           '#000033'),
+                    'Moderate (0.035–0.055)' : ('Moderate\n(0.035–0.055)','#00ffff'),
                     'High (0.055–0.07)'      : ('High\n(0.055–0.07)',      '#66cc00'),
                     'Severe (>0.07)'         : ('Severe\n(>0.07)',         '#ffdd00'),
                 },
                 'SO2': {
-                    # VIS so2 palette: #0000ff #008000 #ffff00 #ffa500 #ff0000 #8b0000
                     'Clean (<1e-4)'      : ('Clean\n(<1×10⁻⁴)',      '#0000ff'),
-                    'Moderate (1–5e-4)'  : ('Moderate\n(1–5×10⁻⁴)', '#ffff00'),
-                    'High (5e-4–1e-3)'   : ('High\n(5–10×10⁻⁴)',    '#ff0000'),
+                    'Moderate (1–5e-4)'  : ('Moderate\n(1–5×10⁻⁴)', '#008000'),
+                    'High (5e-4–1e-3)'   : ('High\n(5–10×10⁻⁴)',    '#ffa500'),
                     'Severe (>1e-3)'     : ('Severe\n(>10⁻³)',       '#8b0000'),
                 },
                 'CH4': {
-                    # VIS ch4 palette: #0000ff→#00ffff→#008000→#ffff00→#ffa500→#ff0000 (min=1750, max=1950)
                     'Background (<1850)'    : ('Background\n(<1850)',    '#0000ff'),
                     'Elevated (1850–1900)'  : ('Elevated\n(1850–1900)', '#00bbbb'),
                     'High (1900–1950)'      : ('High\n(1900–1950)',      '#ffa500'),
@@ -1027,9 +1022,8 @@ def make_stats_charts(stats, var_name, label):
                     'High (>340 DU)'     : ('High\n(>340 DU)',     '#ff0000'),
                 },
                 'AEROSOL': {
-                    # VIS aerosol palette: #0000ff #ffffff #ffff00 #ffa500 #ff0000
                     'Clean (<0)'    : ('Clean\n(<0)',    '#0000ff'),
-                    'Low (0–1)'     : ('Low\n(0–1)',     '#ffff00'),
+                    'Low (0–1)'     : ('Low\n(0–1)',     '#ffff44'),
                     'Moderate (1–2)': ('Moderate\n(1–2)','#ffa500'),
                     'High (>2)'     : ('High\n(>2)',     '#ff0000'),
                 },

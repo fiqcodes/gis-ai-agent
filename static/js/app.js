@@ -1436,12 +1436,14 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
             // Show highest intensity first (mirrors LST: extreme first)
             _aqSorted.reverse();
             for (const d of _aqSorted) {
-              const col    = _aqBulletColor(d.lbl);
-              const haStr  = d.ha != null ? ` (~<strong class="${col}">${Math.round(d.ha).toLocaleString()} ha</strong>)` : '';
-              // Short inline context: first sentence only
-              const _fullDesc = _getAtmoClassDesc(vUp, d.lbl);
-              const _shortCtx = _fullDesc ? ' — ' + _fullDesc.split('.')[0] : '';
-              findingItems += `<div class="concl-finding-item"><strong>${d.lbl}</strong>: <strong class="${col}">${d.pct.toFixed(1)}%</strong>${haStr}${_shortCtx}</div>`;
+              const col      = _aqBulletColor(d.lbl);
+              const haStr    = d.ha != null ? ` (~${Math.round(d.ha).toLocaleString()} ha)` : '';
+              const fullDesc = _getAtmoClassDesc(vUp, d.lbl);
+              // First clause only (before first comma or colon) — keeps it to one line
+              const shortCtx = fullDesc
+                ? ' — ' + fullDesc.split(/[,:]|\s—/)[0].trim()
+                : '';
+              findingItems += `<div class="concl-finding-item"><strong class="${col}">${d.lbl}</strong>: ${d.pct.toFixed(1)}%${haStr}${shortCtx}</div>`;
             }
           } else if (s.p90 != null) {
             findingItems += `<div class="concl-finding-item">P90 concentration: <strong class="fv-amber">${digFmt(s.p90)} ${unit}</strong> — upper-bound exposure in the region</div>`;
@@ -1703,34 +1705,15 @@ function buildMonthlyHighlights(varLabel, monthly) {
 
 // ── Distribution + class explanation (auto-computed, no LLM) ─────────────────
 
-// ── Inject CSS for atmospheric bullet context descriptions (runs once) ──────────
+// ── CSS for atmospheric bullet context (injected once) ───────────────────────
 (function _injectAtmoCSS() {
   if (document.getElementById('_atmo-context-css')) return;
   const s = document.createElement('style');
   s.id = '_atmo-context-css';
-  s.textContent = `
-    .bullet-context {
-      display: block;
-      margin-top: 3px;
-      font-size: 11.5px;
-      color: var(--text3, #8a9bb5);
-      font-weight: 400;
-      line-height: 1.5;
-    }
-    .class-breakdown-bullets li {
-      margin-bottom: 8px;
-      line-height: 1.6;
-    }
-    .concl-finding-desc {
-      margin-top: 4px;
-      font-size: 11.5px;
-      color: var(--text3, #8a9bb5);
-      line-height: 1.5;
-      font-weight: 400;
-    }
-  `;
+  s.textContent = `.class-breakdown-bullets li { margin-bottom: 4px; line-height: 1.6; }`;
   document.head.appendChild(s);
 })();
+
 
 // ── Atmospheric class land-use context descriptions ───────────────────────────
 function _getAtmoClassDesc(varName, lbl) {
@@ -1902,75 +1885,30 @@ function buildDistClassExplanation(varLabel, s) {
   }
 
   // ── Atmospheric class notes ──────────────────────────────────────────────
-
-  // ── Atmospheric leading class paragraph — mirrors LST block ─────────────────
-  const _atmoVarUp = varLabel.toUpperCase();
-  const _isAtmoClass = ['NO2','CO','SO2','CH4','O3','AEROSOL','FFPI'].some(a => _atmoVarUp.includes(a));
-  if (_isAtmoClass && s.class_pcts && Object.keys(s.class_pcts).length > 0) {
-    const _cpAtmo = Object.entries(s.class_pcts)
-      .map(([lbl, val]) => ({
-        lbl,
-        pct: typeof val === 'object' && val !== null ? (val.pct || 0) : parseFloat(val || 0),
-        ha : typeof val === 'object' && val !== null ? (val.ha  || null) : null,
-      }))
-      .filter(e => e.pct >= 0.5)
-      .sort((a, b) => b.pct - a.pct);
-
-    if (_cpAtmo.length > 0) {
-      const _dom = _cpAtmo[0];
-      const _sec = _cpAtmo[1];
-      let _atmoIntro = `The ${_atmoVarUp} concentration landscape is dominated by the <strong>${_dom.lbl}</strong> class`;
-      if (_dom.ha != null) {
-        _atmoIntro += `, covering <strong>${_dom.pct.toFixed(1)}%</strong> of the area (~${Math.round(_dom.ha).toLocaleString()} ha)`;
-      } else {
-        _atmoIntro += ` at <strong>${_dom.pct.toFixed(1)}%</strong> of the area`;
-      }
-      _atmoIntro += '. ';
-      if (_sec) {
-        _atmoIntro += `<strong>${_sec.lbl}</strong> accounts for an additional <strong>${_sec.pct.toFixed(1)}%</strong>`;
-        if (_sec.ha != null) _atmoIntro += ` (~${Math.round(_sec.ha).toLocaleString()} ha)`;
-        _atmoIntro += '. ';
-      }
-      const _pollutedEntries = _cpAtmo.filter(e =>
-        ['high','severe','polluted','very high'].some(w => e.lbl.toLowerCase().includes(w)));
-      const _pollutedPct = _pollutedEntries.reduce((sum, e) => sum + e.pct, 0);
-      if (_pollutedPct > 50) {
-        _atmoIntro += 'Combined high and severe classes cover more than half the region, pointing to widespread emission sources — traffic corridors, industrial zones, and built-up areas act as primary contributors. ';
-      } else if (_pollutedPct > 20) {
-        _atmoIntro += `Elevated and severe zones together represent a significant <strong>${_pollutedPct.toFixed(1)}%</strong> of the area, concentrated over built-up and industrial surfaces. `;
-      }
-      text += _atmoIntro;
-    }
-  }
-
   if (varLabel.toUpperCase().includes('NO2') && s.mean != null) {
     const m = s.mean;
     const p90 = s.p90 || m;
     text += `With a mean of <strong>${m.toExponential(2)} mol/m²</strong>, `;
     if (m < 0.00008)       text += 'NO₂ levels are relatively low, suggesting limited local combustion sources — the area is likely characterised by urban green spaces, coastal zones, and low-traffic residential neighbourhoods.';
-    else if (m < 0.00015)  text += 'moderate NO₂ concentrations indicate active traffic and industrial emissions in the region, consistent with mixed urban land use: commercial corridors, medium-density residential blocks, and arterial roads that define a typical megacity baseline.';
+    else if (m < 0.00015)  text += 'moderate NO₂ concentrations indicate active traffic and industrial emissions, consistent with mixed urban land use: commercial corridors, medium-density residential blocks, and arterial roads that define a typical megacity baseline.';
     else                   text += 'elevated NO₂ points to significant combustion activity — dense traffic corridors, industrial zones, and interchange nodes with persistent diesel and heavy-vehicle emissions.';
-    if (p90 > m * 1.3) text += ` The P90 value of ${p90.toExponential(2)} mol/m² highlights localised hotspots — likely concentrated over major road junctions, toll plazas, or industrial clusters — where emissions are substantially higher than the regional average.`;
-    // Enrich with dominant and secondary class characteristics from real GEE data
+    if (p90 > m * 1.3) text += ` The P90 value of ${p90.toExponential(2)} mol/m² highlights localised hotspots — likely concentrated over major road junctions, toll plazas, or industrial clusters.`;
     if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
       const _cp = Object.entries(s.class_pcts)
         .map(([lbl, val]) => ({ lbl, pct: typeof val === 'object' ? val.pct : parseFloat(val) }))
         .filter(e => e.pct >= 1).sort((a, b) => b.pct - a.pct);
       if (_cp.length > 0) {
         const _dom = _cp[0]; const _sec = _cp[1];
-        const _classCtx = {
+        const _ctxMap = {
           'clean':    'urban forests, large parks, coastal and water-adjacent zones with minimal combustion sources',
           'moderate': 'mixed urban areas — medium-density residential blocks, commercial zones, and arterial roads with moderate vehicle density',
           'high':     'major traffic corridors, toll roads, bus terminals, and peri-urban industrial clusters with persistent NOx from diesel vehicles',
           'severe':   'dense industrial zones, power plants, large-scale manufacturing facilities, or heavily congested interchange nodes'
         };
-        const _getCtx = lbl => { const l = lbl.toLowerCase(); return Object.entries(_classCtx).find(([k]) => l.includes(k))?.[1] || ''; };
+        const _getCtx = lbl => Object.entries(_ctxMap).find(([k]) => lbl.toLowerCase().includes(k))?.[1] || '';
         const _domCtx = _getCtx(_dom.lbl);
         if (_domCtx) text += ` The dominant <strong>${_dom.lbl}</strong> class (${_dom.pct.toFixed(1)}%) is spatially characteristic of ${_domCtx}.`;
-        if (_sec) {
-          const _secCtx = _getCtx(_sec.lbl);
-          if (_secCtx) text += ` Secondary coverage by <strong>${_sec.lbl}</strong> (${_sec.pct.toFixed(1)}%) reflects ${_secCtx}.`;
-        }
+        if (_sec) { const _secCtx = _getCtx(_sec.lbl); if (_secCtx) text += ` Secondary coverage by <strong>${_sec.lbl}</strong> (${_sec.pct.toFixed(1)}%) reflects ${_secCtx}.`; }
       }
     }
   }
@@ -1981,42 +1919,31 @@ function buildDistClassExplanation(varLabel, s) {
     if (m < 0.03)      text += 'is within background levels, suggesting limited local combustion activity — vegetated areas and low-density residential zones dominate the landscape.';
     else if (m < 0.06) text += 'indicates moderate CO loading, consistent with urban traffic, household biomass burning, and mixed-use commercial activity across the region.';
     else               text += 'is elevated, pointing to significant combustion sources — heavy vehicle traffic, industrial operations, or active fire events are likely primary contributors.';
-    if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
-      const _cp = Object.entries(s.class_pcts)
-        .map(([lbl, val]) => ({ lbl, pct: typeof val === 'object' ? val.pct : parseFloat(val) }))
-        .filter(e => e.pct >= 1).sort((a, b) => b.pct - a.pct);
-      if (_cp.length > 0) {
-        const _dom = _cp[0];
-        const _ctxMap = { 'low':'vegetated and low-activity residential areas', 'moderate':'mixed urban surfaces with regular traffic and light industry', 'high':'traffic-heavy corridors and open burning zones', 'severe':'large-scale fire events or major industrial emitters' };
-        const _ctx = Object.entries(_ctxMap).find(([k]) => _dom.lbl.toLowerCase().includes(k))?.[1];
-        if (_ctx) text += ` The <strong>${_dom.lbl}</strong> class covers ${_dom.pct.toFixed(1)}% of the area, characteristic of ${_ctx}.`;
-      }
-    }
   }
 
   if (varLabel.toUpperCase().includes('SO2') && s.mean != null) {
     const m = s.mean;
     text += `SO₂ mean of <strong>${m.toExponential(2)} mol/m²</strong> `;
-    if (m < 0.0002)    text += 'is near background — industrial and volcanic sources appear limited, with the landscape dominated by residential or vegetated surfaces.';
-    else if (m < 0.001) text += 'suggests moderate sulfur emissions, potentially from coal-fired power plants, cement factories, or petroleum refineries within or upwind of the region.';
-    else               text += 'is high, indicative of significant industrial point sources — power stations, large smelters, or volcanic degassing driving persistent SO₂ loading.';
+    if (m < 0.0002)    text += 'is near background — industrial and volcanic sources appear limited.';
+    else if (m < 0.001) text += 'suggests moderate sulfur emissions, potentially from industrial facilities or coal combustion.';
+    else               text += 'is high, indicative of significant industrial activity, power plants, or volcanic degassing.';
   }
 
   if (varLabel.toUpperCase().includes('CH4') && s.mean != null) {
     const m = s.mean;
     text += `Methane mixing ratios average <strong>${m.toFixed(0)} ppb</strong>. `;
-    if (m < 1850)      text += 'Values near the global background suggest limited local CH₄ sources — forested or open rural land cover with minimal agriculture or waste infrastructure.';
+    if (m < 1850)      text += 'Values near the global background suggest limited local CH₄ sources — forested or open rural land with minimal agriculture or waste infrastructure.';
     else if (m < 1900) text += 'Slightly elevated CH₄ may reflect agricultural land use — rice paddies, livestock operations, or landfills at moderate density within the region.';
-    else               text += 'Elevated CH₄ signals significant biogenic or anthropogenic sources: large municipal landfills, intensive rice cultivation, livestock farms, or leaking natural gas infrastructure are likely contributors.';
+    else               text += 'Elevated CH₄ signals significant biogenic or anthropogenic sources: large municipal landfills, intensive rice cultivation, livestock farms, or leaking natural gas infrastructure.';
   }
 
   if (varLabel.toUpperCase().includes('AEROSOL') && s.mean != null) {
     const m = s.mean;
     text += `The absorbing aerosol index (AAI) mean of <strong>${fmt(s.mean)}</strong> `;
-    if (m < 0)         text += 'is negative, typical of clean marine aerosols or post-rainfall conditions that have washed particles from the column — coastal and water-adjacent land cover is likely dominant.';
-    else if (m < 1)    text += 'is low, indicating minor aerosol loading with limited impact on air quality — suburban areas with moderate traffic and some vegetation cover.';
-    else if (m < 2)    text += 'indicates moderate aerosol loading from a combination of urban haze, road dust, construction activity, and possible regional smoke transport.';
-    else               text += 'is high, pointing to significant absorbing aerosols — active biomass burning, dust storm events, or severe industrial smoke episodes are the likely drivers.';
+    if (m < 0)         text += 'is negative, typical of marine aerosols or clean background air.';
+    else if (m < 1)    text += 'is low, indicating minor aerosol loading with limited impact on air quality.';
+    else if (m < 2)    text += 'indicates moderate aerosol loading — possible smoke, dust, or urban haze.';
+    else               text += 'is high, pointing to significant absorbing aerosols from biomass burning, dust storms, or industrial smoke.';
   }
 
   // ── LST heat class note ──────────────────────────────────────────────────
@@ -2192,14 +2119,16 @@ function buildDistClassExplanation(varLabel, s) {
         classText += '. ';
       }
 
-      // Per-class breakdown as bullet list with ha — clean, no inline context (info is in paragraph)
+      // Per-class breakdown as bullet list with ha
       const items = classLabels.map((lbl, i) => {
-        const pct  = classPcts[i].toFixed(1);
-        const ha   = classHas[i] != null
+        const pct = classPcts[i].toFixed(1);
+        const ha  = classHas[i] != null
           ? classHas[i]
           : (totalHa ? Math.round(totalHa * classPcts[i] / 100) : null);
-        const haStr = ha != null ? ` (~${ha.toLocaleString()} ha)` : '';
-        return `<li><strong>${lbl}</strong>: ${pct}%${haStr}</li>`;
+        if (ha != null) {
+          return `<li><strong>${lbl}</strong>: ${pct}% (~${ha.toLocaleString()} ha)</li>`;
+        }
+        return `<li><strong>${lbl}</strong>: ${pct}%</li>`;
       }).join('');
 
       text += ` ${classText}`;
