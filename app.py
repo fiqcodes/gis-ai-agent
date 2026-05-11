@@ -235,7 +235,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             'CH4':     ([1750, 1850, 1900, 1950, 2100],       ['Background (<1850)', 'Elevated (1850–1900)', 'High (1900–1950)', 'Very high (>1950)']),
             'O3':      ([200, 220, 280, 340, 400],             ['Very low (<220 DU)', 'Low (220–280 DU)', 'Normal (280–340 DU)', 'High (>340 DU)']),
             'AEROSOL': ([-1, 0, 1, 2, 4],                     ['Clean (<0)', 'Low (0–1)', 'Moderate (1–2)', 'High (>2)']),
-            'FFPI':    ([0, 0.3, 0.6, 0.8, 1],                ['Clean (0–0.3)', 'Moderate (0.3–0.6)', 'Polluted (0.6–0.8)', 'Severe (>0.8)']),
+            'FFPI':    ([0, 0.35, 0.55, 0.75, 1],             ['Clean (0–0.35)', 'Moderate (0.35–0.55)', 'Polluted (0.55–0.75)', 'Severe (>0.75)']),
         }
 
         def _compute_area_stats(ee_image, band_name, study_area, var_label, scale):
@@ -307,8 +307,8 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     'Clean (<0)': '#4488ff', 'Low (0–1)': '#ffff44',
                     'Moderate (1–2)': '#ffa500', 'High (>2)': '#ff0000',
                     # FFPI
-                    'Clean (0–0.3)': '#313695', 'Moderate (0.3–0.6)': '#74add1',
-                    'Polluted (0.6–0.8)': '#fdae61', 'Severe (>0.8)': '#d73027',
+                    'Clean (0–0.35)': '#313695', 'Moderate (0.35–0.55)': '#74add1',
+                    'Polluted (0.55–0.75)': '#fdae61', 'Severe (>0.75)': '#d73027',
                 }
                 _FALLBACK = ['#1a00aa','#00dddd','#66cc00','#ffdd00','#74add1','#fdae61']
                 pairs = []
@@ -900,6 +900,9 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             from gis_functions import compute_no2, compute_co, compute_so2
                             ffpi_img, _ = compute_ffpi(study_area_atmo, start_date, end_date)
                             s = get_stats(ffpi_img, 'FFPI', study_area_atmo, scale=3500)
+                            print(f'  [DEBUG] FFPI pixel stats: mean={s.get("mean"):.4f} '
+                                  f'min={s.get("min"):.4f} max={s.get("max"):.4f} '
+                                  f'p10={s.get("p10"):.4f} p90={s.get("p90"):.4f}')
 
                             # ── Monthly stats — same pattern as other atmo vars ──────────
                             try:
@@ -937,12 +940,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                             no2_m = m_no2.mean().rename('NO2')
                                             co_m  = m_co.mean().rename('CO')
                                             so2_m = m_so2.mean().rename('SO2')
-                                            # Absolute normalisation — same ceilings as compute_ffpi
+                                            # Absolute normalisation — same SE-Asian ceilings as compute_ffpi
                                             def _norm_abs_m(img, lo, hi):
                                                 return img.max(lo).min(hi).subtract(lo).divide(hi - lo)
-                                            ffpi_m = (_norm_abs_m(no2_m, 0.0, 0.0004)
-                                                        .add(_norm_abs_m(co_m,  0.0, 0.055))
-                                                        .add(_norm_abs_m(so2_m, 0.0, 0.0005))
+                                            ffpi_m = (_norm_abs_m(no2_m, 2e-5, 1.8e-4)
+                                                        .add(_norm_abs_m(co_m,  0.018, 0.025))
+                                                        .add(_norm_abs_m(so2_m, 0.0,   1.5e-4))
                                                         .divide(3).rename('FFPI'))
                                             ms_f = ffpi_m.reduceRegion(
                                                 reducer=ee.Reducer.mean(),

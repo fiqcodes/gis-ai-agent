@@ -338,15 +338,15 @@ def compute_ffpi(study_area, start, end):
     co_img,  _ = compute_co(study_area, start, end)
     so2_img, _ = compute_so2(study_area, start, end)
 
-    # ── Option A: Absolute global reference ceilings ──────────────────────────
-    # Reference maxima are set to severe megacity pollution levels observed in
-    # the peer-reviewed TROPOMI literature (Dhaka, Kolkata, Indian metro studies).
-    # Anything at or above these values scores 1.0 (maximum pollution).
-    #   NO2 : 0.0004  mol/m²  — peak annual average in heavily polluted Asian cities
-    #   CO  : 0.055   mol/m²  — severe urban/industrial + fire-season peak (Dhaka)
-    #   SO2 : 0.0005  mol/m²  — high-industry / coal-burning urban ceiling
-    # Floor is 0 for all three (background / clean ocean baseline).
-    GLOBAL_REF = {'NO2': (0.0, 0.0004), 'CO': (0.0, 0.055), 'SO2': (0.0, 0.0005)}
+    # ── Absolute normalisation with SE-Asian tropical megacity reference ─────
+    # Ceilings are calibrated to the upper bound of heavily polluted Southeast
+    # Asian tropical cities. Jakarta normal NO2 ~1e-4 mol/m2; its bad-season
+    # peak and hotspot pixels reach ~1.5e-4. CO background over tropical ocean
+    # is ~0.018-0.02; Jakarta urban sits ~0.022-0.025. SO2 is low in Jakarta
+    # (no heavy coal) so a 1.5e-4 ceiling captures industrial corridor peaks.
+    # With these references a genuinely polluted Jakarta pixel scores 0.6-0.85,
+    # matching the red-dominant visual on the map.
+    GLOBAL_REF = {'NO2': (2e-5, 1.8e-4), 'CO': (0.018, 0.025), 'SO2': (0.0, 1.5e-4)}
 
     def norm_abs(img, name):
         lo, hi = GLOBAL_REF[name]
@@ -360,10 +360,10 @@ def compute_ffpi(study_area, start, end):
               .rename('FFPI'))
 
     ffpi_class = (ffpi
-        .where(ffpi.lt(0.3), 1)
-        .where(ffpi.gte(0.3).And(ffpi.lt(0.6)), 2)
-        .where(ffpi.gte(0.6).And(ffpi.lt(0.8)), 3)
-        .where(ffpi.gte(0.8), 4)
+        .where(ffpi.lt(0.35), 1)
+        .where(ffpi.gte(0.35).And(ffpi.lt(0.55)), 2)
+        .where(ffpi.gte(0.55).And(ffpi.lt(0.75)), 3)
+        .where(ffpi.gte(0.75), 4)
         .rename('FFPI_class'))
     return ffpi, ffpi_class
 
