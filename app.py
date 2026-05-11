@@ -236,9 +236,6 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             'O3':      ([200, 220, 280, 340, 400],             ['Very low (<220 DU)', 'Low (220–280 DU)', 'Normal (280–340 DU)', 'High (>340 DU)']),
             'AEROSOL': ([-1, 0, 1, 2, 4],                     ['Clean (<0)', 'Low (0–1)', 'Moderate (1–2)', 'High (>2)']),
             'FFPI':    ([0, 0.3, 0.6, 0.8, 1],                ['Clean (0–0.3)', 'Moderate (0.3–0.6)', 'Polluted (0.6–0.8)', 'Severe (>0.8)']),
-            'GPP':     ([0, 0.001, 0.003, 0.006, 0.02],        ['Very low (<0.001)', 'Low (0.001–0.003)', 'Moderate (0.003–0.006)', 'High (>0.006)']),
-            'BURNED':  ([0, 32, 182, 274, 366],                 ['No burn (<32)', 'Early season (32–182)', 'Mid season (182–274)', 'Late season (>274)']),
-            'AEROSOL': ([-1, 0, 1, 2, 4],                       ['Clean (<0)', 'Low (0–1)', 'Moderate (1–2)', 'High (>2)']),
         }
 
         def _compute_area_stats(ee_image, band_name, study_area, var_label, scale):
@@ -312,15 +309,6 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     # FFPI
                     'Clean (0–0.3)': '#313695', 'Moderate (0.3–0.6)': '#74add1',
                     'Polluted (0.6–0.8)': '#fdae61', 'Severe (>0.8)': '#d73027',
-                    # GPP
-                    'Very low (<0.001)': '#f7fcb9', 'Low (0.001–0.003)': '#78c679',
-                    'Moderate (0.003–0.006)': '#238443', 'High (>0.006)': '#004529',
-                    # Burned Area
-                    'No burn (<32)': '#d3d3d3', 'Early season (32–182)': '#ffeda0',
-                    'Mid season (182–274)': '#fc4e2a', 'Late season (>274)': '#800026',
-                    # Aerosol
-                    'Clean (<0)': '#4488ff', 'Low (0–1)': '#ffff44',
-                    'Moderate (1–2)': '#ffa500', 'High (>2)': '#ff0000',
                 }
                 _FALLBACK = ['#1a00aa','#00dddd','#66cc00','#ffdd00','#74add1','#fdae61']
                 pairs = []
@@ -909,17 +897,79 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 for v in atmo_vars:
                     try:
                         if v == 'ffpi':
+                            from gis_functions import compute_no2, compute_co, compute_so2
                             ffpi_img, _ = compute_ffpi(study_area_atmo, start_date, end_date)
                             s = get_stats(ffpi_img, 'FFPI', study_area_atmo, scale=3500)
-                            # FFPI is a composite (NO2+CO+SO2) — no monthly time series available
-                            s['monthly'] = {}
-                            all_stats['FFPI'] = s
-                            # Real per-class area (ha)
+
+                            # ── Monthly stats — same pattern as other atmo vars ──────────
+                            try:
+                                import datetime as _dt_ffpi
+                                ffpi_no2_col = (ee.ImageCollection('COPERNICUS/S5P/OFFL/L3_NO2')
+                                                  .filterDate(start_date, end_date)
+                                                  .filterBounds(study_area_atmo)
+                                                  .select('tropospheric_NO2_column_number_density'))
+                                ffpi_co_col  = (ee.ImageCollection('COPERNICUS/S5P/OFFL/L3_CO')
+                                                  .filterDate(start_date, end_date)
+                                                  .filterBounds(study_area_atmo)
+                                                  .select('CO_column_number_density'))
+                                ffpi_so2_col = (ee.ImageCollection('COPERNICUS/S5P/OFFL/L3_SO2')
+                                                  .filterDate(start_date, end_date)
+                                                  .filterBounds(study_area_atmo)
+                                                  .select('SO2_column_number_density'))
+                                ffpi_monthly = {}
+                                start_dt_f = _dt_ffpi.datetime.strptime(start_date, '%Y-%m-%d').replace(day=1)
+                                end_dt_f   = _dt_ffpi.datetime.strptime(end_date,   '%Y-%m-%d')
+                                cur_f = start_dt_f
+                                while cur_f <= end_dt_f:
+                                    m_s_f = cur_f.strftime('%Y-%m-%d')
+                                    nxt_f = (cur_f.replace(year=cur_f.year+1, month=1, day=1)
+                                             if cur_f.month == 12
+                                             else cur_f.replace(month=cur_f.month+1, day=1))
+                                    m_e_f = nxt_f.strftime('%Y-%m-%d')
+                                    try:
+                                        m_no2 = ffpi_no2_col.filterDate(m_s_f, m_e_f)
+                                        m_co  = ffpi_co_col.filterDate(m_s_f,  m_e_f)
+                                        m_so2 = ffpi_so2_col.filterDate(m_s_f, m_e_f)
+                                        if (m_no2.size().getInfo() > 0 and
+                                            m_co.size().getInfo()  > 0 and
+                                            m_so2.size().getInfo() > 0):
+                                            # Re-compute FFPI for this month using same normalisation
+                                            no2_m = m_no2.mean().rename('NO2')
+                                            co_m  = m_co.mean().rename('CO')
+                                            so2_m = m_so2.mean().rename('SO2')
+                                            def _norm_m(img, name):
+                                                st = img.reduceRegion(ee.Reducer.minMax(), study_area_atmo, 3500, maxPixels=1e9).getInfo()
+                                                mn = st.get(f'{name}_min', 0)
+                                                mx = st.get(f'{name}_max', 1)
+                                                if mx == mn: return img.multiply(0)
+                                                return img.subtract(mn).divide(mx - mn)
+                                            ffpi_m = (_norm_m(no2_m,'NO2')
+                                                        .add(_norm_m(co_m,'CO'))
+                                                        .add(_norm_m(so2_m,'SO2'))
+                                                        .divide(3).rename('FFPI'))
+                                            ms_f = ffpi_m.reduceRegion(
+                                                reducer=ee.Reducer.mean(),
+                                                geometry=study_area_atmo, scale=3500, maxPixels=1e9
+                                            ).getInfo()
+                                            val_f = ms_f.get('FFPI')
+                                            if val_f is not None:
+                                                ffpi_monthly[cur_f.strftime('%Y-%m')] = round(float(val_f), 6)
+                                    except: pass
+                                    cur_f = nxt_f
+                                s['monthly'] = ffpi_monthly
+                                print(f'  ✓ FFPI monthly: {len(ffpi_monthly)} months')
+                            except Exception as _ffpi_me:
+                                s['monthly'] = {}
+                                print(f'  FFPI monthly failed: {_ffpi_me}')
+
+                            # ── Real per-class area (ha) — same as other atmo vars ────────
                             _total_ha_f, _class_pcts_f = _compute_area_stats(
                                 ffpi_img, 'FFPI', study_area_atmo, 'FFPI', scale=3500)
                             if _total_ha_f:
-                                all_stats['FFPI']['total_ha']   = _total_ha_f
-                                all_stats['FFPI']['class_pcts'] = _class_pcts_f
+                                s['total_ha']   = _total_ha_f
+                                s['class_pcts'] = _class_pcts_f
+
+                            all_stats['FFPI'] = s
                             map_id   = ffpi_img.clip(study_area_atmo).getMapId(VIS['ffpi'])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': _layer_label('FFPI', region_name, start_date, end_date), 'tile_url': tile_url,
@@ -927,20 +977,22 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                             if bbox:
                                 arr    = get_thumb(ffpi_img.clip(study_area_atmo), VIS['ffpi'], study_area_atmo, dim=512)
                                 charts = make_stats_charts(all_stats, 'ffpi', 'FFPI')
-                                _cp_f  = all_stats['FFPI'].get('class_pcts') or {}
+                                # Replace simulated class bar with real GEE data bar ──────
+                                _cp_f = all_stats['FFPI'].get('class_pcts') or {}
                                 if _cp_f:
                                     real_bar_f = _make_class_bar_b64(
                                         _cp_f, 'FFPI class composition', 'Pollution class')
                                     if real_bar_f:
                                         charts = [(t, d) for t, d in charts if t != 'class_bar']
                                         charts.insert(0, ('class_bar', real_bar_f))
-                                        print(f'  ✓ FFPI class bar: real GEE data')
+                                        print('  ✓ FFPI class bar: real GEE data')
                                 figures['FFPI'] = {
                                     'analysis_map': make_analysis_map(arr, VIS['ffpi'], 'FFPI Score', region_name, bbox),
                                     'charts'      : charts,
                                     'rgb_overview': atmo_rgb_overview if atmo_first_var else None,
                                 }
                                 atmo_first_var = False
+                            print('  ✓ FFPI ready')
 
                         elif v in ATMO_INDEX_MAP:
                             label, func, vis_key, unit = ATMO_INDEX_MAP[v]
@@ -1203,13 +1255,32 @@ def generate_var_insight(var_label: str, stats: dict, region: str, start_date: s
         f'P10: {fmt(s.get("p10"))} | P90: {fmt(s.get("p90"))}'
     )
 
+    # Variable descriptions — prevents LLM from hallucinating on unfamiliar acronyms
+    _VAR_DESCRIPTIONS = {
+        'NO2':     'NO2 (Nitrogen Dioxide) — a satellite-derived tropospheric column concentration (mol/m²) from Sentinel-5P TROPOMI. High values indicate traffic, industrial combustion, and power plants.',
+        'CO':      'CO (Carbon Monoxide) — tropospheric column density (mol/m²) from Sentinel-5P. Elevated values indicate biomass burning, vehicle exhaust, or industrial emissions.',
+        'SO2':     'SO2 (Sulfur Dioxide) — total column concentration (mol/m²) from Sentinel-5P. High values indicate industrial point sources, coal combustion, or volcanic activity.',
+        'CH4':     'CH4 (Methane) — atmospheric mixing ratio (ppb) from Sentinel-5P. Elevated values indicate agriculture, landfills, livestock, wetlands, or fossil fuel leaks.',
+        'O3':      'O3 (Tropospheric Ozone) — total column (DU) from Sentinel-5P. Low values near urban centers indicate NOx titration; high values indicate photochemical smog.',
+        'AEROSOL': 'AEROSOL — Absorbing Aerosol Index (AAI) from Sentinel-5P UV. Positive values indicate smoke, dust, or industrial aerosols; negative values indicate clean marine air.',
+        'FFPI':    'FFPI (Fossil Fuel Pollution Index) — a GEE-derived composite index (0–1) combining normalised NO2, CO, and SO2 columns. High values indicate areas of intense fossil fuel combustion. This is NOT an institution or organisation.',
+        'GPP':     'GPP (Gross Primary Production) — 8-day vegetation carbon uptake (kgC/m²/8-day) from MODIS MOD17A2H. High values indicate dense, productive vegetation.',
+        'BURNED':  'Burned Area — burn date day-of-year (DOY) from MODIS MCD64A1. Values represent the day fire was detected; used to identify fire seasonality and spatial extent.',
+        'LST':     'LST (Land Surface Temperature) — daytime surface temperature (°C) from Landsat thermal band. High values indicate urban heat island effects and impervious surfaces.',
+    }
+    var_up = var_label.upper()
+    var_desc = next((desc for key, desc in _VAR_DESCRIPTIONS.items() if key in var_up), f'{var_label} — satellite-derived index')
+
     prompt = (
         f'You are a satellite remote sensing scientist. '
         f'Write a concise 3–4 sentence insight about the {var_label} map shown for {region}.\n\n'
+        f'Variable definition: {var_desc}\n\n'
         f'{stats_text}\n\n'
-        f'Focus only on: what the mean value indicates, what the spatial range (p10 vs p90) reveals '
-        f'about hotspots or uniformity, and one key finding or implication. '
-        f'Be specific, scientific, and direct. No bullet points. No headers. Plain paragraph only.'
+        f'Focus only on: what the mean value indicates about the environmental condition, '
+        f'what the spatial range (p10 vs p90) reveals about hotspots or uniformity, '
+        f'and one key finding or implication for the region. '
+        f'Be specific, scientific, and direct. No bullet points. No headers. Plain paragraph only. '
+        f'Do NOT mention any institutions, organisations, or unrelated topics.'
     )
 
     try:
@@ -1250,10 +1321,31 @@ def generate_conclusion(region: str, start_date: str, end_date: str,
         if web_context else ''
     )
 
+    # Variable descriptions for conclusion context
+    _CONC_VAR_DESC = {
+        'NO2':'tropospheric NO2 column (mol/m², traffic/industrial combustion)',
+        'CO':'CO column density (mol/m², combustion/burning)',
+        'SO2':'SO2 column (mol/m², industrial/volcanic)',
+        'CH4':'methane mixing ratio (ppb, agriculture/landfills/fossil fuels)',
+        'O3':'tropospheric ozone (DU, photochemical smog)',
+        'AEROSOL':'absorbing aerosol index (smoke/dust/industrial haze)',
+        'FFPI':'Fossil Fuel Pollution Index 0-1 composite of NO2+CO+SO2 (NOT an institution)',
+        'GPP':'Gross Primary Production (kgC/m²/8-day, vegetation productivity)',
+        'BURNED':'burn date DOY from MODIS (fire seasonality)',
+        'LST':'Land Surface Temperature (°C, urban heat)',
+        'NDVI':'vegetation greenness index (-1 to 1)',
+        'LULC':'Land Use Land Cover classification',
+    }
+    var_desc_lines = []
+    for v in variables:
+        vup = v.upper()
+        desc = next((d for k, d in _CONC_VAR_DESC.items() if k in vup), vup)
+        var_desc_lines.append(f'  {vup}: {desc}')
+
     prompt = (
         f'You are a satellite remote sensing scientist writing the conclusion of an analysis report.\n'
         f'Region: {region} | Period: {start_date} to {end_date}\n'
-        f'Variables analyzed: {", ".join(v.upper() for v in variables)}\n\n'
+        f'Variables analyzed (definitions):\n' + '\n'.join(var_desc_lines) + '\n\n'
         f'Summary statistics:\n' + '\n'.join(stats_lines) +
         web_section +
         '\n\nWrite a concise conclusion (4–6 sentences) that:\n'
@@ -1261,7 +1353,9 @@ def generate_conclusion(region: str, start_date: str, end_date: str,
         '2. Connects patterns to real-world conditions or events (use web context if relevant)\n'
         '3. Highlights the most important concern or positive finding\n'
         '4. Ends with one concrete, actionable recommendation\n\n'
-        'Write in flowing prose. No bullet points. No headers. No markdown. Plain paragraphs only.'
+        'Write in flowing prose. No bullet points. No headers. No markdown. Plain paragraphs only. '
+        'Stay strictly on-topic about the satellite data analysis. Do NOT mention any institutions, '
+        'organisations, or topics unrelated to the remote sensing variables listed above.'
     )
 
     try:
