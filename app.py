@@ -290,31 +290,46 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     'High built (>0.1)': '#e53935',
                     'Dry (<-0.3)': '#bf8c4c', 'Transition (-0.3–0)': '#a5d6a7',
                     'Moist (0–0.3)': '#42a5f5', 'Water (>0.3)': '#0d47a1',
-                    # NO2/CO — en-dash labels matching _APP_CLASS_BOUNDS_LOCAL
-                    'Clean (<8e-5)': '#1a00aa', 'Moderate (8–15e-5)': '#00dddd',
-                    'High (15–25e-5)': '#66cc00', 'Severe (>25e-5)': '#ffdd00',
-                    'Low (<0.035)': '#1a00aa', 'Moderate (0.035–0.055)': '#00dddd',
-                    'High (0.055–0.07)': '#66cc00', 'Severe (>0.07)': '#ffdd00',
-                    # SO2
-                    'Clean (<1e-4)': '#0000ff', 'Moderate (1–5e-4)': '#008000',
-                    'High (5e-4–1e-3)': '#ffa500', 'Severe (>1e-3)': '#ff0000',
-                    # CH4
-                    'Background (<1850)': '#0000ff', 'Elevated (1850–1900)': '#00bbbb',
-                    'High (1900–1950)': '#ffa500', 'Very high (>1950)': '#ff0000',
-                    # O3
-                    'Very low (<220 DU)': '#800080', 'Low (220–280 DU)': '#0044ff',
-                    'Normal (280–340 DU)': '#00cc88', 'High (>340 DU)': '#ffaa00',
-                    # Aerosol
-                    'Clean (<0)': '#4488ff', 'Low (0–1)': '#ffff44',
-                    'Moderate (1–2)': '#ffa500', 'High (>2)': '#ff0000',
-                    # GPP
-                    'Very low (<0.001)': '#ffffe5', 'Low (0.001–0.003)': '#a1dab4',
-                    'Moderate (0.003–0.006)': '#41b6c4', 'High (>0.006)': '#225ea8',
+                    # NO2 — palette ['#000033','#0000ff','#8000ff','#00ffff','#008000','#ffff00','#ff0000'], min=0 max=0.0002
+                    'Clean (<8e-5)':      '#000033',  # 0–40% of palette → deep navy
+                    'Moderate (8–15e-5)': '#00ccff',  # 40–75% → cyan
+                    'High (15–25e-5)':    '#80cc00',  # 75–100% → yellow-green
+                    'Severe (>25e-5)':    '#ff0000',  # top → red
+                    # CO — same palette ['#000033'…'#ff0000'], min=0.02 max=0.08
+                    'Low (<0.035)':           '#000033',
+                    'Moderate (0.035–0.055)': '#8000ff',
+                    'High (0.055–0.07)':      '#ffff00',
+                    'Severe (>0.07)':         '#ff0000',
+                    # SO2 — palette ['#0000ff','#008000','#ffff00','#ffa500','#ff0000','#8b0000']
+                    'Clean (<1e-4)':      '#0000ff',
+                    'Moderate (1–5e-4)':  '#008000',
+                    'High (5e-4–1e-3)':   '#ffa500',
+                    'Severe (>1e-3)':     '#8b0000',
+                    # CH4 — palette ['#0000ff','#00ffff','#008000','#ffff00','#ffa500','#ff0000']
+                    'Background (<1850)':    '#0000ff',
+                    'Elevated (1850–1900)':  '#00ffff',
+                    'High (1900–1950)':      '#ffa500',
+                    'Very high (>1950)':     '#ff0000',
+                    # O3 — palette ['#800080','#0000ff','#00ffff','#008000','#ffff00','#ff0000']
+                    'Very low (<220 DU)':  '#800080',
+                    'Low (220–280 DU)':    '#0000ff',
+                    'Normal (280–340 DU)': '#00cc88',
+                    'High (>340 DU)':      '#ffff00',
+                    # Aerosol — palette ['#0000ff','#ffffff','#ffff00','#ffa500','#ff0000']
+                    'Clean (<0)':      '#0000ff',
+                    'Low (0–1)':       '#ffff44',
+                    'Moderate (1–2)':  '#ffa500',
+                    'High (>2)':       '#ff0000',
+                    # GPP — palette ['#ffffff','#a8ddb5','#238b45','#00441b']
+                    'Very low (<0.001)':         '#ffffff',
+                    'Low (0.001–0.003)':         '#a8ddb5',
+                    'Moderate (0.003–0.006)':    '#238b45',
+                    'High (>0.006)':             '#00441b',
                     # FFPI
                     'Clean (0–0.35)': '#313695', 'Moderate (0.35–0.55)': '#74add1',
                     'Polluted (0.55–0.75)': '#fdae61', 'Severe (>0.75)': '#d73027',
                 }
-                _FALLBACK = ['#1a00aa','#00dddd','#66cc00','#ffdd00','#74add1','#fdae61']
+                _FALLBACK = ['#000033','#00ccff','#ffff00','#ff0000','#74add1','#fdae61']
                 pairs = []
                 for lbl, val in class_pcts.items():
                     pct = val['pct'] if isinstance(val, dict) else float(val)
@@ -330,7 +345,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                          lbl.replace('\u2013','-').replace('\u2014','-')), None)
                              or _FALLBACK[len(pairs) % len(_FALLBACK)])
                     print(f'  [bar] lbl={repr(lbl)} matched={lbl in _COLOR_MAP} color={color}')
-                    disp  = lbl.replace(' (', '\n(') if ' (' in lbl else lbl
+                    disp = lbl.replace(' (', '\n(') if ' (' in lbl else lbl
                     pairs.append((disp, pct, color))
                 if not pairs:
                     return None
@@ -338,13 +353,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 fig, ax = _plt.subplots(figsize=(max(5, len(pairs) * 1.3), 3.5))
                 bars = ax.bar(cls, pct_vals, color=col_vals, edgecolor='white', linewidth=0.5, width=0.55)
                 _max_pct = max(pct_vals)
-                ax.set_ylim(0, _max_pct * 1.32)
+                ax.set_ylim(0, _max_pct * 1.35)
                 for bar, pct in zip(bars, pct_vals):
-                    # Always place label above bar; use a minimum offset so tiny
-                    # bars (e.g. 1.9%) don't swallow their label inside the bar body
-                    _offset = max(bar.get_height() + _max_pct * 0.02, _max_pct * 0.04)
+                    # Clamp label y so tiny bars (<5% of max) always show label above bar
+                    _label_y = max(bar.get_height() + _max_pct * 0.02, _max_pct * 0.05)
                     ax.text(bar.get_x() + bar.get_width() / 2,
-                            _offset,
+                            _label_y,
                             f'{pct:.1f}%', ha='center', va='bottom', fontsize=8,
                             fontweight='bold', color='#333')
                 ax.set_xlabel(xlabel, fontsize=9)
