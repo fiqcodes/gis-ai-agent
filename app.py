@@ -937,15 +937,12 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                                             no2_m = m_no2.mean().rename('NO2')
                                             co_m  = m_co.mean().rename('CO')
                                             so2_m = m_so2.mean().rename('SO2')
-                                            def _norm_m(img, name):
-                                                st = img.reduceRegion(ee.Reducer.minMax(), study_area_atmo, 3500, maxPixels=1e9).getInfo()
-                                                mn = st.get(f'{name}_min', 0)
-                                                mx = st.get(f'{name}_max', 1)
-                                                if mx == mn: return img.multiply(0)
-                                                return img.subtract(mn).divide(mx - mn)
-                                            ffpi_m = (_norm_m(no2_m,'NO2')
-                                                        .add(_norm_m(co_m,'CO'))
-                                                        .add(_norm_m(so2_m,'SO2'))
+                                            # Absolute normalisation — same ceilings as compute_ffpi
+                                            def _norm_abs_m(img, lo, hi):
+                                                return img.max(lo).min(hi).subtract(lo).divide(hi - lo)
+                                            ffpi_m = (_norm_abs_m(no2_m, 0.0, 0.0004)
+                                                        .add(_norm_abs_m(co_m,  0.0, 0.055))
+                                                        .add(_norm_abs_m(so2_m, 0.0, 0.0005))
                                                         .divide(3).rename('FFPI'))
                                             ms_f = ffpi_m.reduceRegion(
                                                 reducer=ee.Reducer.mean(),

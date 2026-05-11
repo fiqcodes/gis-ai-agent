@@ -337,14 +337,28 @@ def compute_ffpi(study_area, start, end):
     no2_img, _ = compute_no2(study_area, start, end)
     co_img,  _ = compute_co(study_area, start, end)
     so2_img, _ = compute_so2(study_area, start, end)
-    def norm(img, name):
-        stats = img.reduceRegion(ee.Reducer.minMax(), study_area, 3500, maxPixels=1e9).getInfo()
-        mn = stats.get(f'{name}_min', 0)
-        mx = stats.get(f'{name}_max', 1)
-        if mx == mn: return img.multiply(0)
-        return img.subtract(mn).divide(mx - mn)
-    ffpi = (norm(no2_img,'NO2').add(norm(co_img,'CO')).add(norm(so2_img,'SO2'))
-                               .divide(3).rename('FFPI'))
+
+    # ── Option A: Absolute global reference ceilings ──────────────────────────
+    # Reference maxima are set to severe megacity pollution levels observed in
+    # the peer-reviewed TROPOMI literature (Dhaka, Kolkata, Indian metro studies).
+    # Anything at or above these values scores 1.0 (maximum pollution).
+    #   NO2 : 0.0004  mol/m²  — peak annual average in heavily polluted Asian cities
+    #   CO  : 0.055   mol/m²  — severe urban/industrial + fire-season peak (Dhaka)
+    #   SO2 : 0.0005  mol/m²  — high-industry / coal-burning urban ceiling
+    # Floor is 0 for all three (background / clean ocean baseline).
+    GLOBAL_REF = {'NO2': (0.0, 0.0004), 'CO': (0.0, 0.055), 'SO2': (0.0, 0.0005)}
+
+    def norm_abs(img, name):
+        lo, hi = GLOBAL_REF[name]
+        # Clip to [lo, hi] then rescale — values above the ceiling stay at 1.0
+        return img.max(lo).min(hi).subtract(lo).divide(hi - lo)
+
+    ffpi = (norm_abs(no2_img, 'NO2')
+              .add(norm_abs(co_img,  'CO'))
+              .add(norm_abs(so2_img, 'SO2'))
+              .divide(3)
+              .rename('FFPI'))
+
     ffpi_class = (ffpi
         .where(ffpi.lt(0.3), 1)
         .where(ffpi.gte(0.3).And(ffpi.lt(0.6)), 2)
