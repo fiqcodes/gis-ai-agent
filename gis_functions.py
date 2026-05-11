@@ -1276,6 +1276,11 @@ SYSTEM_PROMPT = (
     "4. variables - ONLY what the user explicitly said. "
     "If user says 'NO2 and CO', return EXACTLY ['no2', 'co']. "
     "NEVER add ch4, aerosol, so2, or anything else not mentioned.\n\n"
+    "CRITICAL VARIABLE DEFINITIONS — these are GEE satellite indices, NOT organisations or programs:\n"
+    "  FFPI = Fossil Fuel Pollution Index (satellite composite of NO2+CO+SO2). "
+    "         If user says 'FFPI', 'pollution index', or 'fossil fuel', set variables=['ffpi'].\n"
+    "  NDVI = vegetation index. LST = land surface temperature. NO2 = nitrogen dioxide. "
+    "  CO = carbon monoxide. SO2 = sulfur dioxide. LULC = land cover classification.\n\n"
     "Available variables:\n"
     "Surface: ndvi, evi, savi, ndwi, mndwi, ndbi, ui, nbi, bsi, ndsi, lst, uhi, rgb\n"
     "Atmospheric: co, ch4, no2, so2, aerosol, o3, gpp, burned, ffpi\n"
@@ -1292,7 +1297,120 @@ SYSTEM_PROMPT = (
     'No text outside the JSON. No extra variables.'
 )
 
+# =============================================================================
+# KEYWORD PRE-CHECK — intercept known variable keywords before hitting the LLM.
+# Maps regex patterns → canonical variable names. Checked in order; first match wins.
+# This prevents small models (gemma3:4b etc.) from hallucinating on known acronyms.
+# =============================================================================
+import re as _re
+
+_KEYWORD_INTERCEPTS = [
+    # ── Atmospheric ───────────────────────────────────────────────────────────
+    (r'\bffpi\b|fossil fuel pollution|pollution index',          'ffpi'),
+    (r'\bno2\b|nitrogen dioxide',                               'no2'),
+    (r'\bco\b(?!2)|carbon monoxide',                            'co'),
+    (r'\bso2\b|sulfur dioxide|sulphur dioxide',                 'so2'),
+    (r'\bch4\b|methane',                                        'ch4'),
+    (r'\baerosol\b|\baqi\b|\bdust\b|\bsmoke\b',                 'aerosol'),
+    (r'\bo3\b|\bozone\b',                                       'o3'),
+    (r'\bgpp\b|gross primary productivity|carbon uptake',       'gpp'),
+    (r'\bburned?\b|\bwildfire\b|\bfire\b',                      'burned'),
+    # ── Surface ───────────────────────────────────────────────────────────────
+    (r'\bndvi\b|\bvegetation index\b',                          'ndvi'),
+    (r'\bevi\b|\benhanced vegetation\b',                        'evi'),
+    (r'\bsavi\b|\bsoil.adjusted\b',                             'savi'),
+    (r'\bndwi\b|\bwater index\b',                               'ndwi'),
+    (r'\bmndwi\b|\bmodified water\b',                           'mndwi'),
+    (r'\bndbi\b|\bbuilt.?up index\b',                           'ndbi'),
+    (r'\b(?:ui|urban index)\b',                                 'ui'),
+    (r'\bnbi\b|\bnew built\b',                                  'nbi'),
+    (r'\bbsi\b|\bbare soil\b',                                  'bsi'),
+    (r'\bndsi\b|\bsnow index\b',                                'ndsi'),
+    (r'\blst\b|land surface temp|surface temperature',          'lst'),
+    (r'\buhi\b|urban heat island|heat island',                  'uhi'),
+    (r'\brgb\b|true colou?r',                                   'rgb'),
+    # ── Special ───────────────────────────────────────────────────────────────
+    (r'\blulc\b|land (?:cover|use)|land class(?:ification)?',   'lulc'),
+    (r'\ball.?surface\b',                                       'all_surface'),
+    (r'\ball.?atmo(?:spheric)?\b',                              'all_atmo'),
+]
+
+def _extract_variables_from_text(text: str) -> list:
+    """
+    Scan raw user message for known variable keywords.
+    Returns list of matched canonical variable names (preserving order, deduped).
+    Returns empty list if nothing matched — caller falls through to LLM.
+    """
+    lower = text.lower()
+    found, seen = [], set()
+    for pattern, var in _KEYWORD_INTERCEPTS:
+        if _re.search(pattern, lower) and var not in seen:
+            found.append(var)
+            seen.add(var)
+    return found
+
+
+def _extract_region_and_dates(text: str) -> tuple:
+    """
+    Best-effort extraction of region + dates from raw text without LLM.
+    Returns (region_or_None, start_or_None, end_or_None).
+    """
+    # Dates: YYYY-MM-DD or DD/MM/YYYY or "in YYYY"
+    date_pat = _re.findall(r'\b(\d{4}-\d{2}-\d{2})\b', text)
+    start_date = date_pat[0] if len(date_pat) >= 1 else None
+    end_date   = date_pat[1] if len(date_pat) >= 2 else None
+
+    # Year-only: "in 2025" / "for 2024" → full year range
+    if not start_date:
+        yr = _re.search(r'\b(20\d{2})\b', text)
+        if yr:
+            y = yr.group(1)
+            start_date = f'{y}-01-01'
+            end_date   = f'{y}-12-31'
+
+    # Region: everything before the first known variable keyword / date / preposition
+    region = None
+    # Strip leading commands like /ffpi, analyse, show, compute, etc.
+    cleaned = _re.sub(
+        r'^(?:analyse|analyze|show|compute|calculate|run|get|give me|what is|map)\s+',
+        '', text.strip(), flags=_re.IGNORECASE)
+    # Known stop words before which we'd expect a region name
+    region_stop = _re.search(
+        r'\b(?:in |for |of |from |between |ndvi|evi|savi|ndwi|mndwi|ndbi|'
+        r'ui\b|nbi|bsi|ndsi|lst|uhi|rgb|lulc|no2|co\b|so2|ch4|o3|aerosol|'
+        r'gpp|burned|ffpi|all.?surface|all.?atmo)\b',
+        cleaned, flags=_re.IGNORECASE)
+    if region_stop:
+        candidate = cleaned[:region_stop.start()].strip().rstrip(',')
+        if len(candidate) > 1:
+            region = candidate
+
+    return region, start_date, end_date
+
+
 def call_ollama(user_message, chat_history):
+    # ── Pre-check: intercept known variable keywords before hitting the LLM ───
+    # Small models (gemma3:4b) hallucinate on ambiguous acronyms (e.g. FFPI →
+    # "Indonesian Forest Fires Program"). If we can extract variables + dates
+    # deterministically, skip the LLM entirely and return a hardcoded result.
+    _pre_vars = _extract_variables_from_text(user_message)
+    if _pre_vars:
+        _pre_region, _pre_start, _pre_end = _extract_region_and_dates(user_message)
+        # Only short-circuit when we also have at least a region or a date —
+        # otherwise it might be a follow-up question, so let LLM handle context.
+        if _pre_region or _pre_start:
+            print(f'  [pre-check] variables={_pre_vars} region={_pre_region} '
+                  f'start={_pre_start} end={_pre_end}')
+            return {
+                'intent'    : 'analysis',
+                'region'    : _pre_region,
+                'start_date': _pre_start,
+                'end_date'  : _pre_end,
+                'variables' : _pre_vars,
+                'response'  : f'Running {", ".join(v.upper() for v in _pre_vars)} analysis'
+                              + (f' for {_pre_region}' if _pre_region else '') + '.',
+            }
+
     messages = [{'role': 'system', 'content': SYSTEM_PROMPT}]
     messages += chat_history
     messages.append({'role': 'user', 'content': user_message})
