@@ -685,8 +685,7 @@ def make_stats_charts(stats, var_name, label):
             n_pts   = 50000
             rng     = np.random.default_rng(42)
             samples = rng.normal(mean_v, std_v, n_pts)
-            # Do NOT clip to [min_v, max_v] — clipping piles values onto the endpoints
-            # creating artificial spikes at the histogram edges. Instead, filter below.
+            samples = np.clip(samples, min_v, max_v)
 
             # Atmospheric vars: restrict display to p10–p90 zone so histogram isn't collapsed
             label_up  = label.upper()
@@ -697,19 +696,9 @@ def make_stats_charts(stats, var_name, label):
                 h_max  = min(max_v, p90_v + spread * 0.5)
                 display_samples = samples[(samples >= h_min) & (samples <= h_max)]
                 if len(display_samples) < 500:
-                    display_samples = samples[(samples >= min_v) & (samples <= max_v)]
-            else:
-                # For non-atmo vars, still filter outliers but keep within [min, max]
-                # Use IQR-based trimming to avoid edge spikes from clipping
-                if p10_v is not None and p90_v is not None:
-                    iqr = p90_v - p10_v
-                    trim_lo = p10_v - iqr * 1.5
-                    trim_hi = p90_v + iqr * 1.5
-                    display_samples = samples[(samples >= trim_lo) & (samples <= trim_hi)]
-                    if len(display_samples) < 500:
-                        display_samples = samples
-                else:
                     display_samples = samples
+            else:
+                display_samples = samples
 
             fig, ax = plt.subplots(figsize=(6, 4))
             ax.hist(display_samples, bins=40, color='#5B9BD5', edgecolor='white',

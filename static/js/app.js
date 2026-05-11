@@ -2552,11 +2552,9 @@ const _CLASS_DEFS = {
              xlabel:'UHI z-score class',   colors:['#313695','#74add1','#fed976','#fd8d3c','#b10026'] },
   NO2:     { bounds:[0,8e-5,1.5e-4,2.5e-4,1],      labels:['Clean\n(<8×10⁻⁵)','Moderate\n(8–15×10⁻⁵)','High\n(15–25×10⁻⁵)','Severe\n(>25×10⁻⁵)'],
              backendLabels:['Clean (<8e-5)','Moderate (8–15e-5)','High (15–25e-5)','Severe (>25e-5)'],
-             colors:['#1a00aa','#00dddd','#66cc00','#ffdd00'],
              xlabel:'NO₂ concentration class', visKey:'no2', visMin:0, visMax:0.0002 },
   CO:      { bounds:[0.02,0.035,0.055,0.07,0.08],  labels:['Low\n(<0.035)','Moderate\n(0.035–0.055)','High\n(0.055–0.07)','Severe\n(>0.07)'],
              backendLabels:['Low (<0.035)','Moderate (0.035–0.055)','High (0.055–0.07)','Severe (>0.07)'],
-             colors:['#1a00aa','#00dddd','#66cc00','#ffdd00'],
              xlabel:'CO column density class', visKey:'co',  visMin:0.02,  visMax:0.08 },
   SO2:     { bounds:[0,1e-4,5e-4,1e-3,0.01],       labels:['Clean\n(<1×10⁻⁴)','Moderate\n(1–5×10⁻⁴)','High\n(5×10⁻⁴–10⁻³)','Severe\n(>10⁻³)'],
              backendLabels:['Clean (<1e-4)','Moderate (1–5e-4)','High (5e-4–1e-3)','Severe (>1e-3)'],
@@ -2572,10 +2570,21 @@ const _CLASS_DEFS = {
              xlabel:'O₃ column class',         visKey:'o3',  visMin:200,   visMax:380 },
   AEROSOL: { bounds:[-1,0,1,2,4],                  labels:['Clean\n(<0)','Low\n(0–1)','Moderate\n(1–2)','High\n(>2)'],
              backendLabels:['Clean (<0)','Low (0–1)','Moderate (1–2)','High (>2)'],
+             colors:['#4488ff','#ffff44','#ffa500','#ff0000'],
              xlabel:'Aerosol index class',     visKey:'aerosol', visMin:-1, visMax:3 },
   FFPI:    { bounds:[0,0.3,0.6,0.8,1],             labels:['Clean\n(0–0.3)','Moderate\n(0.3–0.6)','Polluted\n(0.6–0.8)','Severe\n(>0.8)'],
              backendLabels:['Clean (0–0.3)','Moderate (0.3–0.6)','Polluted (0.6–0.8)','Severe (>0.8)'],
+             colors:['#313695','#74add1','#fdae61','#d73027'],
              xlabel:'Pollution class',         visKey:'ffpi', visMin:0,    visMax:1 },
+
+  GPP:     { bounds:[0,0.001,0.003,0.006,0.02],   labels:['Very low\n(<0.001)','Low\n(0.001–0.003)','Moderate\n(0.003–0.006)','High\n(>0.006)'],
+             backendLabels:['Very low (<0.001)','Low (0.001–0.003)','Moderate (0.003–0.006)','High (>0.006)'],
+             colors:['#f7fcb9','#78c679','#238443','#004529'],
+             xlabel:'GPP class', visKey:'gpp', visMin:0, visMax:0.006 },
+  BURNED:  { bounds:[0,32,182,274,366],             labels:['No burn\n(<32)','Early season\n(32–182)','Mid season\n(182–274)','Late season\n(>274)'],
+             backendLabels:['No burn (<32)','Early season (32–182)','Mid season (182–274)','Late season (>274)'],
+             colors:['#d3d3d3','#ffeda0','#fc4e2a','#800026'],
+             xlabel:'Burn date class (DOY)', visKey:'burned', visMin:0, visMax:366 },
 };
 
 function _sampleNormal(mean, std, n=50000, lo=-Infinity, hi=Infinity) {
@@ -2757,8 +2766,11 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
               const vis = _VIS_PAL[def.visKey];
               const vMin = def.visMin ?? vis?.min ?? def.bounds[0];
               const vMax = def.visMax ?? vis?.max ?? def.bounds[def.bounds.length-1];
-              if (def.colors && idx < def.colors.length) {
-                classColors.push(def.colors[idx]);
+              const _hasDefColors = !!(def.colors && idx < def.colors.length);
+              const _chosenColor = _hasDefColors ? def.colors[idx] : null;
+              console.log('[BAR COLOR]', cleanLbl, '| idx:', idx, '| def.colors:', def.colors, '| chosen:', _chosenColor);
+              if (_hasDefColors) {
+                classColors.push(_chosenColor);
               } else if (vis) {
                 const midpoint = idx < def.bounds.length - 1
                   ? (def.bounds[idx] + def.bounds[idx+1]) / 2

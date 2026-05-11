@@ -236,6 +236,9 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             'O3':      ([200, 220, 280, 340, 400],             ['Very low (<220 DU)', 'Low (220–280 DU)', 'Normal (280–340 DU)', 'High (>340 DU)']),
             'AEROSOL': ([-1, 0, 1, 2, 4],                     ['Clean (<0)', 'Low (0–1)', 'Moderate (1–2)', 'High (>2)']),
             'FFPI':    ([0, 0.3, 0.6, 0.8, 1],                ['Clean (0–0.3)', 'Moderate (0.3–0.6)', 'Polluted (0.6–0.8)', 'Severe (>0.8)']),
+            'GPP':     ([0, 0.001, 0.003, 0.006, 0.02],        ['Very low (<0.001)', 'Low (0.001–0.003)', 'Moderate (0.003–0.006)', 'High (>0.006)']),
+            'BURNED':  ([0, 32, 182, 274, 366],                 ['No burn (<32)', 'Early season (32–182)', 'Mid season (182–274)', 'Late season (>274)']),
+            'AEROSOL': ([-1, 0, 1, 2, 4],                       ['Clean (<0)', 'Low (0–1)', 'Moderate (1–2)', 'High (>2)']),
         }
 
         def _compute_area_stats(ee_image, band_name, study_area, var_label, scale):
@@ -309,6 +312,15 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     # FFPI
                     'Clean (0–0.3)': '#313695', 'Moderate (0.3–0.6)': '#74add1',
                     'Polluted (0.6–0.8)': '#fdae61', 'Severe (>0.8)': '#d73027',
+                    # GPP
+                    'Very low (<0.001)': '#f7fcb9', 'Low (0.001–0.003)': '#78c679',
+                    'Moderate (0.003–0.006)': '#238443', 'High (>0.006)': '#004529',
+                    # Burned Area
+                    'No burn (<32)': '#d3d3d3', 'Early season (32–182)': '#ffeda0',
+                    'Mid season (182–274)': '#fc4e2a', 'Late season (>274)': '#800026',
+                    # Aerosol
+                    'Clean (<0)': '#4488ff', 'Low (0–1)': '#ffff44',
+                    'Moderate (1–2)': '#ffa500', 'High (>2)': '#ff0000',
                 }
                 _FALLBACK = ['#1a00aa','#00dddd','#66cc00','#ffdd00','#74add1','#fdae61']
                 pairs = []
@@ -899,16 +911,33 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                         if v == 'ffpi':
                             ffpi_img, _ = compute_ffpi(study_area_atmo, start_date, end_date)
                             s = get_stats(ffpi_img, 'FFPI', study_area_atmo, scale=3500)
+                            # FFPI is a composite (NO2+CO+SO2) — no monthly time series available
+                            s['monthly'] = {}
                             all_stats['FFPI'] = s
+                            # Real per-class area (ha)
+                            _total_ha_f, _class_pcts_f = _compute_area_stats(
+                                ffpi_img, 'FFPI', study_area_atmo, 'FFPI', scale=3500)
+                            if _total_ha_f:
+                                all_stats['FFPI']['total_ha']   = _total_ha_f
+                                all_stats['FFPI']['class_pcts'] = _class_pcts_f
                             map_id   = ffpi_img.clip(study_area_atmo).getMapId(VIS['ffpi'])
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': _layer_label('FFPI', region_name, start_date, end_date), 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
                             if bbox:
-                                arr = get_thumb(ffpi_img.clip(study_area_atmo), VIS['ffpi'], study_area_atmo, dim=512)
+                                arr    = get_thumb(ffpi_img.clip(study_area_atmo), VIS['ffpi'], study_area_atmo, dim=512)
+                                charts = make_stats_charts(all_stats, 'ffpi', 'FFPI')
+                                _cp_f  = all_stats['FFPI'].get('class_pcts') or {}
+                                if _cp_f:
+                                    real_bar_f = _make_class_bar_b64(
+                                        _cp_f, 'FFPI class composition', 'Pollution class')
+                                    if real_bar_f:
+                                        charts = [(t, d) for t, d in charts if t != 'class_bar']
+                                        charts.insert(0, ('class_bar', real_bar_f))
+                                        print(f'  ✓ FFPI class bar: real GEE data')
                                 figures['FFPI'] = {
                                     'analysis_map': make_analysis_map(arr, VIS['ffpi'], 'FFPI Score', region_name, bbox),
-                                    'charts'      : make_stats_charts(all_stats, 'ffpi', 'FFPI'),
+                                    'charts'      : charts,
                                     'rgb_overview': atmo_rgb_overview if atmo_first_var else None,
                                 }
                                 atmo_first_var = False
