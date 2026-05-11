@@ -337,10 +337,14 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 cls, pct_vals, col_vals = zip(*pairs)
                 fig, ax = _plt.subplots(figsize=(max(5, len(pairs) * 1.3), 3.5))
                 bars = ax.bar(cls, pct_vals, color=col_vals, edgecolor='white', linewidth=0.5, width=0.55)
-                ax.set_ylim(0, max(pct_vals) * 1.28)
+                _max_pct = max(pct_vals)
+                ax.set_ylim(0, _max_pct * 1.32)
                 for bar, pct in zip(bars, pct_vals):
+                    # Always place label above bar; use a minimum offset so tiny
+                    # bars (e.g. 1.9%) don't swallow their label inside the bar body
+                    _offset = max(bar.get_height() + _max_pct * 0.02, _max_pct * 0.04)
                     ax.text(bar.get_x() + bar.get_width() / 2,
-                            bar.get_height() + max(pct_vals) * 0.02,
+                            _offset,
                             f'{pct:.1f}%', ha='center', va='bottom', fontsize=8,
                             fontweight='bold', color='#333')
                 ax.set_xlabel(xlabel, fontsize=9)
