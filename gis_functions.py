@@ -1390,16 +1390,17 @@ def _extract_region_and_dates(text: str) -> tuple:
 
 def call_ollama(user_message, chat_history):
     # ── Pre-check: intercept known variable keywords before hitting the LLM ───
-    # Small models (gemma3:4b) hallucinate on ambiguous acronyms (e.g. FFPI →
-    # "Indonesian Forest Fires Program"). If we can extract variables + dates
-    # deterministically, skip the LLM entirely and return a hardcoded result.
+    # Small models (gemma3:4b) hallucinate on ambiguous acronyms (FFPI, NDVI…).
+    # When variables are detected deterministically, we ALWAYS short-circuit.
+    # If region/date extraction also succeeds → skip Ollama entirely.
+    # If region/date is missing → ask Ollama only for those fields, then merge.
     _pre_vars = _extract_variables_from_text(user_message)
     if _pre_vars:
         _pre_region, _pre_start, _pre_end = _extract_region_and_dates(user_message)
-        # Only short-circuit when we also have at least a region or a date —
-        # otherwise it might be a follow-up question, so let LLM handle context.
-        if _pre_region or _pre_start:
-            print(f'  [pre-check] variables={_pre_vars} region={_pre_region} '
+
+        # If we have everything, skip Ollama entirely
+        if _pre_region and _pre_start:
+            print(f'  [pre-check FULL] vars={_pre_vars} region={_pre_region} '
                   f'start={_pre_start} end={_pre_end}')
             return {
                 'intent'    : 'analysis',
@@ -1410,6 +1411,40 @@ def call_ollama(user_message, chat_history):
                 'response'  : f'Running {", ".join(v.upper() for v in _pre_vars)} analysis'
                               + (f' for {_pre_region}' if _pre_region else '') + '.',
             }
+
+        # Variables detected but region/date missing — ask Ollama ONLY for those,
+        # with an explicit instruction not to touch variables or intent.
+        print(f'  [pre-check PARTIAL] vars={_pre_vars} — asking Ollama for region/date only')
+        _geo_prompt = (
+            'Extract ONLY the region name and date range from this message. '
+            'Do NOT interpret or change the variables field. '
+            'Respond with ONLY this JSON:\n'
+            '{"region": "place name or null", "start_date": "YYYY-MM-DD or null", "end_date": "YYYY-MM-DD or null"}'
+        )
+        try:
+            _resp = requests.post(OLLAMA_URL,
+                json={'model': OLLAMA_MODEL,
+                      'messages': [{'role': 'system', 'content': _geo_prompt},
+                                   {'role': 'user',   'content': user_message}],
+                      'stream': False}, timeout=30)
+            _geo = json.loads(_resp.json().get('message', {}).get('content', '{}'))
+            _pre_region = _pre_region or _geo.get('region')
+            _pre_start  = _pre_start  or _geo.get('start_date')
+            _pre_end    = _pre_end    or _geo.get('end_date')
+        except Exception as _ge:
+            print(f'  [pre-check] geo fallback failed: {_ge}')
+
+        print(f'  [pre-check MERGED] vars={_pre_vars} region={_pre_region} '
+              f'start={_pre_start} end={_pre_end}')
+        return {
+            'intent'    : 'analysis',
+            'region'    : _pre_region,
+            'start_date': _pre_start,
+            'end_date'  : _pre_end,
+            'variables' : _pre_vars,
+            'response'  : f'Running {", ".join(v.upper() for v in _pre_vars)} analysis'
+                          + (f' for {_pre_region}' if _pre_region else '') + '.',
+        }
 
     messages = [{'role': 'system', 'content': SYSTEM_PROMPT}]
     messages += chat_history
