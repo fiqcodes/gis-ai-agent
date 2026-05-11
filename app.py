@@ -235,6 +235,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
             'CH4':     ([1750, 1850, 1900, 1950, 2100],       ['Background (<1850)', 'Elevated (1850–1900)', 'High (1900–1950)', 'Very high (>1950)']),
             'O3':      ([200, 220, 280, 340, 400],             ['Very low (<220 DU)', 'Low (220–280 DU)', 'Normal (280–340 DU)', 'High (>340 DU)']),
             'AEROSOL': ([-1, 0, 1, 2, 4],                     ['Clean (<0)', 'Low (0–1)', 'Moderate (1–2)', 'High (>2)']),
+            'GPP':     ([0, 0.001, 0.003, 0.006, 0.02],        ['Very low (<0.001)', 'Low (0.001–0.003)', 'Moderate (0.003–0.006)', 'High (>0.006)']),
             'FFPI':    ([0, 0.35, 0.55, 0.75, 1],             ['Clean (0–0.35)', 'Moderate (0.35–0.55)', 'Polluted (0.55–0.75)', 'Severe (>0.75)']),
         }
 
@@ -306,6 +307,9 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     # Aerosol
                     'Clean (<0)': '#4488ff', 'Low (0–1)': '#ffff44',
                     'Moderate (1–2)': '#ffa500', 'High (>2)': '#ff0000',
+                    # GPP
+                    'Very low (<0.001)': '#ffffe5', 'Low (0.001–0.003)': '#a1dab4',
+                    'Moderate (0.003–0.006)': '#41b6c4', 'High (>0.006)': '#225ea8',
                     # FFPI
                     'Clean (0–0.35)': '#313695', 'Moderate (0.35–0.55)': '#74add1',
                     'Polluted (0.55–0.75)': '#fdae61', 'Severe (>0.75)': '#d73027',
