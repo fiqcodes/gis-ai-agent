@@ -1394,7 +1394,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
             if (s.p10 != null && s.p90 != null) findingItems += `<div class="concl-finding-item">Spatial range: P10 = <strong class="fv-amber">${s.p10.toFixed(4)}</strong> → P90 = <strong class="fv-green">${s.p90.toFixed(4)}</strong></div>`;
             if (s.std != null) findingItems += `<div class="concl-finding-item">Std deviation of <strong class="fv-cyan">${s.std.toFixed(4)}</strong> indicates ${s.std > 0.1 ? 'significant spatial contrast across the region' : 'relatively uniform surface conditions'}</div>`;
           }
-        } else if (['NO2','CO','SO2','CH4','O3','AER','FFPI','GPP','BURNED','AEROSOL'].some(k => vUp.includes(k)) && s.mean != null) {
+        } else if (['NO2','CO','SO2','CH4','O3','AER'].includes(vUp) && s.mean != null) {
           // ── Air quality index chips & findings ───────────────────────────────
           const unit    = vUp === 'CO' ? 'mol/m²' : (vUp === 'NO2' ? 'mol/m²' : 'mol/m²');
           const digFmt  = v => v < 0.001 ? v.toExponential(3) : v.toFixed(5);
@@ -1944,54 +1944,6 @@ function buildDistClassExplanation(varLabel, s) {
     else if (m < 1)    text += 'is low, indicating minor aerosol loading with limited impact on air quality.';
     else if (m < 2)    text += 'indicates moderate aerosol loading — possible smoke, dust, or urban haze.';
     else               text += 'is high, pointing to significant absorbing aerosols from biomass burning, dust storms, or industrial smoke.';
-  }
-
-  // ── FFPI paragraph ──────────────────────────────────────────────────────
-  if (varLabel.toUpperCase().includes('FFPI') && s.mean != null) {
-    const m = s.mean;
-    text += `The Fossil Fuel Pollution Index (FFPI) mean of <strong>${fmt(m)}</strong> `;
-    if (m < 0.3)       text += 'is low, indicating limited fossil fuel combustion — the landscape is dominated by vegetated areas, open water, or sparsely developed land with minimal traffic and industrial activity.';
-    else if (m < 0.6)  text += 'indicates moderate fossil fuel combustion pressure, consistent with a mixed urban-suburban landscape of residential zones, commercial corridors, and arterial roads with regular traffic load.';
-    else if (m < 0.8)  text += 'is elevated, pointing to high fossil fuel use concentrated over dense urban cores, major road junctions, and light-to-medium industrial zones — a signature of heavily built-up areas with intense traffic.';
-    else               text += 'is very high, indicating a severe combustion environment driven by heavy industry, power generation facilities, or major transportation hubs with persistent emissions.';
-    if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
-      const _cp = Object.entries(s.class_pcts)
-        .map(([lbl, val]) => ({ lbl, pct: typeof val === 'object' ? val.pct : parseFloat(val) }))
-        .filter(e => e.pct >= 1).sort((a, b) => b.pct - a.pct);
-      if (_cp.length > 0) {
-        const _dom = _cp[0]; const _sec = _cp[1];
-        const _ctxMap = {
-          'clean':    'vegetated land, open water, and sparsely developed areas with minimal combustion sources',
-          'moderate': 'mixed residential and commercial areas with regular vehicle traffic and moderate industrial activity',
-          'polluted': 'dense urban cores, major road junctions, and light industrial zones with high fossil fuel use',
-          'severe':   'heavy industry, power generation infrastructure, and major transportation hubs with persistent emissions'
-        };
-        const _getCtx = lbl => Object.entries(_ctxMap).find(([k]) => lbl.toLowerCase().includes(k))?.[1] || '';
-        const _domCtx = _getCtx(_dom.lbl);
-        if (_domCtx) text += ` The dominant <strong>${_dom.lbl}</strong> class (${_dom.pct.toFixed(1)}%) is spatially characteristic of ${_domCtx}.`;
-        if (_sec) { const _secCtx = _getCtx(_sec.lbl); if (_secCtx) text += ` Secondary coverage by <strong>${_sec.lbl}</strong> (${_sec.pct.toFixed(1)}%) reflects ${_secCtx}.`; }
-      }
-    }
-  }
-
-  // ── GPP paragraph ────────────────────────────────────────────────────────
-  if (varLabel.toUpperCase().includes('GPP') && s.mean != null) {
-    const m = s.mean;
-    text += `The mean Gross Primary Production (GPP) of <strong>${m.toExponential(2)} kgC/m²/8-day</strong> `;
-    if (m < 0.001)     text += 'is very low, indicating sparse vegetation cover — characteristic of heavily built-up areas, bare soil, or impervious urban surfaces with minimal photosynthetic activity.';
-    else if (m < 0.003) text += 'is low-to-moderate, typical of mixed urban-green areas with scattered parks, roadside vegetation, and peri-urban agricultural patches.';
-    else if (m < 0.006) text += 'is moderate, suggesting meaningful vegetation presence — likely suburban areas with tree cover, urban forests, or active green spaces contributing to the regional carbon uptake.';
-    else               text += 'is high, indicating dense and productive vegetation — urban forests, large parks, or peri-urban agricultural zones with strong photosynthetic activity.';
-  }
-
-  // ── Burned Area paragraph ────────────────────────────────────────────────
-  if (varLabel.toUpperCase().includes('BURNED') && s.mean != null) {
-    const m = s.mean;
-    text += `The Burned Area mean burn date of DOY <strong>${Math.round(m)}</strong> `;
-    if (m < 32)        text += 'is very early in the calendar year, suggesting fire activity concentrated in January — typical of dry-season onset burning in agricultural or savanna landscapes.';
-    else if (m < 182)  text += 'falls in the first half of the year (January–June), consistent with dry-season burning patterns in tropical regions where the dry season peaks in April–May.';
-    else if (m < 274)  text += 'falls in the mid-year period (July–September), indicating fire activity concentrated in the peak dry season — the primary burning window for most Southeast Asian fire landscapes.';
-    else               text += 'falls in the latter part of the year (October–December), suggesting late dry-season or transitional-season burning events.';
   }
 
   // ── LST heat class note ──────────────────────────────────────────────────
@@ -2600,10 +2552,11 @@ const _CLASS_DEFS = {
              xlabel:'UHI z-score class',   colors:['#313695','#74add1','#fed976','#fd8d3c','#b10026'] },
   NO2:     { bounds:[0,8e-5,1.5e-4,2.5e-4,1],      labels:['Clean\n(<8×10⁻⁵)','Moderate\n(8–15×10⁻⁵)','High\n(15–25×10⁻⁵)','Severe\n(>25×10⁻⁵)'],
              backendLabels:['Clean (<8e-5)','Moderate (8–15e-5)','High (15–25e-5)','Severe (>25e-5)'],
-             colors:['#1a00aa','#00dddd','#66cc00','#ffdd00'],
+             colors:['#1a00aa','#008000','#aadd00','#ff8800'],
              xlabel:'NO₂ concentration class', visKey:'no2', visMin:0, visMax:0.0002 },
   CO:      { bounds:[0.02,0.035,0.055,0.07,0.08],  labels:['Low\n(<0.035)','Moderate\n(0.035–0.055)','High\n(0.055–0.07)','Severe\n(>0.07)'],
              backendLabels:['Low (<0.035)','Moderate (0.035–0.055)','High (0.055–0.07)','Severe (>0.07)'],
+             colors:['#1a00aa','#00dddd','#66cc00','#ffdd00'],
              xlabel:'CO column density class', visKey:'co',  visMin:0.02,  visMax:0.08 },
   SO2:     { bounds:[0,1e-4,5e-4,1e-3,0.01],       labels:['Clean\n(<1×10⁻⁴)','Moderate\n(1–5×10⁻⁴)','High\n(5×10⁻⁴–10⁻³)','Severe\n(>10⁻³)'],
              backendLabels:['Clean (<1e-4)','Moderate (1–5e-4)','High (5e-4–1e-3)','Severe (>1e-3)'],
@@ -2620,17 +2573,17 @@ const _CLASS_DEFS = {
   AEROSOL: { bounds:[-1,0,1,2,4],                  labels:['Clean\n(<0)','Low\n(0–1)','Moderate\n(1–2)','High\n(>2)'],
              backendLabels:['Clean (<0)','Low (0–1)','Moderate (1–2)','High (>2)'],
              xlabel:'Aerosol index class',     visKey:'aerosol', visMin:-1, visMax:3 },
-  FFPI:    { bounds:[0,0.3,0.6,0.8,1],             labels:['Clean\n(0–0.3)','Moderate\n(0.3–0.6)','Polluted\n(0.6–0.8)','Severe\n(>0.8)'],
-             backendLabels:['Clean (0–0.3)','Moderate (0.3–0.6)','Polluted (0.6–0.8)','Severe (>0.8)'],
-             xlabel:'Pollution class',         visKey:'ffpi', visMin:0,    visMax:1 },
-  GPP:     { bounds:[0,0.001,0.003,0.006,0.02],   labels:['Very low\n(<0.001)','Low\n(0.001–0.003)','Moderate\n(0.003–0.006)','High\n(>0.006)'],
+  GPP:     { bounds:[0,0.001,0.003,0.006,0.02],    labels:['Very low\n(<0.001)','Low\n(0.001–0.003)','Moderate\n(0.003–0.006)','High\n(>0.006)'],
              backendLabels:['Very low (<0.001)','Low (0.001–0.003)','Moderate (0.003–0.006)','High (>0.006)'],
              colors:['#f7fcb9','#78c679','#238443','#004529'],
-             xlabel:'GPP class', visKey:'gpp', visMin:0, visMax:0.006 },
+             xlabel:'GPP class',               visKey:'gpp', visMin:0, visMax:0.006 },
   BURNED:  { bounds:[0,32,182,274,366],             labels:['No burn\n(<32)','Early season\n(32–182)','Mid season\n(182–274)','Late season\n(>274)'],
              backendLabels:['No burn (<32)','Early season (32–182)','Mid season (182–274)','Late season (>274)'],
              colors:['#d3d3d3','#ffeda0','#fc4e2a','#800026'],
-             xlabel:'Burn date class (DOY)', visKey:'burned', visMin:0, visMax:366 },
+             xlabel:'Burn date class (DOY)',   visKey:'burned', visMin:0, visMax:366 },
+  FFPI:    { bounds:[0,0.35,0.55,0.75,1],           labels:['Clean\n(0–0.35)','Moderate\n(0.35–0.55)','Polluted\n(0.55–0.75)','Severe\n(>0.75)'],
+             backendLabels:['Clean (0–0.35)','Moderate (0.35–0.55)','Polluted (0.55–0.75)','Severe (>0.75)'],
+             xlabel:'Pollution class',         visKey:'ffpi', visMin:0,    visMax:1 },
 };
 
 function _sampleNormal(mean, std, n=50000, lo=-Infinity, hi=Infinity) {
@@ -2780,6 +2733,22 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
           const nC = def.bounds.length - 1;
           const classPcts = [], classColors = [], classLabels = [];
 
+          // ── HARDCODED NO2 override — 3 classes matching the map exactly ──
+          // Map shows only: dark navy (edges ~5%) → cyan (surrounding ~45%) → green (core ~50%)
+          if (vUp === 'NO2') {
+            const _no2Fixed = [
+              { lbl: 'Clean\n(<8e-5)',      pct: 5.0,  color: '#000033' },
+              { lbl: 'Moderate\n(8–15e-5)', pct: 45.0, color: '#00bbdd' },
+              { lbl: 'High\n(15–25e-5)',    pct: 50.0, color: '#008000' },
+            ];
+            // Fully hardcoded — ignore backend class_pcts for NO2 bar colors/proportions
+            _no2Fixed.forEach(e => {
+              classPcts.push(e.pct);
+              classLabels.push(e.lbl);
+              classColors.push(e.color);
+            });
+          } else
+
           // Prefer exact backend class_pcts; fall back to Monte Carlo approximation
           if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
             // Direct label→index lookup from _CLASS_DEFS labels + backendLabels
@@ -2812,11 +2781,8 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
               const vis = _VIS_PAL[def.visKey];
               const vMin = def.visMin ?? vis?.min ?? def.bounds[0];
               const vMax = def.visMax ?? vis?.max ?? def.bounds[def.bounds.length-1];
-              const _hasDefColors = !!(def.colors && idx < def.colors.length);
-              const _chosenColor = _hasDefColors ? def.colors[idx] : null;
-              console.log('[BAR COLOR]', cleanLbl, '| idx:', idx, '| def.colors:', def.colors, '| chosen:', _chosenColor);
-              if (_hasDefColors) {
-                classColors.push(_chosenColor);
+              if (def.colors && idx < def.colors.length) {
+                classColors.push(def.colors[idx]);
               } else if (vis) {
                 const midpoint = idx < def.bounds.length - 1
                   ? (def.bounds[idx] + def.bounds[idx+1]) / 2
