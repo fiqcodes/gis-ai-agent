@@ -3942,7 +3942,7 @@ function openKnowledgeDetail(id) {
     : '';
 
   const keyMetricsHtml = `
-    <div class="concl-card expanded" data-chips-theme="${_theme.chips}" data-findings-theme="${_theme.findings}" style="margin-bottom:0;border-radius:var(--radius-sm)">
+    <div class="concl-card" data-chips-theme="${_theme.chips}" data-findings-theme="${_theme.findings}" style="margin-bottom:0;border-radius:var(--radius-sm)">
       <div class="concl-header" onclick="this.closest('.concl-card').classList.toggle('expanded')" style="cursor:pointer">
         <div class="concl-header-left">
           <div class="concl-header-title">Index Summary</div>
@@ -3968,77 +3968,66 @@ function openKnowledgeDetail(id) {
   document.getElementById('kpDetailContent').innerHTML = `
     <div class="kpd-page theme-${k.category}">
 
-      <!-- Hero -->
-      <div class="kpd-hero-full">
-        <div class="kpd-hero-left">
+      <!-- LEFT COLUMN: hero + formula -->
+      <div class="kpd-left-col">
+
+        <div class="kpd-hero-full">
           <div class="kpd-big-name">${k.name}</div>
           <div class="kpd-big-full">${k.full}</div>
           <div class="kpd-big-def">${k.definition}</div>
         </div>
-        <div class="kpd-hero-right">
-          <span class="kp-tag kp-tag-${k.category} kp-tag-lg">${k.tag}</span>
-          <div class="kpd-command-box">
-            <div class="kpd-command-label">Quick Command</div>
-            <code class="kpd-command-code">${k.command}</code>
-          </div>
-          <div class="kpd-source-box">
-            <div class="kpd-command-label">Data Source</div>
-            <div class="kpd-source-text">${k.datasource}</div>
-            <div class="kpd-source-res">${k.scale}</div>
+
+        <div class="kpd-formula-paper-section">
+          <div class="kpd-section-title">Formula</div>
+          <div class="kpd-formula-paper">
+            <div class="kpd-formula-paper-inner">
+              <div class="kpd-formula-render">${ex.latex || k.formula}</div>
+              ${ex.variables ? `
+              <div class="kpd-where-title">Where:</div>
+              <div class="kpd-vars-list">
+                ${ex.variables.map(v => `
+                  <div class="kpd-var-row">
+                    <span class="kpd-var-sym-plain">${v.sym}</span>
+                    <span class="kpd-var-eq">=</span>
+                    <span class="kpd-var-desc">${v.desc}</span>
+                  </div>`).join('')}
+              </div>` : ''}
+            </div>
+            <div class="kpd-formula-bands-label">Band Implementation (Landsat 8):</div>
+            <div class="kpd-formula-bands-box">${k.formula_bands}</div>
           </div>
         </div>
+
       </div>
 
-      <div class="kpd-formula-paper-section">
-        <div class="kpd-section-title">Formula</div>
-        <div class="kpd-formula-paper">
-          <div class="kpd-formula-paper-inner">
-            <div class="kpd-formula-render">${ex.latex || k.formula}</div>
-            ${ex.variables ? `
-            <div class="kpd-where-title">Where:</div>
-            <div class="kpd-vars-list">
-              ${ex.variables.map(v => `
-                <div class="kpd-var-row">
-                  <span class="kpd-var-sym-plain">${v.sym}</span>
-                  <span class="kpd-var-eq">=</span>
-                  <span class="kpd-var-desc">${v.desc}</span>
-                </div>`).join('')}
-            </div>` : ''}
-          </div>
-          <div class="kpd-formula-bands-label">Band Implementation (Landsat 8):</div>
-          <div class="kpd-formula-bands-box">${k.formula_bands}</div>
+      <!-- RIGHT COLUMN: banner + floating cards -->
+      <div class="kpd-right-col">
+
+        <div class="kpd-right-type-banner">${k.tag}</div>
+
+        <!-- Data source card -->
+        <div class="kpd-right-card">
+          <div class="kpd-command-label">Data Source</div>
+          <div class="kpd-source-text">${k.datasource}</div>
+          <div class="kpd-source-res">${k.scale}</div>
         </div>
-      </div>
 
-      ${keyMetricsHtml}
-
-      ${findingsHtml}
-      ${vizHtml}
-
-      <div class="kpd-full-block">
-        <div class="kpd-section-title">Use Cases &amp; Applications</div>
-        <div class="kpd-usecases-grid">
-          ${k.use_cases.split(', ').map(u => `<div class="kpd-usecase-item">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            ${u.trim()}
-          </div>`).join('')}
+        <!-- Index summary card -->
+        <div class="kpd-right-card kpd-index-card">
+          ${keyMetricsHtml}
         </div>
-      </div>
 
-      <div class="kpd-two-col">
-        <div class="kpd-block">
-          <div class="kpd-section-title">Satellite Platform</div>
-          <div class="kpd-platform-badge">${k.datasource.split('(')[0].trim()}</div>
-          <div class="kpd-source-res" style="margin-top:8px">${k.scale}</div>
-        </div>
-        <div class="kpd-block">
-          <div class="kpd-section-title">Value Range</div>
-          <div class="kpd-range-display">
-            <div class="kpd-range-val">${k.range.split(' to ')[0] || '—'}</div>
-            <div class="kpd-range-arrow">→</div>
-            <div class="kpd-range-val kpd-range-high">${k.range.split(' to ')[1] || '—'}</div>
+        <!-- Use cases card -->
+        <div class="kpd-right-card">
+          <div class="kpd-section-title">Use Cases &amp; Applications</div>
+          <div class="kpd-usecases-grid">
+            ${k.use_cases.split(', ').map(u => `<div class="kpd-usecase-item">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              ${u.trim()}
+            </div>`).join('')}
           </div>
         </div>
+
       </div>
 
     </div>
@@ -4087,6 +4076,20 @@ function buildKnowledgeViz(ex) {
   }
   return '';
 }
+
+function toggleSummaryPopup(trigger) {
+  const isOpen = trigger.classList.contains('open');
+  // Close any other open popups first
+  document.querySelectorAll('.kp-summary-trigger.open').forEach(t => t.classList.remove('open'));
+  if (!isOpen) trigger.classList.add('open');
+}
+
+// Close summary popup when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.kp-summary-trigger')) {
+    document.querySelectorAll('.kp-summary-trigger.open').forEach(t => t.classList.remove('open'));
+  }
+});
 
 function filterKnowledge(query) {
   const q = query.toLowerCase().trim();
