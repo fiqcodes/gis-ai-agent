@@ -4028,6 +4028,7 @@ function openKnowledgeDetail(id) {
                 ${u.trim()}
               </div>`).join('')}
             </div>
+            <div style="height:32px;flex-shrink:0"></div>
           </div>
 
         </div>

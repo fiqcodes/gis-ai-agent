@@ -2049,7 +2049,7 @@ html, body {
   flex-shrink: 0;
 }
 .kpd-right-card:first-child { border-top: none; }
-.kpd-right-card:last-child { border-bottom: none; flex: 1; min-height: 0; padding-bottom: 24px; }
+.kpd-right-card:last-child { border-bottom: none; flex: 1; min-height: 0; }
 
 /* Index card — just natural height, no flex grow */
 .kpd-right-card.kpd-index-card {
