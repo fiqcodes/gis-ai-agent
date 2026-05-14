@@ -1983,6 +1983,10 @@ html, body {
   padding: 0;
 }
 
+#kpDetailContent {
+  height: 100%;
+}
+
 /* ── Detail page layout — two-column grid ──────────────── */
 .kpd-page {
   height: 100%;
@@ -2003,12 +2007,22 @@ html, body {
 
 /* RIGHT COLUMN */
 .kpd-right-col {
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   background: var(--bg2);
   border-left: 1px solid var(--border);
   height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Inner scroll wrapper that fills height */
+.kpd-right-col-inner {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* Type banner — solid filled bar flush to top */
@@ -2035,7 +2049,7 @@ html, body {
   flex-shrink: 0;
 }
 .kpd-right-card:first-child { border-top: none; }
-.kpd-right-card:last-child { border-bottom: none; flex: 1; }
+.kpd-right-card:last-child { border-bottom: none; flex: 1; min-height: 0; padding-bottom: 24px; }
 
 /* Index card — just natural height, no flex grow */
 .kpd-right-card.kpd-index-card {

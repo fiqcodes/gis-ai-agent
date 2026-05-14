@@ -4005,27 +4005,31 @@ function openKnowledgeDetail(id) {
 
         <div class="kpd-right-type-banner">${k.tag}</div>
 
-        <!-- Data source card -->
-        <div class="kpd-right-card">
-          <div class="kpd-command-label">Data Source</div>
-          <div class="kpd-source-text">${k.datasource}</div>
-          <div class="kpd-source-res">${k.scale}</div>
-        </div>
+        <div class="kpd-right-col-inner">
 
-        <!-- Index summary card -->
-        <div class="kpd-right-card kpd-index-card">
-          ${keyMetricsHtml}
-        </div>
-
-        <!-- Use cases card -->
-        <div class="kpd-right-card">
-          <div class="kpd-section-title">Use Cases &amp; Applications</div>
-          <div class="kpd-usecases-grid">
-            ${k.use_cases.split(', ').map(u => `<div class="kpd-usecase-item">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              ${u.trim()}
-            </div>`).join('')}
+          <!-- Data source card -->
+          <div class="kpd-right-card">
+            <div class="kpd-command-label">Data Source</div>
+            <div class="kpd-source-text">${k.datasource}</div>
+            <div class="kpd-source-res">${k.scale}</div>
           </div>
+
+          <!-- Index summary card -->
+          <div class="kpd-right-card kpd-index-card">
+            ${keyMetricsHtml}
+          </div>
+
+          <!-- Use cases card -->
+          <div class="kpd-right-card">
+            <div class="kpd-section-title">Use Cases &amp; Applications</div>
+            <div class="kpd-usecases-grid">
+              ${k.use_cases.split(', ').map(u => `<div class="kpd-usecase-item">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                ${u.trim()}
+              </div>`).join('')}
+            </div>
+          </div>
+
         </div>
 
       </div>
