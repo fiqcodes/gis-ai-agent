@@ -4257,7 +4257,16 @@ function openKnowledgeDetail(id) {
       </div>
     </div>`;
 
-  // ── Assemble the full page ──────────────────────────────
+  // ── Insight box colours per category (mirrors concl-finding-item themes) ──
+  const _insightStyles = {
+    vegetation:  { bg: 'rgba(48,209,88,0.07)',    border: 'rgba(48,209,88,0.22)',    label: 'rgba(48,209,88,0.75)',   text: 'rgba(140,220,160,0.92)',  leftBar: '#4cd964' },
+    water:       { bg: 'rgba(10,132,255,0.08)',   border: 'rgba(10,132,255,0.22)',   label: 'rgba(77,163,255,0.75)',  text: 'rgba(147,197,255,0.92)', leftBar: '#6bb8ff' },
+    urban:       { bg: 'rgba(245,166,35,0.08)',   border: 'rgba(245,166,35,0.22)',   label: 'rgba(245,166,35,0.75)', text: 'rgba(229,190,120,0.92)', leftBar: '#f5c842' },
+    thermal:     { bg: 'rgba(255,59,48,0.07)',    border: 'rgba(255,59,48,0.22)',    label: 'rgba(255,100,90,0.75)', text: 'rgba(255,170,160,0.92)', leftBar: '#ff7b72' },
+    atmospheric: { bg: 'rgba(245,166,35,0.08)',   border: 'rgba(245,166,35,0.22)',   label: 'rgba(245,166,35,0.75)', text: 'rgba(229,190,120,0.92)', leftBar: '#f5c842' },
+    landcover:   { bg: 'rgba(48,209,88,0.06)',    border: 'rgba(100,220,130,0.22)',  label: 'rgba(100,220,130,0.7)', text: 'rgba(160,220,170,0.92)', leftBar: '#00d4ff' },
+  };
+  const _ins = _insightStyles[k.category] || _insightStyles.vegetation;
   document.getElementById('kpDetailContent').innerHTML = `
     <div class="kpd-page theme-${k.category}">
 
@@ -4274,12 +4283,12 @@ function openKnowledgeDetail(id) {
           <div class="kpd-big-full">${k.full}</div>
           <p class="kpd-doc-body">${k.definition}</p>
           ${k.insight ? `
-          <div class="kpd-insight-block" style="--insight-accent:${accent}">
-            <div class="kpd-insight-header">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <div style="background:${_ins.bg};border:1px solid ${_ins.border};border-left:3px solid ${_ins.leftBar};border-radius:var(--radius-sm);padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;align-items:center;gap:7px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.13em;color:${_ins.label}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               Research Insight
             </div>
-            <p class="kpd-insight-body">${k.insight}</p>
+            <p style="font-size:13px;color:${_ins.text};line-height:1.8;margin:0">${k.insight}</p>
           </div>` : ''}
         </div>
 
