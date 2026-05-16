@@ -1992,7 +1992,7 @@ html, body {
   height: 100%;
   padding: 0;
   display: grid;
-  grid-template-columns: 1fr 400px;
+  grid-template-columns: 1fr minmax(400px, 400px);
   overflow: hidden;
 }
 
@@ -2014,6 +2014,9 @@ html, body {
   height: 100%;
   overflow: hidden;
   position: relative;
+  width: 400px;
+  min-width: 400px;
+  max-width: 400px;
 }
 
 /* Inner scroll wrapper that fills height */
@@ -2054,7 +2057,50 @@ html, body {
 /* Index card — just natural height, no flex grow */
 .kpd-right-card.kpd-index-card {
   flex-shrink: 0;
-  overflow: visible;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  align-items: stretch;
+}
+
+/* concl-card inside kpd-index-card — locked width, never grows */
+.kpd-index-card .concl-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  overflow: hidden;
+  display: block;
+}
+.kpd-index-card .concl-header {
+  width: 100%;
+  box-sizing: border-box;
+}
+.kpd-index-card .concl-header:hover {
+  background: rgba(255,255,255,0.03);
+  width: 100%;
+}
+.kpd-index-card .concl-body {
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.kpd-index-card .concl-chips-row {
+  flex-wrap: wrap;
+  width: 100%;
+  box-sizing: border-box;
+}
+.kpd-index-card .concl-chip {
+  min-width: 0;
+  flex: 1 1 calc(50% - 4px);
+  box-sizing: border-box;
+}
+.kpd-index-card .concl-findings-list,
+.kpd-index-card .concl-finding-item {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Index Summary — closed trigger row + floating popup */
@@ -2103,6 +2149,8 @@ html, body {
   margin: 0;
   border-radius: 0;
   box-shadow: none;
+  width: 100%;
+  box-sizing: border-box;
 }
 .kpd-right-card .concl-header {
   padding: 0 0 10px;
