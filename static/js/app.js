@@ -1448,6 +1448,38 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
           } else if (s.p90 != null) {
             findingItems += `<div class="concl-finding-item">P90 concentration: <strong class="fv-amber">${digFmt(s.p90)} ${unit}</strong> — upper-bound exposure in the region</div>`;
           }
+        } else if (vUp === 'FFPI' && s.mean != null) {
+          // ── FFPI chips & findings ─────────────────────────────────────────────
+          let ffpiClass, ffpiColor;
+          const fm = s.mean;
+          if      (fm < 0.35) { ffpiClass = 'Clean';    ffpiColor = 'cv-green';  }
+          else if (fm < 0.55) { ffpiClass = 'Moderate'; ffpiColor = 'cv-cyan';   }
+          else if (fm < 0.75) { ffpiClass = 'Polluted'; ffpiColor = 'cv-amber';  }
+          else                { ffpiClass = 'Severe';   ffpiColor = 'cv-pink';   }
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Mean FFPI</div><div class="concl-chip-value ${ffpiColor}">${fm.toFixed(4)}</div></div>`;
+          chips += `<div class="concl-chip"><div class="concl-chip-label">Pollution Level</div><div class="concl-chip-value ${ffpiColor}">${ffpiClass}</div></div>`;
+          if (s.p10 != null) chips += `<div class="concl-chip"><div class="concl-chip-label">P10 (Clean)</div><div class="concl-chip-value cv-green">${s.p10.toFixed(4)}</div></div>`;
+          if (s.p90 != null) chips += `<div class="concl-chip"><div class="concl-chip-label">P90 (Hotspot)</div><div class="concl-chip-value cv-pink">${s.p90.toFixed(4)}</div></div>`;
+          findingItems += `<div class="concl-finding-item">Overall pollution classified as <strong class="f${ffpiColor.slice(1)}">${ffpiClass}</strong> — composite of NO₂, CO, and SO₂ columns</div>`;
+          if      (fm < 0.35) findingItems += `<div class="concl-finding-item">Low fossil fuel combustion intensity — consistent with vegetated, coastal, or low-density land use</div>`;
+          else if (fm < 0.55) findingItems += `<div class="concl-finding-item">Moderate combustion activity from mixed residential, commercial, and vehicle traffic corridors</div>`;
+          else if (fm < 0.75) findingItems += `<div class="concl-finding-item">Elevated combustion load from dense urban cores, major road junctions, and light industrial zones</div>`;
+          else                findingItems += `<div class="concl-finding-item">Severe fossil fuel signal — heavy industry, power generation, or major transport hubs are dominant sources</div>`;
+          if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
+            const _fpSorted = Object.entries(s.class_pcts)
+              .map(([lbl, val]) => ({ lbl, pct: typeof val === 'object' ? val.pct : parseFloat(val), ha: typeof val === 'object' ? val.ha : null }))
+              .filter(e => e.pct >= 0.5).reverse();
+            for (const d of _fpSorted) {
+              const col   = d.lbl.toLowerCase().includes('clean') ? 'fv-green' : d.lbl.toLowerCase().includes('moderate') ? 'fv-amber' : 'fv-pink';
+              const haStr = d.ha != null ? ` (~${Math.round(d.ha).toLocaleString()} ha)` : '';
+              const ctx   = _getAtmoClassDesc('FFPI', d.lbl);
+              const short = ctx ? ' — ' + ctx.split(/[,:]|\s—/)[0].trim() : '';
+              findingItems += `<div class="concl-finding-item"><strong class="${col}">${d.lbl}</strong>: ${d.pct.toFixed(1)}%${haStr}${short}</div>`;
+            }
+          } else {
+            if (s.p90 != null) findingItems += `<div class="concl-finding-item">P90 hotspot value: <strong class="fv-pink">${s.p90.toFixed(4)}</strong> — upper-bound combustion intensity in the region</div>`;
+            if (s.std  != null) findingItems += `<div class="concl-finding-item">Std deviation of <strong class="fv-cyan">${s.std.toFixed(4)}</strong> indicates ${s.std > 0.15 ? 'high spatial variability — clean and polluted zones coexist' : 'relatively uniform combustion intensity across the region'}</div>`;
+          }
         } else if (s.mean != null) {
           // ── Generic fallback ──────────────────────────────────────────────────
           chips += `<div class="concl-chip"><div class="concl-chip-label">Mean ${vUp}</div><div class="concl-chip-value cv-cyan">${s.mean.toFixed(4)}</div></div>`;
@@ -1944,6 +1976,36 @@ function buildDistClassExplanation(varLabel, s) {
     else if (m < 1)    text += 'is low, indicating minor aerosol loading with limited impact on air quality.';
     else if (m < 2)    text += 'indicates moderate aerosol loading — possible smoke, dust, or urban haze.';
     else               text += 'is high, pointing to significant absorbing aerosols from biomass burning, dust storms, or industrial smoke.';
+  }
+
+  if (varLabel.toUpperCase().includes('FFPI') && s.mean != null) {
+    const m = s.mean;
+    text += `The FFPI composite score of <strong>${m.toFixed(4)}</strong> `;
+    if      (m < 0.35) text += 'indicates low fossil fuel combustion intensity across the region — consistent with predominantly vegetated land, open water, or sparsely developed areas with limited traffic and industrial activity.';
+    else if (m < 0.55) text += 'reflects moderate combustion activity, characteristic of mixed residential and commercial urban areas with regular vehicle traffic and distributed industrial presence.';
+    else if (m < 0.75) text += 'signals elevated fossil fuel use concentrated in dense urban cores, major arterial roads, and light industrial zones where NO₂, CO, and SO₂ columns converge.';
+    else               text += 'points to severe multi-pollutant loading — heavy industry, power generation infrastructure, or major transportation hubs are the dominant combustion sources driving all three component indices (NO₂, CO, SO₂) simultaneously.';
+    if (s.p90 != null && s.p90 > m * 1.3) {
+      text += ` The P90 value of <strong>${s.p90.toFixed(4)}</strong> confirms significant pollution hotspots — areas where all three fossil fuel indicators peak together, likely over industrial corridors or interchange nodes.`;
+    }
+    if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
+      const _cp = Object.entries(s.class_pcts)
+        .map(([lbl, val]) => ({ lbl, pct: typeof val === 'object' ? val.pct : parseFloat(val) }))
+        .filter(e => e.pct >= 1).sort((a, b) => b.pct - a.pct);
+      if (_cp.length > 0) {
+        const dom = _cp[0]; const sec = _cp[1];
+        const _fpCtx = {
+          'clean':    'vegetated areas, coastal zones, and low-density residential neighbourhoods with minimal combustion sources',
+          'moderate': 'mixed urban land use — commercial corridors, medium-density residential blocks, and arterial roads with regular vehicle density',
+          'polluted': 'dense urban cores, major road junctions, bus terminals, and light industrial clusters with persistent NOx and CO from vehicle and industrial emissions',
+          'severe':   'heavy industry, power plants, large-scale manufacturing facilities, or major transport interchange nodes where all three pollutant columns peak simultaneously'
+        };
+        const _getCtx = lbl => Object.entries(_fpCtx).find(([k]) => lbl.toLowerCase().includes(k))?.[1] || '';
+        const domCtx = _getCtx(dom.lbl);
+        if (domCtx) text += ` The dominant <strong>${dom.lbl}</strong> class (${dom.pct.toFixed(1)}%) is spatially characteristic of ${domCtx}.`;
+        if (sec) { const secCtx = _getCtx(sec.lbl); if (secCtx) text += ` Secondary coverage by <strong>${sec.lbl}</strong> (${sec.pct.toFixed(1)}%) reflects ${secCtx}.`; }
+      }
+    }
   }
 
   // ── LST heat class note ──────────────────────────────────────────────────

@@ -1278,6 +1278,8 @@ SYSTEM_PROMPT = (
     "NEVER add ch4, aerosol, so2, or anything else not mentioned.\n\n"
     "CRITICAL VARIABLE DEFINITIONS — these are GEE satellite indices, NOT organisations or programs:\n"
     "  FFPI = Fossil Fuel Pollution Index (satellite composite of NO2+CO+SO2). "
+    "         NEVER interpret FFPI as a company, organisation, institution, or acronym for anything else. "
+    "         It is ONLY a satellite pollution index. "
     "         If user says 'FFPI', 'pollution index', or 'fossil fuel', set variables=['ffpi'].\n"
     "  NDVI = vegetation index. LST = land surface temperature. NO2 = nitrogen dioxide. "
     "  CO = carbon monoxide. SO2 = sulfur dioxide. LULC = land cover classification.\n\n"
@@ -1418,6 +1420,9 @@ def call_ollama(user_message, chat_history):
         _geo_prompt = (
             'Extract ONLY the region name and date range from this message. '
             'Do NOT interpret or change the variables field. '
+            'IMPORTANT: Words like FFPI, NDVI, NO2, CO, SO2, CH4, LST, LULC, EVI, NDWI are satellite index names — '
+            'they are NOT place names, company names, or organisations. Ignore them when extracting the region. '
+            'Example: "FFPI Jakarta in 2025" → region="Jakarta", start_date="2025-01-01", end_date="2025-12-31". '
             'Respond with ONLY this JSON:\n'
             '{"region": "place name or null", "start_date": "YYYY-MM-DD or null", "end_date": "YYYY-MM-DD or null"}'
         )
