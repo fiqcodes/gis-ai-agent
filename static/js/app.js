@@ -4084,7 +4084,7 @@ function openKnowledgeDetail(id) {
   const _bandsUsed = _bandsMatch ? [...new Set(_bandsMatch)].join(', ') : k.tag;
 
   // Theme chip colours per category
-  const _themeMap = { vegetation:{chips:'green',findings:'blue'}, water:{chips:'blue',findings:'green'}, urban:{chips:'red',findings:'amber'}, thermal:{chips:'amber',findings:'red'}, atmospheric:{chips:'blue',findings:'amber'}, landcover:{chips:'green',findings:'blue'} };
+  const _themeMap = { vegetation:{chips:'blue',findings:'green'}, water:{chips:'green',findings:'blue'}, urban:{chips:'red',findings:'amber'}, thermal:{chips:'amber',findings:'red'}, atmospheric:{chips:'blue',findings:'amber'}, landcover:{chips:'green',findings:'green'} };
   const _theme = _themeMap[k.category] || { chips:'blue', findings:'green' };
   const _ccMap = { vegetation:['cv-green','cv-cyan','cv-blue','cv-purple'], water:['cv-cyan','cv-blue','cv-green','cv-purple'], urban:['cv-pink','cv-amber','cv-cyan','cv-purple'], thermal:['cv-amber','cv-pink','cv-cyan','cv-blue'], atmospheric:['cv-purple','cv-cyan','cv-blue','cv-amber'], landcover:['cv-cyan','cv-green','cv-blue','cv-purple'] };
   const _cc = _ccMap[k.category] || ['cv-cyan','cv-green','cv-blue','cv-purple'];
@@ -4259,12 +4259,12 @@ function openKnowledgeDetail(id) {
 
   // ── Insight box colours per category (mirrors concl-finding-item themes) ──
   const _insightStyles = {
-    vegetation:  { bg: 'rgba(48,209,88,0.07)',    border: 'rgba(48,209,88,0.22)',    label: 'rgba(48,209,88,0.75)',   text: 'rgba(140,220,160,0.92)',  leftBar: '#4cd964' },
-    water:       { bg: 'rgba(10,132,255,0.08)',   border: 'rgba(10,132,255,0.22)',   label: 'rgba(77,163,255,0.75)',  text: 'rgba(147,197,255,0.92)', leftBar: '#6bb8ff' },
+    vegetation:  { bg: 'rgba(10,132,255,0.08)',   border: 'rgba(10,132,255,0.22)',   label: 'rgba(77,163,255,0.75)',  text: 'rgba(147,197,255,0.92)', leftBar: '#6bb8ff' },
+    water:       { bg: 'rgba(48,209,88,0.07)',    border: 'rgba(48,209,88,0.22)',    label: 'rgba(48,209,88,0.75)',   text: 'rgba(140,220,160,0.92)', leftBar: '#4cd964' },
     urban:       { bg: 'rgba(245,166,35,0.08)',   border: 'rgba(245,166,35,0.22)',   label: 'rgba(245,166,35,0.75)', text: 'rgba(229,190,120,0.92)', leftBar: '#f5c842' },
     thermal:     { bg: 'rgba(255,59,48,0.07)',    border: 'rgba(255,59,48,0.22)',    label: 'rgba(255,100,90,0.75)', text: 'rgba(255,170,160,0.92)', leftBar: '#ff7b72' },
     atmospheric: { bg: 'rgba(245,166,35,0.08)',   border: 'rgba(245,166,35,0.22)',   label: 'rgba(245,166,35,0.75)', text: 'rgba(229,190,120,0.92)', leftBar: '#f5c842' },
-    landcover:   { bg: 'rgba(48,209,88,0.06)',    border: 'rgba(100,220,130,0.22)',  label: 'rgba(100,220,130,0.7)', text: 'rgba(160,220,170,0.92)', leftBar: '#00d4ff' },
+    landcover:   { bg: 'rgba(48,209,88,0.06)',    border: 'rgba(100,220,130,0.22)',  label: 'rgba(100,220,130,0.7)', text: 'rgba(160,220,170,0.92)', leftBar: '#4cd964' },
   };
   const _ins = _insightStyles[k.category] || _insightStyles.vegetation;
   document.getElementById('kpDetailContent').innerHTML = `
@@ -4330,8 +4330,13 @@ function openKnowledgeDetail(id) {
 
       </div>
 
+      <!-- RIGHT COLUMN toggle tab — sits on the left edge, outside the col -->
+      <button class="kpd-right-tab-btn" id="kpdRightTabBtn" onclick="kpdToggleRightCol()" title="Toggle panel">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+
       <!-- RIGHT COLUMN: data source + summary + use cases -->
-      <div class="kpd-right-col">
+      <div class="kpd-right-col" id="kpdRightCol">
 
         <div class="kpd-right-type-banner">${k.tag}</div>
 
@@ -4405,6 +4410,18 @@ function _kpdScrollSpy() {
   items.forEach(it => {
     it.classList.toggle('active', it.getAttribute('onclick') && it.getAttribute('onclick').includes(current));
   });
+}
+
+function kpdToggleRightCol() {
+  const page = document.querySelector('.kpd-page');
+  const col  = document.getElementById('kpdRightCol');
+  const tab  = document.getElementById('kpdRightTabBtn');
+  if (!page || !col) return;
+  const isCollapsed = col.classList.toggle('kpd-right-col--collapsed');
+  page.classList.toggle('kpd-page--right-collapsed', isCollapsed);
+  // Flip chevron: → when collapsed (open), ← when expanded (close)
+  const svg = tab?.querySelector('polyline');
+  if (svg) svg.setAttribute('points', isCollapsed ? '9 18 15 12 9 6' : '15 18 9 12 15 6');
 }
 
 function kpdToggleIndexSummary(headerEl) {

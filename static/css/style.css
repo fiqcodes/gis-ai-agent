@@ -1994,6 +1994,7 @@ html, body {
   display: grid;
   grid-template-columns: 1fr minmax(400px, 400px);
   overflow: hidden;
+  position: relative;
 }
 
 /* LEFT COLUMN */
@@ -2036,6 +2037,50 @@ html, body {
   text-transform: uppercase;
   letter-spacing: 0.18em;
   flex-shrink: 0;
+}
+
+/* Side-tab toggle button — floats on the LEFT edge of the right col */
+.kpd-right-tab-btn {
+  position: absolute;
+  /* vertically centered in the page, accounting for any top chrome */
+  top: 50%;
+  transform: translateY(-50%);
+  /* sits just to the left of the right col — we use right-col width via right offset */
+  right: 400px; /* matches kpd-right-col width */
+  width: 20px;
+  height: 48px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: background 0.15s, color 0.15s, right 0.2s;
+}
+.kpd-right-tab-btn:hover { background: var(--bg3); color: var(--text); }
+
+/* Collapsed state — right col fully hidden */
+.kpd-right-col--collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden;
+  border-left: none;
+}
+
+/* Expand left col to fill when right is collapsed */
+.kpd-page--right-collapsed {
+  grid-template-columns: 1fr 0px;
+}
+
+/* Move tab button to the far right edge when panel is collapsed */
+.kpd-page--right-collapsed .kpd-right-tab-btn {
+  right: 0;
+  border-radius: 6px 0 0 6px;
 }
 
 /* Cards — full width, no side margins, divider lines only */
