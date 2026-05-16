@@ -4084,7 +4084,7 @@ function openKnowledgeDetail(id) {
   const _bandsUsed = _bandsMatch ? [...new Set(_bandsMatch)].join(', ') : k.tag;
 
   // Theme chip colours per category
-  const _themeMap = { vegetation:{chips:'blue',findings:'green'}, water:{chips:'green',findings:'blue'}, urban:{chips:'red',findings:'amber'}, thermal:{chips:'amber',findings:'red'}, atmospheric:{chips:'blue',findings:'amber'}, landcover:{chips:'green',findings:'green'} };
+  const _themeMap = { vegetation:{chips:'blue',findings:'green'}, water:{chips:'green',findings:'blue'}, urban:{chips:'red',findings:'amber'}, thermal:{chips:'amber',findings:'red'}, atmospheric:{chips:'blue',findings:'amber'}, landcover:{chips:'amber',findings:'green'} };
   const _theme = _themeMap[k.category] || { chips:'blue', findings:'green' };
   const _ccMap = { vegetation:['cv-green','cv-cyan','cv-blue','cv-purple'], water:['cv-cyan','cv-blue','cv-green','cv-purple'], urban:['cv-pink','cv-amber','cv-cyan','cv-purple'], thermal:['cv-amber','cv-pink','cv-cyan','cv-blue'], atmospheric:['cv-purple','cv-cyan','cv-blue','cv-amber'], landcover:['cv-cyan','cv-green','cv-blue','cv-purple'] };
   const _cc = _ccMap[k.category] || ['cv-cyan','cv-green','cv-blue','cv-purple'];
@@ -4098,10 +4098,10 @@ function openKnowledgeDetail(id) {
   let _chipsHtml;
   if (k.tag === 'Classification') {
     _chipsHtml = `
-    <div class="concl-chip"><div class="concl-chip-label">Output Type</div><div class="concl-chip-value ${_cc[0]}" style="font-size:12px">Categorical</div></div>
-    <div class="concl-chip"><div class="concl-chip-label">Classes</div><div class="concl-chip-value ${_cc[1]}" style="font-size:12px">6 classes</div></div>
-    <div class="concl-chip"><div class="concl-chip-label">Resolution</div><div class="concl-chip-value ${_cc[2]}" style="font-size:13px;font-family:var(--font-body)">${_resShort}</div></div>
-    <div class="concl-chip"><div class="concl-chip-label">Algorithm</div><div class="concl-chip-value ${_cc[3]}" style="font-size:11px;font-family:var(--font-body);line-height:1.4">Random Forest</div></div>`;
+    <div class="concl-chip" style="background:rgba(245,166,35,0.12);border-color:rgba(245,166,35,0.28);color:#f5a623"><div class="concl-chip-label" style="color:rgba(245,166,35,0.6)">Output Type</div><div class="concl-chip-value" style="font-size:12px">Categorical</div></div>
+    <div class="concl-chip" style="background:rgba(245,166,35,0.12);border-color:rgba(245,166,35,0.28);color:#f5a623"><div class="concl-chip-label" style="color:rgba(245,166,35,0.6)">Classes</div><div class="concl-chip-value" style="font-size:12px">6 classes</div></div>
+    <div class="concl-chip" style="background:rgba(245,166,35,0.12);border-color:rgba(245,166,35,0.28);color:#f5a623"><div class="concl-chip-label" style="color:rgba(245,166,35,0.6)">Resolution</div><div class="concl-chip-value" style="font-size:13px;font-family:var(--font-body)">${_resShort}</div></div>
+    <div class="concl-chip" style="background:rgba(245,166,35,0.12);border-color:rgba(245,166,35,0.28);color:#f5a623"><div class="concl-chip-label" style="color:rgba(245,166,35,0.6)">Algorithm</div><div class="concl-chip-value" style="font-size:11px;font-family:var(--font-body);line-height:1.4">Random Forest</div></div>`;
   } else {
     _chipsHtml = `
     <div class="concl-chip"><div class="concl-chip-label">Min Value</div><div class="concl-chip-value ${_cc[0]}">${rangeMin}</div></div>
@@ -4155,7 +4155,6 @@ function openKnowledgeDetail(id) {
     <div class="kpd-otp">
       <div class="kpd-otp-label">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>
-        On this page
       </div>
       <div class="kpd-otp-list">
         ${onThisPageItems.map((it,i) => `
@@ -4268,7 +4267,7 @@ function openKnowledgeDetail(id) {
   };
   const _ins = _insightStyles[k.category] || _insightStyles.vegetation;
   document.getElementById('kpDetailContent').innerHTML = `
-    <div class="kpd-page theme-${k.category}">
+    <div class="kpd-page theme-${k.category} kpd-page--right-collapsed">
 
       <!-- LEFT COLUMN: scrollable doc -->
       <div class="kpd-left-col">
@@ -4278,7 +4277,6 @@ function openKnowledgeDetail(id) {
 
         <!-- SECTION 1: Overview -->
         <div class="kpd-doc-section" id="kpd-sec-overview">
-          <div class="kpd-doc-section-label" style="color:${accent}">Introduction</div>
           <div class="kpd-big-name">${k.name}</div>
           <div class="kpd-big-full">${k.full}</div>
           <p class="kpd-doc-body">${k.definition}</p>
@@ -4332,11 +4330,11 @@ function openKnowledgeDetail(id) {
 
       <!-- RIGHT COLUMN toggle tab — sits on the left edge, outside the col -->
       <button class="kpd-right-tab-btn" id="kpdRightTabBtn" onclick="kpdToggleRightCol()" title="Toggle panel">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
 
-      <!-- RIGHT COLUMN: data source + summary + use cases -->
-      <div class="kpd-right-col" id="kpdRightCol">
+      <!-- RIGHT COLUMN: data source + summary + use cases — collapsed by default -->
+      <div class="kpd-right-col kpd-right-col--collapsed" id="kpdRightCol">
 
         <div class="kpd-right-type-banner">${k.tag}</div>
 
@@ -4419,7 +4417,6 @@ function kpdToggleRightCol() {
   if (!page || !col) return;
   const isCollapsed = col.classList.toggle('kpd-right-col--collapsed');
   page.classList.toggle('kpd-page--right-collapsed', isCollapsed);
-  // Flip chevron: → when collapsed (open), ← when expanded (close)
   const svg = tab?.querySelector('polyline');
   if (svg) svg.setAttribute('points', isCollapsed ? '9 18 15 12 9 6' : '15 18 9 12 15 6');
 }
