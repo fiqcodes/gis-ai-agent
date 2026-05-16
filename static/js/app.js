@@ -3967,28 +3967,25 @@ function openKnowledgeDetail(id) {
   document.getElementById('kpLanding').style.display    = 'none';
   document.getElementById('kpDetailFull').style.display = 'block';
 
-  // Build visualization block
-  const vizHtml = buildKnowledgeViz(ex);
-
-  const catColorMap = { vegetation:'green', water:'blue', urban:'red', thermal:'yellow', atmospheric:'purple', landcover:'cyan' };
-  const cardColor = catColorMap[k.category] || 'green';
+  // ── Derived values ──────────────────────────────────────
   const rangeParts = k.range.split(' to ');
   const rangeMin = rangeParts[0] || '—';
   const rangeMax = rangeParts[1] || '—';
-
-  // Theme per category
-  const _themeMap = { vegetation:{chips:'green',findings:'blue'}, water:{chips:'blue',findings:'green'}, urban:{chips:'red',findings:'amber'}, thermal:{chips:'amber',findings:'red'}, atmospheric:{chips:'blue',findings:'amber'}, landcover:{chips:'green',findings:'blue'} };
-  const _theme = _themeMap[k.category] || { chips:'blue', findings:'green' };
-
-  // Extract bands used from formula_bands
+  const _resShort = k.scale.replace(' spatial resolution','');
   const _bandsMatch = k.formula_bands.match(/SR_B\d+|ST_B\d+/g);
   const _bandsUsed = _bandsMatch ? [...new Set(_bandsMatch)].join(', ') : k.tag;
-  const _resShort = k.scale.replace(' spatial resolution','');
 
-  // Chip colors per category
+  // Theme chip colours per category
+  const _themeMap = { vegetation:{chips:'green',findings:'blue'}, water:{chips:'blue',findings:'green'}, urban:{chips:'red',findings:'amber'}, thermal:{chips:'amber',findings:'red'}, atmospheric:{chips:'blue',findings:'amber'}, landcover:{chips:'green',findings:'blue'} };
+  const _theme = _themeMap[k.category] || { chips:'blue', findings:'green' };
   const _ccMap = { vegetation:['cv-green','cv-cyan','cv-blue','cv-purple'], water:['cv-cyan','cv-blue','cv-green','cv-purple'], urban:['cv-pink','cv-amber','cv-cyan','cv-purple'], thermal:['cv-amber','cv-pink','cv-cyan','cv-blue'], atmospheric:['cv-purple','cv-cyan','cv-blue','cv-amber'], landcover:['cv-cyan','cv-green','cv-blue','cv-purple'] };
   const _cc = _ccMap[k.category] || ['cv-cyan','cv-green','cv-blue','cv-purple'];
 
+  // Category accent colour for inline use
+  const catAccent = { vegetation:'#4ade80', water:'#60a5fa', urban:'#ff6666', thermal:'#f5a800', atmospheric:'#c084fc', landcover:'#00d4ff' };
+  const accent = catAccent[k.category] || 'var(--accent)';
+
+  // ── RIGHT COLUMN: Key metrics chips ────────────────────
   const _chipsHtml = `
     <div class="concl-chip"><div class="concl-chip-label">Min Value</div><div class="concl-chip-value ${_cc[0]}">${rangeMin}</div></div>
     <div class="concl-chip"><div class="concl-chip-label">Max Value</div><div class="concl-chip-value ${_cc[1]}">${rangeMax}</div></div>
@@ -4004,15 +4001,15 @@ function openKnowledgeDetail(id) {
     : '';
 
   const keyMetricsHtml = `
-    <div class="concl-card" data-chips-theme="${_theme.chips}" data-findings-theme="${_theme.findings}" style="margin-bottom:0;border-radius:var(--radius-sm)">
-      <div class="concl-header" onclick="this.closest('.concl-card').classList.toggle('expanded')" style="cursor:pointer">
+    <div class="concl-card concl-card--expanded" data-chips-theme="${_theme.chips}" data-findings-theme="${_theme.findings}" style="margin-bottom:0;border-radius:var(--radius-sm)">
+      <div class="concl-header" style="cursor:default">
         <div class="concl-header-left">
           <div class="concl-header-title">Index Summary</div>
           <div class="concl-header-preview">${k.range} · ${_resShort} · ${k.tag}</div>
         </div>
         <svg class="concl-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
-      <div class="concl-body">
+      <div class="concl-body" style="display:block">
         <div class="concl-chips-section">
           <div class="concl-chips-label">Key Metrics</div>
           <div class="concl-chips-row">${_chipsHtml}</div>
@@ -4025,22 +4022,165 @@ function openKnowledgeDetail(id) {
       </div>
     </div>`;
 
-  const findingsHtml = '';
+  // ── LEFT COLUMN: "On This Page" nav ────────────────────
+  const hasHowItWorks = !!(ex.viz_steps && ex.viz_steps.length);
+  const onThisPageItems = [
+    { anchor: 'kpd-sec-overview',    label: 'Overview' },
+    { anchor: 'kpd-sec-formula',     label: 'Formula' },
+    hasHowItWorks ? { anchor: 'kpd-sec-howitworks', label: 'How It Works' } : null,
+    { anchor: 'kpd-sec-interp',      label: 'Interpretation' },
+    { anchor: 'kpd-sec-techspec',    label: 'Technical Spec' },
+    { anchor: 'kpd-sec-usecases',    label: 'Use Cases' },
+  ].filter(Boolean);
 
+  const onThisPageHtml = `
+    <div class="kpd-otp">
+      <div class="kpd-otp-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>
+        On this page
+      </div>
+      <div class="kpd-otp-list">
+        ${onThisPageItems.map((it,i) => `
+          <div class="kpd-otp-item ${i===0?'active':''}" onclick="kpdScrollTo('${it.anchor}', this)">${it.label}</div>`).join('')}
+      </div>
+    </div>`;
+
+  // ── LEFT COLUMN: How It Works numbered steps ────────────
+  const howItWorksHtml = hasHowItWorks ? `
+    <div class="kpd-doc-section" id="kpd-sec-howitworks">
+      <div class="kpd-doc-section-label" style="color:${accent}">How It Works</div>
+      <h2 class="kpd-doc-h2">Value classes &amp; what they mean</h2>
+      <p class="kpd-doc-body">Each pixel in the output map is assigned a value in the index range. The table below shows how to interpret that value in the real world.</p>
+      <div class="kpd-steps-list">
+        ${ex.viz_steps.map((s, i) => `
+          <div class="kpd-step">
+            <div class="kpd-step-num" style="background:${s.color}20;border-color:${s.color}40;color:${s.color}">${i + 1}</div>
+            <div class="kpd-step-body">
+              <div class="kpd-step-title">
+                <span class="kpd-step-swatch" style="background:${s.color}"></span>
+                ${s.icon} ${s.range}
+              </div>
+              <div class="kpd-step-desc">${s.label}</div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  // ── LEFT COLUMN: Interpretation table ──────────────────
+  const interpTableHtml = k.interpretation && k.interpretation.length ? `
+    <div class="kpd-doc-section" id="kpd-sec-interp">
+      <div class="kpd-doc-section-label" style="color:${accent}">Interpretation</div>
+      <h2 class="kpd-doc-h2">Reading the output values</h2>
+      <p class="kpd-doc-body">Use the threshold table below as a quick reference when analysing results. Boundaries may shift slightly depending on region, season, and sensor calibration.</p>
+      <div class="kpd-interp-table">
+        <div class="kpd-interp-thead">
+          <div class="kpd-interp-th">Value Range</div>
+          <div class="kpd-interp-th">Land Cover Class</div>
+        </div>
+        ${k.interpretation.map(it => `
+          <div class="kpd-interp-row">
+            <div class="kpd-interp-td kpd-interp-range">
+              <span class="kpd-interp-dot" style="background:${it.color}"></span>
+              <code>${it.range}</code>
+            </div>
+            <div class="kpd-interp-td">${it.label}</div>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  // ── LEFT COLUMN: Tech spec callout ─────────────────────
+  const techSpecHtml = `
+    <div class="kpd-doc-section" id="kpd-sec-techspec">
+      <div class="kpd-doc-section-label" style="color:${accent}">Technical Specification</div>
+      <h2 class="kpd-doc-h2">Data source &amp; sensor details</h2>
+      <div class="kpd-callout kpd-callout--info" style="--callout-accent:${accent}">
+        <div class="kpd-callout-row">
+          <div class="kpd-callout-key">Satellite / Sensor</div>
+          <div class="kpd-callout-val">${k.datasource}</div>
+        </div>
+        <div class="kpd-callout-divider"></div>
+        <div class="kpd-callout-row">
+          <div class="kpd-callout-key">Spatial Resolution</div>
+          <div class="kpd-callout-val">${k.scale}</div>
+        </div>
+        <div class="kpd-callout-divider"></div>
+        <div class="kpd-callout-row">
+          <div class="kpd-callout-key">Output Range</div>
+          <div class="kpd-callout-val">${k.range}</div>
+        </div>
+        <div class="kpd-callout-divider"></div>
+        <div class="kpd-callout-row">
+          <div class="kpd-callout-key">Index Type</div>
+          <div class="kpd-callout-val">${k.tag}</div>
+        </div>
+        ${_bandsUsed ? `
+        <div class="kpd-callout-divider"></div>
+        <div class="kpd-callout-row">
+          <div class="kpd-callout-key">Bands Used</div>
+          <div class="kpd-callout-val"><code class="kpd-code">${_bandsUsed}</code></div>
+        </div>` : ''}
+      </div>
+    </div>`;
+
+  // ── LEFT COLUMN: Use cases ──────────────────────────────
+  const useCaseItems = k.use_cases.split(', ').map(u => u.trim()).filter(Boolean);
+  const useCasesHtml = `
+    <div class="kpd-doc-section" id="kpd-sec-usecases">
+      <div class="kpd-doc-section-label" style="color:${accent}">Applications</div>
+      <h2 class="kpd-doc-h2">Use cases &amp; real-world applications</h2>
+      <div class="kpd-usecase-doc-grid">
+        ${useCaseItems.map((u, i) => `
+          <div class="kpd-usecase-doc-card">
+            <div class="kpd-usecase-doc-num" style="color:${accent}">${String(i+1).padStart(2,'0')}</div>
+            <div class="kpd-usecase-doc-body">
+              <div class="kpd-usecase-doc-title">${u}</div>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="kpd-cta-block" style="--cta-accent:${accent}">
+        <div class="kpd-cta-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </div>
+        <div class="kpd-cta-text">
+          <div class="kpd-cta-title">Run this analysis</div>
+          <div class="kpd-cta-sub">Type <code class="kpd-code">${k.command}</code> in the chat to analyse your selected region with this index.</div>
+        </div>
+      </div>
+    </div>`;
+
+  // ── Assemble the full page ──────────────────────────────
   document.getElementById('kpDetailContent').innerHTML = `
     <div class="kpd-page theme-${k.category}">
 
-      <!-- LEFT COLUMN: hero + formula -->
+      <!-- LEFT COLUMN: scrollable doc -->
       <div class="kpd-left-col">
 
-        <div class="kpd-hero-full">
+        <!-- "On This Page" sticky nav -->
+        ${onThisPageHtml}
+
+        <!-- SECTION 1: Overview -->
+        <div class="kpd-doc-section" id="kpd-sec-overview">
+          <div class="kpd-doc-section-label" style="color:${accent}">Introduction</div>
           <div class="kpd-big-name">${k.name}</div>
           <div class="kpd-big-full">${k.full}</div>
-          <div class="kpd-big-def">${k.definition}</div>
+          <p class="kpd-doc-body">${k.definition}</p>
+          <div class="kpd-compare-block" style="--cta-accent:${accent}">
+            <div class="kpd-compare-row kpd-compare-row--muted">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <div><strong>Output type:</strong> ${k.tag} · range ${k.range}</div>
+            </div>
+            <div class="kpd-compare-row" style="color:${accent}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:2px"><polyline points="20 6 9 17 4 12"/></svg>
+              <div><strong>Available as command:</strong> <code class="kpd-code">${k.command}</code> in the GIS Agent chat</div>
+            </div>
+          </div>
         </div>
 
-        <div class="kpd-formula-paper-section">
-          <div class="kpd-section-title">Formula</div>
+        <!-- SECTION 2: Formula -->
+        <div class="kpd-doc-section" id="kpd-sec-formula">
+          <div class="kpd-doc-section-label" style="color:${accent}">Formula</div>
+          <h2 class="kpd-doc-h2">Mathematical definition</h2>
+          <p class="kpd-doc-body">The index is computed pixel-by-pixel from the surface reflectance bands of the source satellite imagery.</p>
           <div class="kpd-formula-paper">
             <div class="kpd-formula-paper-inner">
               <div class="kpd-formula-render">${ex.latex || k.formula}</div>
@@ -4049,20 +4189,32 @@ function openKnowledgeDetail(id) {
               <div class="kpd-vars-list">
                 ${ex.variables.map(v => `
                   <div class="kpd-var-row">
-                    <span class="kpd-var-sym-plain">${v.sym}</span>
+                    <span class="kpd-var-sym-plain" style="color:${accent}">${v.sym}</span>
                     <span class="kpd-var-eq">=</span>
                     <span class="kpd-var-desc">${v.desc}</span>
                   </div>`).join('')}
               </div>` : ''}
             </div>
-            <div class="kpd-formula-bands-label">Band Implementation (Landsat 8):</div>
+            <div class="kpd-formula-bands-label">Band Implementation (${k.datasource.includes('Sentinel') ? 'Sentinel-5P TROPOMI' : 'Landsat 8'}):</div>
             <div class="kpd-formula-bands-box">${k.formula_bands}</div>
           </div>
         </div>
 
+        <!-- SECTION 3: How It Works (if viz steps exist) -->
+        ${howItWorksHtml}
+
+        <!-- SECTION 4: Interpretation table -->
+        ${interpTableHtml}
+
+        <!-- SECTION 5: Technical Spec -->
+        ${techSpecHtml}
+
+        <!-- SECTION 6: Use cases -->
+        ${useCasesHtml}
+
       </div>
 
-      <!-- RIGHT COLUMN: banner + floating cards -->
+      <!-- RIGHT COLUMN: data source + summary + use cases -->
       <div class="kpd-right-col">
 
         <div class="kpd-right-type-banner">${k.tag}</div>
@@ -4100,12 +4252,43 @@ function openKnowledgeDetail(id) {
     </div>
   `;
 
-  // Trigger MathJax to typeset the new content
+  // Trigger MathJax
   if (window.MathJax && window.MathJax.typesetPromise) {
     window.MathJax.typesetPromise([document.getElementById('kpDetailContent')]);
   }
 
+  // Scroll-spy for "On This Page"
+  const leftCol = document.querySelector('.kpd-left-col');
+  if (leftCol) {
+    leftCol.addEventListener('scroll', _kpdScrollSpy, { passive: true });
+  }
+
   document.getElementById('kpDetailFull').scrollTop = 0;
+}
+
+function kpdScrollTo(anchor, el) {
+  const target = document.getElementById(anchor);
+  const leftCol = document.querySelector('.kpd-left-col');
+  if (target && leftCol) {
+    leftCol.scrollTo({ top: target.offsetTop - 80, behavior: 'smooth' });
+  }
+  document.querySelectorAll('.kpd-otp-item').forEach(i => i.classList.remove('active'));
+  if (el) el.classList.add('active');
+}
+
+function _kpdScrollSpy() {
+  const leftCol = document.querySelector('.kpd-left-col');
+  const items   = document.querySelectorAll('.kpd-otp-item');
+  const sections = document.querySelectorAll('.kpd-doc-section');
+  if (!leftCol || !sections.length) return;
+  const scrollTop = leftCol.scrollTop + 100;
+  let current = null;
+  sections.forEach(sec => {
+    if (sec.offsetTop <= scrollTop) current = sec.id;
+  });
+  items.forEach(it => {
+    it.classList.toggle('active', it.getAttribute('onclick') && it.getAttribute('onclick').includes(current));
+  });
 }
 
 function buildKnowledgeViz(ex) {

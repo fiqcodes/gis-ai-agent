@@ -2555,3 +2555,323 @@ html, body {
 .kpd-finding-body { display:flex; align-items:center; gap:14px; flex:1; }
 .kpd-finding-range { font-family:var(--font-mono); font-size:11.5px; color:var(--text3); min-width:80px; flex-shrink:0; }
 .kpd-finding-label { font-size:13.5px; color:var(--text); font-weight:500; line-height:1.4; }
+/* ════════════════════════════════════════════════════════
+   KNOWLEDGE BASE — DOC PAGE STYLES (new)
+════════════════════════════════════════════════════════ */
+
+/* On This Page sticky nav */
+.kpd-otp {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  padding: 12px 0 14px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.kpd-otp-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+.kpd-otp-list {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.kpd-otp-item {
+  font-size: 11.5px;
+  color: var(--text3);
+  padding: 4px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.kpd-otp-item:hover { color: var(--text); background: var(--bg3); border-color: var(--border); }
+.kpd-otp-item.active { color: var(--text); background: var(--bg3); border-color: var(--border2); font-weight: 600; }
+
+/* Document sections */
+.kpd-doc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 40px;
+  border-bottom: 1px solid var(--border);
+}
+.kpd-doc-section:last-child { border-bottom: none; padding-bottom: 80px; }
+
+.kpd-doc-section-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.kpd-doc-h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+  margin: 0;
+}
+
+.kpd-doc-body {
+  font-size: 13.5px;
+  color: var(--text2);
+  line-height: 1.8;
+  margin: 0;
+}
+
+/* Overview compare/callout block */
+.kpd-compare-block {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-left: 3px solid var(--cta-accent, var(--accent));
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kpd-compare-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text2);
+}
+.kpd-compare-row--muted { color: var(--text3); }
+.kpd-compare-row strong { color: var(--text); font-weight: 600; }
+
+/* Numbered how-it-works steps */
+.kpd-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.kpd-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  transition: background 0.12s;
+}
+.kpd-step:last-child { border-bottom: none; }
+.kpd-step:hover { background: var(--bg2); }
+.kpd-step-num {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800;
+  border: 1px solid;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.kpd-step-body { flex: 1; }
+.kpd-step-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+.kpd-step-swatch {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.kpd-step-desc { font-size: 12px; color: var(--text3); line-height: 1.5; }
+
+/* Interpretation table */
+.kpd-interp-table {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.kpd-interp-thead {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+.kpd-interp-th {
+  padding: 9px 16px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text3);
+}
+.kpd-interp-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.kpd-interp-row:last-child { border-bottom: none; }
+.kpd-interp-row:hover { background: var(--bg2); }
+.kpd-interp-td {
+  padding: 11px 16px;
+  font-size: 13px;
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kpd-interp-range {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+}
+.kpd-interp-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Tech spec callout */
+.kpd-callout {
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-left: 3px solid var(--callout-accent, var(--accent));
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.kpd-callout-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 16px;
+}
+.kpd-callout-divider { height: 1px; background: rgba(255,255,255,0.05); }
+.kpd-callout-key {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding-top: 1px;
+}
+.kpd-callout-val {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* Inline code snippets */
+.kpd-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--text);
+}
+
+/* Use cases doc grid */
+.kpd-usecase-doc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.kpd-usecase-doc-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  transition: border-color 0.12s, background 0.12s;
+}
+.kpd-usecase-doc-card:hover { background: var(--bg3); border-color: var(--border2); }
+.kpd-usecase-doc-num {
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.kpd-usecase-doc-title {
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.45;
+  font-weight: 500;
+}
+
+/* Run analysis CTA */
+.kpd-cta-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-left: 3px solid var(--cta-accent, var(--accent));
+  border-radius: var(--radius-sm);
+  padding: 16px 18px;
+  margin-top: 4px;
+}
+.kpd-cta-icon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--cta-accent, var(--accent));
+  flex-shrink: 0;
+}
+.kpd-cta-text { flex: 1; }
+.kpd-cta-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.kpd-cta-sub {
+  font-size: 12.5px;
+  color: var(--text3);
+  line-height: 1.55;
+}
+
+/* Left col layout — override for doc mode */
+.kpd-left-col {
+  gap: 0 !important;
+  padding: 0 52px 0 !important;
+}
+.kpd-otp {
+  margin: 0 0 0;
+  padding: 18px 0 14px;
+}
+.kpd-doc-section {
+  padding-top: 36px;
+}
+.kpd-doc-section:first-of-type { padding-top: 28px; }
+
+/* Theme-aware section label (already handled inline via accent var) */
+.kpd-page.theme-vegetation .kpd-otp-item.active { border-color: rgba(74,222,128,0.35); color: #4ade80; }
+.kpd-page.theme-water .kpd-otp-item.active        { border-color: rgba(96,165,250,0.35); color: #60a5fa; }
+.kpd-page.theme-urban .kpd-otp-item.active         { border-color: rgba(255,102,102,0.35); color: #ff6666; }
+.kpd-page.theme-thermal .kpd-otp-item.active       { border-color: rgba(245,168,0,0.35); color: #f5a800; }
+.kpd-page.theme-atmospheric .kpd-otp-item.active   { border-color: rgba(192,132,252,0.35); color: #c084fc; }
+.kpd-page.theme-landcover .kpd-otp-item.active     { border-color: rgba(0,212,255,0.3); color: #00d4ff; }
+
+/* concl-card always expanded in right col */
+.concl-card--expanded .concl-chevron { transform: rotate(180deg); }
