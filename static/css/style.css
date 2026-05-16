@@ -2875,3 +2875,37 @@ html, body {
 
 /* concl-card always expanded in right col */
 .concl-card--expanded .concl-chevron { transform: rotate(180deg); }
+
+/* ── Knowledge Base: Research Insight block ── */
+.kpd-insight-block {
+  background: rgba(0,0,0,0.22);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-left: 3px solid var(--insight-accent, var(--accent));
+  border-radius: var(--radius-sm);
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.kpd-insight-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--insight-accent, var(--accent));
+  opacity: 0.9;
+}
+.kpd-insight-body {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.8;
+  margin: 0;
+}
+
+/* Chevron transition for collapsible */
+.concl-chevron {
+  transition: transform 0.2s ease;
+}

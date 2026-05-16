@@ -3310,7 +3310,8 @@ const KNOWLEDGE = [
     id: 'ndvi', category: 'vegetation', tag: 'Surface Index',
     name: 'NDVI', full: 'Normalized Difference Vegetation Index',
     command: '/ndvi',
-    definition: 'NDVI measures the density and health of vegetation by comparing near-infrared (NIR) and red light reflected by plants. Healthy vegetation absorbs most visible light and reflects a large portion of NIR light, producing high NDVI values.',
+    definition: 'NDVI measures the density and health of vegetation by comparing near-infrared (NIR) and red light reflected by plants. Healthy vegetation absorbs most visible light and reflects a large portion of NIR light, producing characteristically high NDVI values. Sparse or stressed vegetation has lower NIR reflectance and higher red reflectance, producing lower values. Water and snow absorb NIR strongly, yielding near-zero or negative values.',
+    insight: 'NDVI is the most widely used vegetation index in remote sensing, with applications spanning agriculture, forestry, ecology, and climate science. Studies consistently show NDVI values are most accurate during peak growing season at the stage of active crop growth. However, it is sensitive to soil brightness and atmospheric haze in arid or sparsely vegetated landscapes — in those conditions, EVI or SAVI provide better results. Research has also shown that NDVI has a saturation effect at high biomass values (>0.8), making it less sensitive to differences in dense tropical forest canopies.',
     formula: '(NIR − Red) / (NIR + Red)',
     formula_bands: 'Landsat 8: (SR_B5 − SR_B4) / (SR_B5 + SR_B4)',
     range: '−1 to +1',
@@ -3322,7 +3323,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Landsat 8/9 Collection 2 Level-2 (SR_B4, SR_B5)',
     scale: '30 m spatial resolution',
-    use_cases: 'Monitoring deforestation, agricultural crop health, urban green space, drought assessment, and seasonal vegetation change.',
+    use_cases: 'Monitoring deforestation and forest cover change, agricultural crop health and yield estimation, urban green space inventory, drought and vegetation stress assessment, seasonal phenology tracking, and desertification risk monitoring.',
     palette: ['#0000ff','#ffffff','#008000'],
     palette_label: 'Blue (low) → White (0) → Green (high)',
   },
@@ -3330,7 +3331,8 @@ const KNOWLEDGE = [
     id: 'evi', category: 'vegetation', tag: 'Surface Index',
     name: 'EVI', full: 'Enhanced Vegetation Index',
     command: '/evi',
-    definition: 'EVI is an optimized vegetation index designed to enhance the vegetation signal with improved sensitivity in high-biomass regions and improved vegetation monitoring through a decoupling of the canopy background signal and a reduction in atmosphere influences.',
+    definition: 'EVI is an optimized vegetation index designed to enhance vegetation signal sensitivity in high-biomass regions while reducing atmospheric and soil background noise. It incorporates a blue band correction to minimize aerosol and atmospheric interference — effects that NDVI cannot account for. EVI maintains sensitivity in dense canopy areas where NDVI tends to saturate, making it a preferred choice for tropical forest monitoring.',
+    insight: 'EVI was developed by NASA\'s MODIS science team specifically to overcome NDVI limitations in high-biomass, humid tropical environments. The gain factor (2.5) amplifies the vegetation signal, while the soil adjustment (L=1) and atmospheric correction coefficients (C1=6, C2=7.5) work together to decouple canopy background effects. Research shows EVI is more responsive to canopy structural variations such as leaf area index (LAI), canopy type, and plant architecture — making it especially valuable for ecosystem dynamics studies. EVI and NDVI are considered complementary: use NDVI for general vegetation greenness across diverse landscapes, and EVI where atmospheric interference or high biomass density is a concern.',
     formula: '2.5 × (NIR − Red) / (NIR + 6×Red − 7.5×Blue + 1)',
     formula_bands: 'Landsat 8: 2.5 × (SR_B5 − SR_B4) / (SR_B5 + 6×SR_B4 − 7.5×SR_B2 + 1)',
     range: '−1 to +1',
@@ -3342,7 +3344,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Landsat 8/9 Collection 2 Level-2 (SR_B2, SR_B4, SR_B5)',
     scale: '30 m spatial resolution',
-    use_cases: 'Canopy estimation in dense tropical forests, reducing atmospheric and soil noise compared to NDVI, biomass monitoring.',
+    use_cases: 'Tropical rainforest canopy estimation and biomass mapping, phenological monitoring under hazy atmospheric conditions, Leaf Area Index (LAI) derivation, savanna and mixed woodland analysis, crop growth stage differentiation, and multi-sensor vegetation comparison studies.',
     palette: ['#a52a2a','#ffffff','#006400'],
     palette_label: 'Brown (low) → White (0) → Dark green (high)',
   },
@@ -3350,7 +3352,8 @@ const KNOWLEDGE = [
     id: 'savi', category: 'vegetation', tag: 'Surface Index',
     name: 'SAVI', full: 'Soil-Adjusted Vegetation Index',
     command: '/savi',
-    definition: 'SAVI modifies NDVI to correct for the influence of soil brightness in areas with low vegetation cover. A soil correction factor L is included to minimize the effect of soil noise.',
+    definition: 'SAVI modifies NDVI by introducing a soil brightness correction factor L to minimize the influence of exposed soil on the vegetation signal. The factor L ranges from 0 (dense vegetation) to 1 (very sparse vegetation), with 0.5 used as the default for intermediate cover. This makes SAVI significantly more accurate than NDVI in arid and semi-arid regions where bare soil is visible through the vegetation canopy.',
+    insight: 'In areas with less than 40–50% vegetation cover — typical of arid regions, early crop growth stages, or recently disturbed land — NDVI values can be dominated by soil reflectance rather than plant biomass. SAVI corrects for this by effectively "pushing" the spectral baseline away from the soil line. Field studies comparing SAVI and NDVI over maize plots show significant differences in index values in areas with numerous gaps in the canopy, where soil is clearly visible. For Indonesian archipelago contexts — particularly dryland agriculture across East Java, Nusa Tenggara, and open grasslands — SAVI is often a more reliable greenness indicator than NDVI during the dry season.',
     formula: '((NIR − Red) / (NIR + Red + L)) × (1 + L)',
     formula_bands: 'L = 0.5 (default). Landsat 8: ((SR_B5 − SR_B4) / (SR_B5 + SR_B4 + 0.5)) × 1.5',
     range: '−1 to +1',
@@ -3362,7 +3365,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Landsat 8/9 Collection 2 Level-2 (SR_B4, SR_B5)',
     scale: '30 m spatial resolution',
-    use_cases: 'Vegetation monitoring in arid and semi-arid regions, early crop season when soil is exposed, mining-impacted areas.',
+    use_cases: 'Vegetation monitoring in arid and semi-arid drylands, early crop season analysis when soil is exposed, post-fire recovery assessment, mining-impacted land degradation mapping, rangeland condition monitoring, and land consolidation value estimation.',
     palette: ['#a52a2a','#ffffff','#008000'],
     palette_label: 'Brown (low) → White (0) → Green (high)',
   },
@@ -3371,7 +3374,8 @@ const KNOWLEDGE = [
     id: 'ndwi', category: 'water', tag: 'Surface Index',
     name: 'NDWI', full: 'Normalized Difference Water Index',
     command: '/ndwi',
-    definition: 'NDWI uses green and NIR bands to delineate open water features and suppress vegetation and soil signals. Positive values typically correspond to water bodies.',
+    definition: 'NDWI uses the high reflectance of water in the green band and its strong absorption in the near-infrared to delineate open water bodies and suppress non-water signals. Developed by Gao (1996), it is the standard index for mapping surface water extent. Positive values typically correspond to open water, while negative values indicate vegetation or bare soil.',
+    insight: 'NDWI is highly effective for mapping large, open water bodies such as rivers, lakes, and reservoirs, but can confuse built-up surfaces with water in urban environments since both can produce relatively high NDWI values. For urban flood scenarios or dense city environments, MNDWI (which replaces NIR with SWIR) provides significantly better separation between water and impervious surfaces. In flood response contexts, NDWI time-series analysis using before/after Landsat imagery can quantify inundated area extent within hours of satellite overpass. Studies confirm a strong negative correlation between NDWI and Land Surface Temperature (LST), making it a useful proxy for thermal moderation in landscape planning.',
     formula: '(Green − NIR) / (Green + NIR)',
     formula_bands: 'Landsat 8: (SR_B3 − SR_B5) / (SR_B3 + SR_B5)',
     range: '−1 to +1',
@@ -3383,7 +3387,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Landsat 8/9 Collection 2 Level-2 (SR_B3, SR_B5)',
     scale: '30 m spatial resolution',
-    use_cases: 'Flood mapping, water body delineation, wetland monitoring, drought assessment.',
+    use_cases: 'Flood extent mapping and disaster response, permanent water body delineation, wetland and mangrove monitoring, reservoir storage change tracking, irrigation canal identification, and drought-induced water body shrinkage monitoring.',
     palette: ['#a52a2a','#ffffff','#0000ff'],
     palette_label: 'Brown (dry) → White (0) → Blue (water)',
   },
@@ -3391,7 +3395,8 @@ const KNOWLEDGE = [
     id: 'mndwi', category: 'water', tag: 'Surface Index',
     name: 'MNDWI', full: 'Modified Normalized Difference Water Index',
     command: '/mndwi',
-    definition: 'MNDWI replaces NIR with SWIR to better separate built-up areas from water. It suppresses soil and vegetation signals more effectively than NDWI, making it ideal for urban environments.',
+    definition: 'MNDWI replaces the NIR band in NDWI with SWIR (Short-Wave Infrared) to better distinguish water from built-up land. While NIR and SWIR are both strongly absorbed by water, SWIR is additionally absorbed by man-made surfaces, while NIR is not. This gives MNDWI a decisive advantage in urban areas — it suppresses building and road signals that NDWI mistakes for water.',
+    insight: 'Research published in Frontiers in Environmental Science confirms that both NDWI and MNDWI show strong negative correlations with LST, underscoring the thermal cooling role of surface water. However, in urban settings, MNDWI consistently outperforms NDWI with a higher signal-to-noise ratio for water extraction. For Indonesian cities like Jakarta, Surabaya, or Medan — where water bodies are interspersed with dense built-up fabric — MNDWI is the recommended choice for tracking urban flood dynamics or monitoring seasonal river level changes. The index is also paired effectively with NDBI in multi-index urban heat island studies.',
     formula: '(Green − SWIR) / (Green + SWIR)',
     formula_bands: 'Landsat 8: (SR_B3 − SR_B6) / (SR_B3 + SR_B6)',
     range: '−1 to +1',
@@ -3403,7 +3408,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Landsat 8/9 Collection 2 Level-2 (SR_B3, SR_B6)',
     scale: '30 m spatial resolution',
-    use_cases: 'Urban water body mapping, flood monitoring in cities, distinguishing water from built-up features.',
+    use_cases: 'Urban water body mapping and extraction, flood monitoring in dense city environments, distinguishing water from roads and buildings, river channel dynamics tracking, urban stormwater retention pond monitoring, and multi-temporal wetland change analysis.',
     palette: ['#a52a2a','#ffffff','#00ffff'],
     palette_label: 'Brown (dry) → White (0) → Cyan (water)',
   },
@@ -3412,7 +3417,8 @@ const KNOWLEDGE = [
     id: 'ndbi', category: 'urban', tag: 'Surface Index',
     name: 'NDBI', full: 'Normalized Difference Built-up Index',
     command: '/ndbi',
-    definition: 'NDBI highlights built-up or impervious surfaces using SWIR and NIR bands. Built-up areas have higher SWIR reflectance, producing positive NDBI values, while vegetation and water produce negative values.',
+    definition: 'NDBI highlights built-up and impervious surfaces by exploiting the higher SWIR reflectance of concrete, asphalt, and rooftops relative to NIR. Vegetation, which has high NIR reflectance, produces strongly negative NDBI values, creating an effective contrast. The index was originally proposed to address limitations of spectral band combinations in separating urban features from surrounding land cover.',
+    insight: 'NDBI has become a cornerstone of urban expansion studies. Research across multiple cities confirms a strong positive correlation between NDBI and Land Surface Temperature (LST), with correlation coefficients reaching 0.89 in some studies — meaning areas with high NDBI tend to be significantly hotter. This has made NDBI a standard predictor variable in Urban Heat Island (UHI) regression models. Long-term NDBI time-series analysis in rapidly urbanizing regions (like Greater Jakarta or Surabaya Metro) has documented the progressive replacement of green cover (negative NDBI) with impervious surfaces (positive NDBI), which directly drives LST increases. Combining NDBI with NDVI and NDWI provides a comprehensive surface cover summary for any region.',
     formula: '(SWIR − NIR) / (SWIR + NIR)',
     formula_bands: 'Landsat 8: (SR_B6 − SR_B5) / (SR_B6 + SR_B5)',
     range: '−1 to +1',
@@ -3424,7 +3430,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Landsat 8/9 Collection 2 Level-2 (SR_B5, SR_B6)',
     scale: '30 m spatial resolution',
-    use_cases: 'Urban expansion monitoring, impervious surface mapping, urban heat island analysis, city growth tracking.',
+    use_cases: 'Urban expansion and sprawl monitoring, impervious surface fraction mapping, Urban Heat Island (UHI) analysis, construction site and new development detection, peri-urban growth boundary delineation, and long-term city footprint change tracking.',
     palette: ['#0000ff','#ffffff','#ff0000'],
     palette_label: 'Blue (non-built) → White (0) → Red (built-up)',
   },
@@ -3432,7 +3438,8 @@ const KNOWLEDGE = [
     id: 'ui', category: 'urban', tag: 'Surface Index',
     name: 'UI', full: 'Urban Index',
     command: '/ui',
-    definition: 'UI uses SWIR2 and NIR to distinguish urban surfaces from vegetation. It emphasizes the spectral contrast between built-up areas and natural land cover.',
+    definition: 'UI uses SWIR2 (Band 7, ~2.2 μm) and NIR to distinguish urban surfaces from natural land cover. SWIR2 is particularly sensitive to the thermal and structural properties of dry urban materials — concrete, ceramic tiles, asphalt — which have distinctly different reflectance profiles from vegetation. This makes UI complementary to NDBI, which uses SWIR1.',
+    insight: 'UI uses a longer shortwave infrared wavelength (Band 7) compared to NDBI (Band 6), making it more sensitive to dry, heat-retaining urban materials like concrete and industrial rooftops. In comparative studies, UI often delineates high-density commercial and industrial zones more clearly than NDBI, while NDBI performs better in identifying mixed residential suburbs. Using both UI and NDBI together in a multi-index stack can improve urban classification accuracy, especially when training machine learning models for LULC mapping.',
     formula: '(SWIR2 − NIR) / (SWIR2 + NIR)',
     formula_bands: 'Landsat 8: (SR_B7 − SR_B5) / (SR_B7 + SR_B5)',
     range: '−1 to +1',
@@ -3443,7 +3450,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Landsat 8/9 Collection 2 Level-2 (SR_B5, SR_B7)',
     scale: '30 m spatial resolution',
-    use_cases: 'Urban boundary delineation, infrastructure mapping, urban-rural gradient analysis.',
+    use_cases: 'Urban boundary delineation and mapping, high-density commercial and industrial zone identification, urban-rural gradient analysis, infrastructure and road network extraction, complementary feature for LULC classification, and detection of newly built industrial estates.',
     palette: ['#008000','#ffffff','#800080'],
     palette_label: 'Green (vegetation) → White (0) → Purple (urban)',
   },
@@ -3451,7 +3458,8 @@ const KNOWLEDGE = [
     id: 'bsi', category: 'urban', tag: 'Surface Index',
     name: 'BSI', full: 'Bare Soil Index',
     command: '/bsi',
-    definition: 'BSI combines SWIR, Red, NIR, and Blue bands to distinguish bare soil from vegetated and built-up surfaces. High BSI indicates exposed or degraded land.',
+    definition: 'BSI combines four spectral bands (SWIR, Red, NIR, Blue) to discriminate bare soil from vegetated and built-up surfaces. By combining the soil-sensitive SWIR and Red bands in the numerator and subtracting the vegetation-sensitive NIR and atmospheric-correction Blue bands, BSI isolates exposed or degraded land surfaces with high spectral purity.',
+    insight: 'BSI is particularly valuable in detecting soil erosion risk and land degradation, since it responds strongly to the presence of exposed mineral soil — whether due to tillage, drought, overgrazing, deforestation, or construction activity. In agricultural contexts, BSI can identify fallow fields and harvest cycles in time-series analysis. For environmental impact studies around mining operations, BSI before/after analysis clearly delineates the extent of surface disturbance. A key limitation is that BSI can confuse dry, sandy built-up surfaces with bare soil; cross-checking against NDBI helps resolve ambiguity.',
     formula: '((SWIR + Red) − (NIR + Blue)) / ((SWIR + Red) + (NIR + Blue))',
     formula_bands: 'Landsat 8: ((SR_B6 + SR_B4) − (SR_B5 + SR_B2)) / ((SR_B6 + SR_B4) + (SR_B5 + SR_B2))',
     range: '−1 to +1',
@@ -3462,7 +3470,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Landsat 8/9 Collection 2 Level-2 (SR_B2, SR_B4, SR_B5, SR_B6)',
     scale: '30 m spatial resolution',
-    use_cases: 'Soil erosion detection, degraded land mapping, construction site monitoring, agricultural fallow identification.',
+    use_cases: 'Soil erosion detection and risk mapping, land degradation monitoring, construction site and earthwork identification, agricultural fallow field mapping, post-wildfire ground exposure assessment, and open-pit mine expansion monitoring.',
     palette: ['#0000ff','#ffffff','#a52a2a'],
     palette_label: 'Blue (vegetated) → White (0) → Brown (bare soil)',
   },
@@ -3470,7 +3478,8 @@ const KNOWLEDGE = [
     id: 'nbi', category: 'urban', tag: 'Surface Index',
     name: 'NBI', full: 'New Built-up Index',
     command: '/nbi',
-    definition: 'NBI uses the ratio of Red and SWIR reflectance to NIR to highlight built-up areas. It is particularly effective at detecting low-density urban features.',
+    definition: 'NBI uses a multiplicative ratio of Red and SWIR reflectance divided by NIR to highlight built-up surfaces, particularly effective for low-density urban features. Unlike NDBI, NBI is not a normalized difference and produces an unbounded positive output, which makes it responsive to subtle spectral differences in peri-urban and suburban zones.',
+    insight: 'NBI excels in detecting low-density suburban expansion and informal settlements where impervious coverage is partial. In rapidly urbanizing Southeast Asian contexts, peri-urban growth often occurs through incremental construction at the urban fringe — precisely where NBI shows sensitivity that NDBI may miss. NBI is best used in combination with NDBI and NDVI for comprehensive urban mapping, as its non-normalized nature can cause absolute values to vary with atmospheric conditions and sensor gain settings.',
     formula: '(Red × SWIR) / NIR',
     formula_bands: 'Landsat 8: (SR_B4 × SR_B6) / SR_B5',
     range: '0 to ~0.5',
@@ -3481,7 +3490,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Landsat 8/9 Collection 2 Level-2 (SR_B4, SR_B5, SR_B6)',
     scale: '30 m spatial resolution',
-    use_cases: 'Low-density suburban mapping, peri-urban growth detection.',
+    use_cases: 'Low-density suburban mapping, peri-urban growth and informal settlement detection, urban fringe delineation, complementary feature in multi-index LULC classification, industrial park boundary extraction, and road and infrastructure corridor mapping.',
     palette: ['#ffffff','#ffa500','#8b0000'],
     palette_label: 'White (low) → Orange → Dark red (high)',
   },
@@ -3490,10 +3499,11 @@ const KNOWLEDGE = [
     id: 'lst', category: 'thermal', tag: 'Thermal',
     name: 'LST', full: 'Land Surface Temperature',
     command: '/lst',
-    definition: 'LST measures the radiometric temperature of the land surface derived from thermal infrared data. It accounts for vegetation cover (via emissivity) to convert raw thermal brightness into actual surface temperature in Celsius.',
+    definition: 'LST measures the radiometric skin temperature of the land surface derived from thermal infrared emission. The retrieval accounts for vegetation cover via an emissivity model (based on NDVI fractional vegetation cover) to convert raw thermal brightness from Band 10 into actual surface temperature in Celsius. LST represents what the surface itself feels like in terms of heat radiation — distinct from air temperature measured at weather stations.',
+    insight: 'LST is a critical indicator for Urban Heat Island (UHI) analysis. Studies have documented mean LST increases of up to 11°C in rapidly urbanizing areas over 30–40 year periods (e.g., from 41°C in 1985 to 52°C in 2025 in some Turkish cities). The relationship between LST, NDVI, and NDBI is well established in the literature: NDVI has a strong negative correlation with LST (more vegetation = cooler surface), while NDBI has a strong positive correlation (more built-up = hotter surface). NASA\'s ECOSTRESS instrument and Landsat thermal data are now combined with Random Forest models to downscale LST to 10 m resolution for street-scale urban planning applications.',
     formula: 'BT / (1 + (λ × BT / ρ) × ln(ε)) − 273.15',
     formula_bands: 'BT = ST_B10 (thermal brightness), λ = 11.5 μm, ρ = 14380, ε = emissivity from NDVI-based FVC',
-    range: 'Typically 15–65°C for land surfaces',
+    range: '15°C to 65°C',
     interpretation: [
       { range: '< 30°C',   label: 'Cool (vegetation, water)', color: '#307ef3' },
       { range: '30–35°C',  label: 'Moderate', color: '#2895c1' },
@@ -3503,7 +3513,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Landsat 8/9 Collection 2 Level-2 (ST_B10 thermal band)',
     scale: '90 m spatial resolution (resampled from 100 m)',
-    use_cases: 'Urban heat island detection, drought monitoring, surface energy balance, wildfire risk mapping.',
+    use_cases: 'Urban Heat Island detection and spatial mapping, agricultural drought stress monitoring, surface energy balance estimation, wildfire burn severity and risk mapping, green infrastructure cooling effectiveness assessment, and industrial waste heat discharge monitoring.',
     palette: ['#040274','#307ef3','#3be285','#fff705','#ff0000','#911003'],
     palette_label: 'Deep blue (cool) → Green → Yellow → Red (hot)',
   },
@@ -3511,7 +3521,8 @@ const KNOWLEDGE = [
     id: 'uhi', category: 'thermal', tag: 'Thermal',
     name: 'UHI', full: 'Urban Heat Island Index',
     command: '/uhi',
-    definition: 'UHI quantifies the thermal anomaly of urban areas relative to the regional mean. It normalizes LST using z-score standardization: pixels significantly above the mean are heat islands, those below are cool refuges.',
+    definition: 'UHI quantifies the thermal anomaly of any pixel relative to the regional mean temperature. By z-score standardizing LST across the study area, UHI removes absolute temperature effects and focuses on relative heat concentration. Pixels with UHI > 0 are warmer than the regional average (heat islands), while pixels with UHI < 0 are cooler (cool refuges). This normalization allows meaningful comparison across seasons, cities, and climate zones.',
+    insight: 'The UHI effect is driven by the replacement of vegetated surfaces with heat-absorbing impervious materials, reduced evapotranspiration, and waste heat from vehicles and industry. Research shows strong negative UHI correlation with NDVI and strong positive correlation with NDBI — confirming that green spaces are the most effective urban cooling tool. Studies using Landsat UHI indices have identified park "oasis effects" extending cooling benefits 30–300 m beyond park boundaries. For urban planners, UHI mapping is essential for evidence-based siting of trees, water features, and cool roof programs. Public health research has linked high UHI zones to elevated heat stroke risk during extreme heat events, especially for elderly populations.',
     formula: '(LST − μ) / σ',
     formula_bands: 'μ = spatial mean LST, σ = spatial std dev LST across study area',
     range: 'z-score (typically −4 to +4)',
@@ -3523,7 +3534,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Derived from LST (Landsat 8/9 ST_B10)',
     scale: '90 m spatial resolution',
-    use_cases: 'Identifying urban cooling priorities, green infrastructure planning, public health heat risk mapping.',
+    use_cases: 'Identifying urban cooling priority zones, evidence-based greenspace and tree planting planning, public health extreme heat risk mapping, cool roof and pavement policy targeting, tracking UHI mitigation over time, and inter-city thermal environment comparison.',
     palette: ['#313695','#74add1','#fed976','#fd8d3c','#e31a1c','#b10026'],
     palette_label: 'Blue (cool island) → Yellow → Red (heat island)',
   },
@@ -3532,7 +3543,8 @@ const KNOWLEDGE = [
     id: 'ndsi', category: 'water', tag: 'Surface Index',
     name: 'NDSI', full: 'Normalized Difference Snow Index',
     command: '/ndsi',
-    definition: 'NDSI uses the high reflectance of snow in green wavelengths and its low reflectance in SWIR to map snow and ice cover. It effectively separates snow from clouds.',
+    definition: 'NDSI exploits the dramatically different reflectance of snow in two spectral regions: snow is highly reflective in the visible green band (~0.56 μm) but strongly absorbs shortwave infrared (~1.6 μm). This spectral contrast produces high positive NDSI values for snow and ice, while clouds — which are also bright in visible wavelengths — have high SWIR reflectance, yielding near-zero or negative NDSI values. This makes NDSI one of the most reliable methods for separating snow from cloud in satellite imagery.',
+    insight: 'NDSI is used operationally by national meteorological agencies and glacier research institutes worldwide for snow cover area (SCA) monitoring. A standard threshold of NDSI > 0.4 is widely applied to identify snow-covered pixels. In the context of water resources, seasonal snowpack is a natural reservoir — NDSI time-series analysis allows estimation of Snow Water Equivalent (SWE) for downstream runoff forecasting. Glaciological surveys using Landsat NDSI have documented accelerating glacial retreat globally. For Indonesia, NDSI is relevant for monitoring the shrinking Puncak Jaya ice cap in Papua — one of only three remaining equatorial glaciers on Earth.',
     formula: '(Green − SWIR) / (Green + SWIR)',
     formula_bands: 'Landsat 8: (SR_B3 − SR_B6) / (SR_B3 + SR_B6)',
     range: '−1 to +1',
@@ -3543,7 +3555,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Landsat 8/9 Collection 2 Level-2 (SR_B3, SR_B6)',
     scale: '30 m spatial resolution',
-    use_cases: 'Snow cover mapping, glacier monitoring, water resource estimation from snowmelt.',
+    use_cases: 'Seasonal snow cover area mapping, glacier extent monitoring and retreat quantification, water resource estimation from snowmelt and river runoff, cloud vs. snow discrimination in optical imagery, alpine ecosystem snow regime analysis, and equatorial ice cap monitoring.',
     palette: ['#a52a2a','#ffffff','#e0ffff'],
     palette_label: 'Brown (no snow) → White → Ice blue (snow)',
   },
@@ -3552,7 +3564,8 @@ const KNOWLEDGE = [
     id: 'no2', category: 'atmospheric', tag: 'Atmospheric',
     name: 'NO₂', full: 'Tropospheric Nitrogen Dioxide',
     command: '/no2',
-    definition: 'NO₂ column density measures the total amount of nitrogen dioxide in a vertical column of atmosphere. It is a primary pollutant from vehicle exhaust and industrial combustion, and a precursor to ground-level ozone and fine particulate matter.',
+    definition: 'NO₂ column density measures the total nitrogen dioxide in a vertical atmospheric column from the surface to the tropopause. It is a primary pollutant emitted by vehicle exhaust, power plants, and industrial combustion, and a key precursor to ground-level ozone and fine particulate matter (PM2.5). The DOAS (Differential Optical Absorption Spectroscopy) retrieval fits measured UV-visible spectra against known NO₂ absorption cross-sections.',
+    insight: 'Sentinel-5P TROPOMI NO₂ data has become a standard tool for monitoring anthropogenic emission patterns at high spatial resolution. During COVID-19 lockdowns in 2020, TROPOMI NO₂ data showed dramatic reductions over major cities worldwide — providing some of the clearest evidence of human activity\'s direct impact on air quality. Methane (CH₄) is a potent greenhouse gas, but the indirect climate effects of NO₂ are also significant: while NO₂ itself has a net cooling effect via aerosol formation, it drives the production of tropospheric ozone, a potent warming agent. For Indonesian cities like Jakarta and Surabaya, NO₂ monitoring is directly relevant to vehicle emission policy evaluation and industrial zone impact assessment.',
     formula: 'Tropospheric NO₂ column (mol/m²) — retrieved by DOAS algorithm',
     formula_bands: 'Sentinel-5P TROPOMI: tropospheric_NO2_column_number_density',
     range: '0 to ~0.0002 mol/m²',
@@ -3564,7 +3577,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Sentinel-5P TROPOMI (COPERNICUS/S5P/OFFL/L3_NO2)',
     scale: '3.5 km × 5.5 km spatial resolution',
-    use_cases: 'Air quality monitoring, traffic emission hotspot detection, industrial facility impact assessment, COVID-19 lockdown effect studies.',
+    use_cases: 'Urban air quality monitoring and policy evaluation, traffic emission hotspot detection, industrial facility emission assessment, COVID-19 and lockdown emission reduction studies, ozone precursor monitoring, and cross-border transboundary pollution tracking.',
     palette: ['#000033','#0000ff','#8000ff','#00ffff','#008000','#ffff00','#ff0000'],
     palette_label: 'Dark blue (clean) → Cyan → Yellow → Red (severe)',
   },
@@ -3572,7 +3585,8 @@ const KNOWLEDGE = [
     id: 'co', category: 'atmospheric', tag: 'Atmospheric',
     name: 'CO', full: 'Carbon Monoxide Column Density',
     command: '/co',
-    definition: 'CO is produced by incomplete combustion of fossil fuels and biomass. The column density represents the total CO in a vertical atmospheric column. Elevated levels indicate combustion sources including vehicles, industry, and wildfires.',
+    definition: 'CO is produced by incomplete combustion of fossil fuels, biofuels, and biomass burning. The total column density represents the vertically integrated CO burden in the atmosphere. TROPOMI retrieves CO from shortwave infrared (SWIR) radiance at ~2.3 μm, where CO has distinct absorption features. Elevated column densities signal active combustion sources — wildfires, industrial flaring, or heavy traffic — and CO plumes can travel thousands of kilometres downwind.',
+    insight: 'CO is often described as a tracer for combustion activity. It is not a potent greenhouse gas itself, but it indirectly drives climate warming by reacting with OH radicals (reducing their ability to destroy CH₄) and contributing to tropospheric ozone formation. Sentinel-5P CO data from 2019–2024 over coastal areas has shown continuous increasing trends in CH₄ and CO, linked partly to shipping emissions. In Southeast Asia, large-scale agricultural burning in Sumatra, Kalimantan, and Borneo drives significant CO plumes annually — making TROPOMI CO one of the most operationally useful satellite products for regional air quality alerts in the region.',
     formula: 'CO total column (mol/m²) — retrieved by SWIR spectroscopy',
     formula_bands: 'Sentinel-5P TROPOMI: CO_column_number_density',
     range: '~0.02 to 0.08 mol/m²',
@@ -3584,7 +3598,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Sentinel-5P TROPOMI (COPERNICUS/S5P/OFFL/L3_CO)',
     scale: '3.5 km × 7 km spatial resolution',
-    use_cases: 'Wildfire smoke tracking, industrial combustion monitoring, urban air quality assessment.',
+    use_cases: 'Wildfire and peatfire smoke plume tracking, industrial combustion and flaring monitoring, urban traffic emission assessment, transboundary haze event analysis, biomass burning season impact mapping, and combustion source attribution studies.',
     palette: ['#000033','#0000ff','#8000ff','#00ffff','#008000','#ffff00','#ff0000'],
     palette_label: 'Dark blue (low) → Cyan → Red (high)',
   },
@@ -3592,7 +3606,8 @@ const KNOWLEDGE = [
     id: 'so2', category: 'atmospheric', tag: 'Atmospheric',
     name: 'SO₂', full: 'Sulfur Dioxide Column Density',
     command: '/so2',
-    definition: 'SO₂ is emitted from burning of sulfur-containing fuels, volcanic eruptions, and industrial smelting. High concentrations contribute to acid rain, haze, and respiratory problems.',
+    definition: 'SO₂ enters the atmosphere from burning sulfur-containing fossil fuels (coal, oil), volcanic degassing and eruptions, and industrial smelting of metal sulfide ores. At high concentrations it causes respiratory disease and contributes to acid rain by converting to sulfuric acid aerosols. TROPOMI retrieves SO₂ columns using a DOAS algorithm in the UV range (312–326 nm), with sensitivity to both tropospheric anthropogenic and stratospheric volcanic SO₂.',
+    insight: 'Sentinel-5P is now considered the premier satellite tool for SO₂ monitoring, capable of detecting individual power plant plumes at its ~3.5 km resolution. ESA\'s SentiWiki confirms TROPOMI is a particularly valuable tool for studying volcanic SO₂ — from routine degassing to major eruption events. The 2024 SO₂ Product User Manual notes the instrument\'s ability to resolve fine spatial details in anthropogenic emission clusters, enabling attribution of emissions to specific industrial facilities. For Indonesia — with some of the world\'s most active volcanoes including Merapi, Sinabung, and Anak Krakatau — TROPOMI SO₂ provides near-daily monitoring of volcanic activity and aviation hazard assessment.',
     formula: 'SO₂ column (mol/m²) — retrieved by DOAS algorithm',
     formula_bands: 'Sentinel-5P TROPOMI: SO2_column_number_density',
     range: '0 to ~0.001 mol/m²',
@@ -3604,7 +3619,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Sentinel-5P TROPOMI (COPERNICUS/S5P/OFFL/L3_SO2)',
     scale: '3.5 km × 7 km spatial resolution',
-    use_cases: 'Volcanic plume tracking, power plant emission monitoring, acid rain source identification.',
+    use_cases: 'Volcanic eruption plume tracking and aviation hazard alerts, coal power plant emission monitoring, acid rain precursor mapping, industrial smelter impact assessment, SO₂ policy compliance monitoring, and sulfate aerosol formation studies.',
     palette: ['#0000ff','#008000','#ffff00','#ffa500','#ff0000','#8b0000'],
     palette_label: 'Blue (clean) → Green → Orange → Dark red (severe)',
   },
@@ -3612,7 +3627,8 @@ const KNOWLEDGE = [
     id: 'ch4', category: 'atmospheric', tag: 'Atmospheric',
     name: 'CH₄', full: 'Methane Column Mixing Ratio',
     command: '/co', // mapped via agent
-    definition: 'CH₄ is a potent greenhouse gas emitted from wetlands, rice paddies, livestock, landfills, and fossil fuel extraction. The dry-air column mixing ratio measures its atmospheric concentration in parts per billion (ppb).',
+    definition: 'CH₄ is the second most powerful anthropogenic greenhouse gas after CO₂, with a global warming potential approximately 28–30 times greater than CO₂ over a 100-year timescale. TROPOMI retrieves the dry-air column-averaged mixing ratio (XCH₄) from SWIR radiance at ~2.3 μm. Methane is emitted from wetlands, rice paddies, ruminant livestock, landfills, oil and gas infrastructure leaks, and coal mines.',
+    insight: 'ESA reports that atmospheric methane concentration is currently increasing at approximately 1% per year — a trend with profound implications for global climate targets. TROPOMI\'s high spatial resolution (~5.5 × 7 km) enables detection of point-source methane "super-emitters" including individual landfills, oil fields, and livestock operations. Sentinel-5P data from 2019–2024 over China\'s coastal regions shows a continuous increasing CH₄ trend linked to shipping and industrial activity. For Southeast Asia, rice paddy agriculture is a major emission source — Indonesia and Vietnam produce significant CH₄ seasonally, traceable in TROPOMI data. Methane monitoring data directly informs national greenhouse gas inventories and Paris Agreement compliance reporting.',
     formula: 'CH₄ dry-air column mixing ratio (ppb)',
     formula_bands: 'Sentinel-5P TROPOMI: CH4_column_volume_mixing_ratio_dry_air',
     range: '~1750 to 1950 ppb',
@@ -3624,7 +3640,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Sentinel-5P TROPOMI (COPERNICUS/S5P/OFFL/L3_CH4)',
     scale: '5.5 km × 7 km spatial resolution',
-    use_cases: 'Wetland emission mapping, oil/gas leak detection, agricultural CH₄ from rice paddies, landfill monitoring.',
+    use_cases: 'Wetland and peatland CH₄ emission mapping, oil and gas infrastructure leak detection, rice paddy agricultural emission monitoring, landfill methane quantification, national greenhouse gas inventory support, and Paris Agreement climate compliance monitoring.',
     palette: ['#0000ff','#00ffff','#008000','#ffff00','#ffa500','#ff0000'],
     palette_label: 'Blue (background) → Green → Yellow → Red (high)',
   },
@@ -3632,7 +3648,8 @@ const KNOWLEDGE = [
     id: 'aerosol', category: 'atmospheric', tag: 'Atmospheric',
     name: 'Aerosol', full: 'Absorbing Aerosol Index (AAI)',
     command: '/no2',
-    definition: 'The Absorbing Aerosol Index detects the presence of absorbing aerosols (smoke, dust, volcanic ash) in the atmosphere. Positive values indicate absorbing aerosols; negative or near-zero values indicate non-absorbing aerosols or clear sky.',
+    definition: 'The Absorbing Aerosol Index (AAI) detects UV-absorbing aerosol particles in the atmosphere — primarily smoke from biomass burning, desert dust, and volcanic ash. It compares measured backscattered UV radiance against a modelled clear-sky Rayleigh scattering reference. Positive values indicate the presence of absorbing aerosols above the cloud top or in a clear atmosphere; values near zero or negative indicate clean air or non-absorbing aerosols such as marine sulfate.',
+    insight: 'AAI was first derived from the Total Ozone Mapping Spectrometer (TOMS) and has been continued by TROPOMI with greatly improved resolution. Unlike optical depth retrievals, AAI can detect absorbing aerosols above clouds — making it uniquely valuable during cloudy conditions when other aerosol products fail. For Southeast Asia, AAI is critical for monitoring annual transboundary haze events driven by peatland fires in Sumatra and Kalimantan, which regularly affect Singapore, Malaysia, and Borneo. High AAI values (>2) correlate strongly with surface-level PM2.5 spikes detected by ground air quality networks. The ESA Copernicus S5P Applications portal highlights AAI\'s role in aviation safety during volcanic ash events.',
     formula: 'AAI = −100 × log₁₀(I_measured / I_calculated)',
     formula_bands: 'Sentinel-5P TROPOMI: absorbing_aerosol_index',
     range: '−1 to +5 (unitless)',
@@ -3644,7 +3661,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Sentinel-5P TROPOMI (COPERNICUS/S5P/OFFL/L3_AER_AI)',
     scale: '3.5 km × 7 km spatial resolution',
-    use_cases: 'Smoke plume detection from wildfires, Saharan dust monitoring, volcanic ash tracking, air quality alerts.',
+    use_cases: 'Peatfire and wildfire smoke plume detection and tracking, Saharan dust and mineral dust transport monitoring, volcanic ash aviation hazard mapping, seasonal transboundary haze event monitoring, PM2.5 surface concentration proxy estimation, and aerosol-cloud interaction studies.',
     palette: ['#0000ff','#ffffff','#ffff00','#ffa500','#ff0000'],
     palette_label: 'Blue (clean) → White → Yellow → Red (heavy aerosol)',
   },
@@ -3652,7 +3669,8 @@ const KNOWLEDGE = [
     id: 'ffpi', category: 'atmospheric', tag: 'Atmospheric',
     name: 'FFPI', full: 'Fossil Fuel Pollution Index',
     command: '/ffpi',
-    definition: 'FFPI is a composite pollution index combining normalized NO₂, CO, and SO₂ columns into a single score (0–1). It provides a holistic view of fossil fuel combustion impacts on air quality across a region.',
+    definition: 'FFPI is a composite pollution index that synthesizes the normalized signals of three key combustion-derived pollutants — NO₂, CO, and SO₂ — into a single 0–1 score. Each component is min-max normalized within the study area before averaging, producing a holistic measure of fossil fuel combustion impact on local air quality. A score near 0 represents clean background conditions; values approaching 1 indicate a severe multi-pollutant burden.',
+    insight: 'Single-gas indices can be misleading because emission profiles vary by source type: traffic areas have high NO₂ but modest SO₂; coal power plants spike SO₂ and CO; wildfires dominate CO and aerosol. FFPI, by integrating all three, paints a more complete picture of cumulative anthropogenic pressure on a region\'s air quality. It is particularly useful for comparing industrial zones, port areas, and urban cores within the same scene — or for tracking policy interventions over time. Note that because FFPI is normalized within the analysis region, the absolute 0–1 scores are relative to that region and are not directly comparable across different study areas without careful recalibration.',
     formula: '(norm(NO₂) + norm(CO) + norm(SO₂)) / 3',
     formula_bands: 'Each component normalized 0–1 within the study area, then averaged',
     range: '0 (clean) to 1 (severely polluted)',
@@ -3664,7 +3682,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Sentinel-5P TROPOMI — composite of NO₂, CO, SO₂ layers',
     scale: '3.5 km spatial resolution',
-    use_cases: 'Multi-pollutant air quality assessment, identifying combustion hotspots, industrial zone characterization.',
+    use_cases: 'Multi-pollutant air quality composite assessment, combustion hotspot and industrial cluster identification, port and shipping lane emission characterization, air quality policy intervention tracking, environmental justice and residential exposure analysis, and cross-sector emission source comparison.',
     palette: ['#313695','#74add1','#fdae61','#d73027'],
     palette_label: 'Blue (clean) → Orange → Red (polluted)',
   },
@@ -3673,7 +3691,8 @@ const KNOWLEDGE = [
     id: 'lulc', category: 'landcover', tag: 'Classification',
     name: 'LULC', full: 'Land Use / Land Cover Classification',
     command: '/lulc',
-    definition: 'LULC classifies each pixel into a discrete land cover category using a supervised Random Forest classifier trained on ESA WorldCover 2021 reference data. Classes include Built Area, Trees, Rangeland, Cropland, Water, and Bare Ground.',
+    definition: 'LULC classifies each pixel into a discrete land cover category using a supervised Random Forest classifier trained on ESA WorldCover 2021 reference labels. The feature stack combines 6 spectral bands (SR_B2–SR_B7) with derived indices (NDVI, NDWI, NDBI) to give the model both spectral and index-derived information. Output classes include Built Area, Trees, Rangeland, Cropland, Water, and Bare Ground.',
+    insight: 'The Random Forest classifier used here follows the approach where the predicted class ŷ is the majority vote across all decision trees — each of which partitions the feature space differently. ESA WorldCover 2021 provides globally consistent 10 m reference labels derived from a combination of Sentinel-1 SAR and Sentinel-2 optical data, making it a high-quality training source even at Landsat\'s 30 m resolution. In rapidly urbanizing regions, LULC time-series analysis is fundamental: studies across multiple cities have documented that a 1% gain in built area is associated with measurable increases in mean LST. Landcover classification also feeds directly into ecosystem service valuation — for example, quantifying how much carbon sequestration or stormwater regulation capacity is lost when forests are converted to urban use.',
     formula: 'Random Forest classifier trained on spectral bands + indices',
     formula_bands: 'Landsat 8: SR_B2–SR_B7 + NDVI + NDWI + NDBI (as feature stack). Training labels from ESA WorldCover 2021.',
     range: 'Categorical classes',
@@ -3687,7 +3706,7 @@ const KNOWLEDGE = [
     ],
     datasource: 'Landsat 8/9 + ESA WorldCover 2021 (training labels)',
     scale: '30 m spatial resolution',
-    use_cases: 'Urban growth monitoring, deforestation tracking, land use planning, ecosystem service assessment.',
+    use_cases: 'Urban growth and sprawl monitoring, deforestation and forest cover change tracking, agricultural land use mapping and crop type inventory, ecosystem service valuation and carbon stock estimation, land use policy compliance assessment, and multi-temporal landscape fragmentation analysis.',
     palette: ['#ff0000','#228b22','#d2b48c','#ffff00','#0000ff','#a0522d'],
     palette_label: 'Discrete class colors per legend',
   },
@@ -3724,6 +3743,12 @@ const KNOWLEDGE_EXTRA = {
       { sym: '2.5',    desc: 'Gain factor to scale output range' },
     ],
     viz_type: 'gradient_scale',
+    viz_steps: [
+      { range: '< 0.1',   label: 'Bare ground / Very sparse vegetation', color: '#C1704A', icon: '🏜️' },
+      { range: '0.1–0.3', label: 'Low / stressed vegetation', color: '#F0A500', icon: '🌱' },
+      { range: '0.3–0.5', label: 'Moderate vegetation cover', color: '#5BAD72', icon: '🌿' },
+      { range: '> 0.5',   label: 'Dense forest or healthy canopy', color: '#006400', icon: '🌲' },
+    ],
   },
   savi: {
     latex: `\\[ \\text{SAVI} = \\frac{(\\rho_{NIR} - \\rho_{Red})}{(\\rho_{NIR} + \\rho_{Red} + L)} \\times (1 + L) \\]`,
@@ -3733,6 +3758,12 @@ const KNOWLEDGE_EXTRA = {
       { sym: 'L',     desc: 'Soil brightness correction factor (L = 0.5 for intermediate cover; 0 = dense, 1 = sparse)' },
     ],
     viz_type: 'gradient_scale',
+    viz_steps: [
+      { range: '< 0.1',   label: 'Bare soil dominant — minimal vegetation', color: '#C1704A', icon: '🏜️' },
+      { range: '0.1–0.3', label: 'Sparse vegetation with exposed soil', color: '#F0A500', icon: '🌱' },
+      { range: '0.3–0.5', label: 'Moderate vegetation, reduced soil effect', color: '#5BAD72', icon: '🌿' },
+      { range: '> 0.5',   label: 'Dense vegetation, soil background minimal', color: '#1A7A40', icon: '🌳' },
+    ],
   },
   ndwi: {
     latex: `\\[ \\text{NDWI} = \\frac{\\rho_{Green} - \\rho_{NIR}}{\\rho_{Green} + \\rho_{NIR}} \\]`,
@@ -3755,6 +3786,12 @@ const KNOWLEDGE_EXTRA = {
       { sym: 'ρ_SWIR',  desc: 'Short-wave infrared reflectance (Band 6, ~1.6 μm) — better separates built-up from water than NIR' },
     ],
     viz_type: 'gradient_scale',
+    viz_steps: [
+      { range: '< −0.3',  label: 'Dry land / Built-up surfaces', color: '#C1704A', icon: '🏙️' },
+      { range: '−0.3–0',  label: 'Mixed / Transitional land', color: '#91BFDB', icon: '🌾' },
+      { range: '0–0.3',   label: 'Moist soil / Shallow water', color: '#4575B4', icon: '🌊' },
+      { range: '> 0.3',   label: 'Open water body', color: '#023858', icon: '🏞️' },
+    ],
   },
   ndbi: {
     latex: `\\[ \\text{NDBI} = \\frac{\\rho_{SWIR} - \\rho_{NIR}}{\\rho_{SWIR} + \\rho_{NIR}} \\]`,
@@ -3777,6 +3814,11 @@ const KNOWLEDGE_EXTRA = {
       { sym: 'ρ_NIR',   desc: 'Near-infrared (Band 5) — vegetation suppresses urban signal' },
     ],
     viz_type: 'gradient_scale',
+    viz_steps: [
+      { range: '< −0.1',   label: 'Vegetation dominant — parks, forests', color: '#1A7A40', icon: '🌳' },
+      { range: '−0.1–0.1', label: 'Transitional / Mixed suburban', color: '#F0A500', icon: '🏘️' },
+      { range: '> 0.1',    label: 'Urban / Built-up surface', color: '#800080', icon: '🏙️' },
+    ],
   },
   bsi: {
     latex: `\\[ \\text{BSI} = \\frac{(\\rho_{SWIR} + \\rho_{Red}) - (\\rho_{NIR} + \\rho_{Blue})}{(\\rho_{SWIR} + \\rho_{Red}) + (\\rho_{NIR} + \\rho_{Blue})} \\]`,
@@ -3787,6 +3829,11 @@ const KNOWLEDGE_EXTRA = {
       { sym: 'ρ_Blue', desc: 'Blue (Band 2) — suppresses atmospheric effects' },
     ],
     viz_type: 'gradient_scale',
+    viz_steps: [
+      { range: '< −0.1',   label: 'Vegetated surface — low bare soil exposure', color: '#1A7A40', icon: '🌿' },
+      { range: '−0.1–0.1', label: 'Mixed / Transitional land cover', color: '#F0A500', icon: '🌾' },
+      { range: '> 0.1',    label: 'Bare soil / Degraded or exposed land', color: '#C1704A', icon: '🏜️' },
+    ],
   },
   nbi: {
     latex: `\\[ \\text{NBI} = \\frac{\\rho_{Red} \\times \\rho_{SWIR}}{\\rho_{NIR}} \\]`,
@@ -3796,6 +3843,11 @@ const KNOWLEDGE_EXTRA = {
       { sym: 'ρ_NIR',  desc: 'Near-infrared (Band 5) — in denominator to suppress vegetation' },
     ],
     viz_type: 'gradient_scale',
+    viz_steps: [
+      { range: '< 0.1',    label: 'Low / Non-built — vegetation or water', color: '#91BFDB', icon: '🌳' },
+      { range: '0.1–0.25', label: 'Moderate urban — low-density suburbs', color: '#FEE090', icon: '🏘️' },
+      { range: '> 0.25',   label: 'High built-up — dense urban fabric', color: '#D73027', icon: '🏙️' },
+    ],
   },
   ndsi: {
     latex: `\\[ \\text{NDSI} = \\frac{\\rho_{Green} - \\rho_{SWIR}}{\\rho_{Green} + \\rho_{SWIR}} \\]`,
@@ -3804,6 +3856,11 @@ const KNOWLEDGE_EXTRA = {
       { sym: 'ρ_SWIR',  desc: 'Short-wave infrared (Band 6) — snow absorbs strongly in SWIR; clouds do not' },
     ],
     viz_type: 'gradient_scale',
+    viz_steps: [
+      { range: '< 0.0',   label: 'No snow — land surface or water', color: '#C1704A', icon: '🌍' },
+      { range: '0.0–0.4', label: 'Possible snow or ice — transitional', color: '#91BFDB', icon: '🌨️' },
+      { range: '> 0.4',   label: 'Confirmed snow or ice cover', color: '#e0ffff', icon: '❄️' },
+    ],
   },
   lst: {
     latex: `\\[ \\text{LST} = \\frac{BT}{1 + \\left(\\dfrac{\\lambda \\cdot BT}{\\rho}\\right) \\cdot \\ln(\\varepsilon)} - 273.15 \\]`,
@@ -3833,6 +3890,12 @@ const KNOWLEDGE_EXTRA = {
       { sym: 'UHI < 0',   desc: 'Pixel is cooler than average → urban cool island / green space' },
     ],
     viz_type: 'gradient_scale',
+    viz_steps: [
+      { range: '< −2',   label: 'Strong cool island — parks, water bodies, forests', color: '#313695', icon: '🌊' },
+      { range: '−2–0',   label: 'Below average temperature — vegetated or shaded areas', color: '#74add1', icon: '🌿' },
+      { range: '0–2',    label: 'Above average temperature — built-up or paved areas', color: '#fd8d3c', icon: '🏙️' },
+      { range: '> 2',    label: 'Strong heat island — dense urban core or industrial zone', color: '#b10026', icon: '🔥' },
+    ],
   },
   no2: {
     latex: `\\[ \\Omega_{NO_2} = \\int_0^{TOA} n_{NO_2}(z)\\, dz \\quad [\\text{mol/m}^2] \\]`,
@@ -3857,6 +3920,12 @@ const KNOWLEDGE_EXTRA = {
       { sym: 'n_CO(z)', desc: 'CO number density at altitude z, retrieved via SWIR spectroscopy at 2.3 μm' },
     ],
     viz_type: 'gradient_scale',
+    viz_steps: [
+      { range: '< 0.035 mol/m²',       label: 'Background levels — clean air', color: '#000033', icon: '✅' },
+      { range: '0.035–0.055 mol/m²',   label: 'Moderate — urban traffic or industry', color: '#00ffff', icon: '🚗' },
+      { range: '0.055–0.07 mol/m²',    label: 'Elevated — significant combustion source', color: '#ffff00', icon: '🏭' },
+      { range: '> 0.07 mol/m²',        label: 'High — wildfire smoke or heavy burning', color: '#ff0000', icon: '🔥' },
+    ],
   },
   so2: {
     latex: `\\[ \\Omega_{SO_2} = \\int_0^{TOA} n_{SO_2}(z)\\, dz \\quad [\\text{mol/m}^2] \\]`,
@@ -3865,6 +3934,12 @@ const KNOWLEDGE_EXTRA = {
       { sym: 'n_SO₂(z)', desc: 'SO₂ number density at altitude z, retrieved by UV-DOAS in 312–326 nm range' },
     ],
     viz_type: 'gradient_scale',
+    viz_steps: [
+      { range: '< 1×10⁻⁴ mol/m²',     label: 'Clean background — no significant source', color: '#0000ff', icon: '✅' },
+      { range: '1–5×10⁻⁴ mol/m²',     label: 'Moderate — industrial or shipping emissions', color: '#008000', icon: '🏭' },
+      { range: '5×10⁻⁴–10⁻³ mol/m²', label: 'High — active volcanic degassing or heavy industry', color: '#ffa500', icon: '🌋' },
+      { range: '> 10⁻³ mol/m²',       label: 'Severe — major eruption or industrial accident', color: '#8b0000', icon: '⚠️' },
+    ],
   },
   ch4: {
     latex: `\\[ X_{CH_4} = \\frac{\\Omega_{CH_4}}{\\Omega_{dry-air}} \\times 10^9 \\quad [\\text{ppb}] \\]`,
@@ -3875,6 +3950,12 @@ const KNOWLEDGE_EXTRA = {
       { sym: '× 10⁹',        desc: 'Conversion to parts per billion (ppb)' },
     ],
     viz_type: 'gradient_scale',
+    viz_steps: [
+      { range: '< 1850 ppb',    label: 'Background — near global baseline (~1800 ppb)', color: '#0000ff', icon: '✅' },
+      { range: '1850–1900 ppb', label: 'Slightly elevated — regional biogenic source', color: '#00ffff', icon: '🌾' },
+      { range: '1900–1950 ppb', label: 'Elevated — local emission source detected', color: '#ffff00', icon: '🐄' },
+      { range: '> 1950 ppb',    label: 'High — landfill, gas leak, or heavy wetland emission', color: '#ff0000', icon: '⚠️' },
+    ],
   },
   aerosol: {
     latex: `\\[ \\text{AAI} = -100 \\times \\log_{10}\\left(\\frac{I_{meas}}{I_{calc}}\\right) \\]`,
@@ -3885,6 +3966,12 @@ const KNOWLEDGE_EXTRA = {
       { sym: 'AAI < 0', desc: 'Non-absorbing aerosols or clean atmosphere (marine aerosols)' },
     ],
     viz_type: 'gradient_scale',
+    viz_steps: [
+      { range: '< 0',   label: 'Clean / Non-absorbing aerosols — clear sky or marine', color: '#0000ff', icon: '✅' },
+      { range: '0–1',   label: 'Low aerosol loading — trace smoke or dust', color: '#aaaaaa', icon: '🌫️' },
+      { range: '1–2',   label: 'Moderate — dust plume or smoke from regional fires', color: '#ffff00', icon: '🌋' },
+      { range: '> 2',   label: 'High — dense wildfire smoke or volcanic ash cloud', color: '#ff0000', icon: '🔥' },
+    ],
   },
   ffpi: {
     latex: `\\[ \\text{FFPI} = \\frac{1}{3}\\left(\\hat{NO_2} + \\hat{CO} + \\hat{SO_2}\\right) \\]`,
@@ -3895,6 +3982,12 @@ const KNOWLEDGE_EXTRA = {
       { sym: 'ŜO₂',   desc: 'Min-max normalized SO₂ column within the study area' },
     ],
     viz_type: 'gradient_scale',
+    viz_steps: [
+      { range: '0–0.3',   label: 'Clean / Low impact — minimal combustion burden', color: '#313695', icon: '✅' },
+      { range: '0.3–0.6', label: 'Moderate pollution — mixed urban or light industrial', color: '#fdae61', icon: '🏘️' },
+      { range: '0.6–0.8', label: 'Polluted — heavy traffic corridors or industrial clusters', color: '#f46d43', icon: '🏭' },
+      { range: '> 0.8',   label: 'Severely polluted — major combustion hotspot', color: '#d73027', icon: '⚠️' },
+    ],
   },
   lulc: {
     latex: `\\[ \\hat{y} = \\arg\\max_k P(y = k \\mid \\mathbf{x}, \\theta) \\]`,
@@ -3969,8 +4062,23 @@ function openKnowledgeDetail(id) {
 
   // ── Derived values ──────────────────────────────────────
   const rangeParts = k.range.split(' to ');
-  const rangeMin = rangeParts[0] || '—';
-  const rangeMax = rangeParts[1] || '—';
+  let rangeMin, rangeMax;
+  if (rangeParts.length >= 2) {
+    rangeMin = rangeParts[0].trim();
+    rangeMax = rangeParts[1].trim();
+  } else {
+    // Non-standard range (e.g. LST "Typically 15–65°C", UHI "z-score", LULC "Categorical")
+    // Try splitting on em-dash or en-dash
+    const dashParts = k.range.split(/[–—]/);
+    if (dashParts.length >= 2) {
+      // Strip leading descriptive text, keep number + units
+      rangeMin = dashParts[0].replace(/^[A-Za-z\s]*/,'').replace(/[^0-9°C.+\-]*$/,'').trim() || dashParts[0].trim();
+      rangeMax = dashParts[1].replace(/^[^0-9\-+]*/,'').replace(/[^0-9°C.+\-]*$/,'').trim() || dashParts[1].trim();
+    } else {
+      rangeMin = k.range;
+      rangeMax = '—';
+    }
+  }
   const _resShort = k.scale.replace(' spatial resolution','');
   const _bandsMatch = k.formula_bands.match(/SR_B\d+|ST_B\d+/g);
   const _bandsUsed = _bandsMatch ? [...new Set(_bandsMatch)].join(', ') : k.tag;
@@ -3986,11 +4094,21 @@ function openKnowledgeDetail(id) {
   const accent = catAccent[k.category] || 'var(--accent)';
 
   // ── RIGHT COLUMN: Key metrics chips ────────────────────
-  const _chipsHtml = `
+  // For categorical indices (LULC), show classification-specific metrics instead of min/max
+  let _chipsHtml;
+  if (k.tag === 'Classification') {
+    _chipsHtml = `
+    <div class="concl-chip"><div class="concl-chip-label">Output Type</div><div class="concl-chip-value ${_cc[0]}" style="font-size:12px">Categorical</div></div>
+    <div class="concl-chip"><div class="concl-chip-label">Classes</div><div class="concl-chip-value ${_cc[1]}" style="font-size:12px">6 classes</div></div>
+    <div class="concl-chip"><div class="concl-chip-label">Resolution</div><div class="concl-chip-value ${_cc[2]}" style="font-size:13px;font-family:var(--font-body)">${_resShort}</div></div>
+    <div class="concl-chip"><div class="concl-chip-label">Algorithm</div><div class="concl-chip-value ${_cc[3]}" style="font-size:11px;font-family:var(--font-body);line-height:1.4">Random Forest</div></div>`;
+  } else {
+    _chipsHtml = `
     <div class="concl-chip"><div class="concl-chip-label">Min Value</div><div class="concl-chip-value ${_cc[0]}">${rangeMin}</div></div>
     <div class="concl-chip"><div class="concl-chip-label">Max Value</div><div class="concl-chip-value ${_cc[1]}">${rangeMax}</div></div>
     <div class="concl-chip"><div class="concl-chip-label">Resolution</div><div class="concl-chip-value ${_cc[2]}" style="font-size:13px;font-family:var(--font-body)">${_resShort}</div></div>
     <div class="concl-chip"><div class="concl-chip-label">Bands Used</div><div class="concl-chip-value ${_cc[3]}" style="font-size:11px;font-family:var(--font-mono);line-height:1.5">${_bandsUsed}</div></div>`;
+  }
 
   const _interpHtml = k.interpretation && k.interpretation.length
     ? k.interpretation.map(it => `
@@ -4001,15 +4119,15 @@ function openKnowledgeDetail(id) {
     : '';
 
   const keyMetricsHtml = `
-    <div class="concl-card concl-card--expanded" data-chips-theme="${_theme.chips}" data-findings-theme="${_theme.findings}" style="margin-bottom:0;border-radius:var(--radius-sm)">
-      <div class="concl-header" style="cursor:default">
+    <div class="concl-card concl-card--expanded" id="kpd-index-summary-card" data-chips-theme="${_theme.chips}" data-findings-theme="${_theme.findings}" style="margin-bottom:0;border-radius:var(--radius-sm)">
+      <div class="concl-header" onclick="kpdToggleIndexSummary(this)" style="cursor:pointer">
         <div class="concl-header-left">
           <div class="concl-header-title">Index Summary</div>
           <div class="concl-header-preview">${k.range} · ${_resShort} · ${k.tag}</div>
         </div>
         <svg class="concl-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
-      <div class="concl-body" style="display:block">
+      <div class="concl-body" id="kpd-index-summary-body" style="display:block">
         <div class="concl-chips-section">
           <div class="concl-chips-label">Key Metrics</div>
           <div class="concl-chips-row">${_chipsHtml}</div>
@@ -4137,15 +4255,6 @@ function openKnowledgeDetail(id) {
             </div>
           </div>`).join('')}
       </div>
-      <div class="kpd-cta-block" style="--cta-accent:${accent}">
-        <div class="kpd-cta-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        </div>
-        <div class="kpd-cta-text">
-          <div class="kpd-cta-title">Run this analysis</div>
-          <div class="kpd-cta-sub">Type <code class="kpd-code">${k.command}</code> in the chat to analyse your selected region with this index.</div>
-        </div>
-      </div>
     </div>`;
 
   // ── Assemble the full page ──────────────────────────────
@@ -4164,16 +4273,14 @@ function openKnowledgeDetail(id) {
           <div class="kpd-big-name">${k.name}</div>
           <div class="kpd-big-full">${k.full}</div>
           <p class="kpd-doc-body">${k.definition}</p>
-          <div class="kpd-compare-block" style="--cta-accent:${accent}">
-            <div class="kpd-compare-row kpd-compare-row--muted">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <div><strong>Output type:</strong> ${k.tag} · range ${k.range}</div>
+          ${k.insight ? `
+          <div class="kpd-insight-block" style="--insight-accent:${accent}">
+            <div class="kpd-insight-header">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              Research Insight
             </div>
-            <div class="kpd-compare-row" style="color:${accent}">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:2px"><polyline points="20 6 9 17 4 12"/></svg>
-              <div><strong>Available as command:</strong> <code class="kpd-code">${k.command}</code> in the GIS Agent chat</div>
-            </div>
-          </div>
+            <p class="kpd-insight-body">${k.insight}</p>
+          </div>` : ''}
         </div>
 
         <!-- SECTION 2: Formula -->
@@ -4289,6 +4396,17 @@ function _kpdScrollSpy() {
   items.forEach(it => {
     it.classList.toggle('active', it.getAttribute('onclick') && it.getAttribute('onclick').includes(current));
   });
+}
+
+function kpdToggleIndexSummary(headerEl) {
+  const card = headerEl.closest('.concl-card');
+  const body = document.getElementById('kpd-index-summary-body');
+  const chevron = headerEl.querySelector('.concl-chevron');
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (chevron) chevron.style.transform = isOpen ? 'rotate(-90deg)' : 'rotate(0deg)';
+  if (card) card.classList.toggle('concl-card--expanded', !isOpen);
 }
 
 function buildKnowledgeViz(ex) {
