@@ -16,3 +16,4 @@ __pycache__/
 
 # service account
 gee-service-account.json
+gee-creds.json
