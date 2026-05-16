@@ -1352,17 +1352,38 @@ def _extract_variables_from_text(text: str) -> list:
     return found
 
 
+# All known variable tokens — stripped from message before region extraction
+_VAR_TOKENS = _re.compile(
+    r'\b(?:ffpi|ndvi|evi|savi|ndwi|mndwi|ndbi|ui|nbi|bsi|ndsi|lst|uhi|rgb|lulc|'
+    r'no2|co2?|so2|ch4|o3|aerosol|gpp|burned?|all[_\s]?surface|all[_\s]?atmo|'
+    r'fossil\s+fuel(?:\s+pollution)?(?:\s+index)?|pollution\s+index|'
+    r'vegetation|greenery|water\s+index|land\s+(?:cover|use)|land\s+surface\s+temp(?:erature)?|'
+    r'carbon\s+monoxide|nitrogen\s+dioxide|sulfur\s+dioxide|methane|ozone|'
+    r'gross\s+primary(?:\s+productivity)?|carbon\s+uptake|'
+    r'true\s+colou?r|heat\s+island|urban\s+heat\s+island)\b',
+    _re.IGNORECASE
+)
+
+def _strip_var_tokens(text: str) -> str:
+    """Remove all variable names/keywords from text, leaving only region + dates."""
+    # Also strip leading slash commands like /ffpi, /ndvi
+    stripped = _re.sub(r'^/\w+\s*', '', text.strip())
+    stripped = _VAR_TOKENS.sub(' ', stripped)
+    # Collapse multiple spaces
+    return _re.sub(r'\s{2,}', ' ', stripped).strip()
+
+
 def _extract_region_and_dates(text: str) -> tuple:
     """
     Best-effort extraction of region + dates from raw text without LLM.
     Returns (region_or_None, start_or_None, end_or_None).
     """
-    # Dates: YYYY-MM-DD or DD/MM/YYYY or "in YYYY"
+    # Dates: YYYY-MM-DD
     date_pat = _re.findall(r'\b(\d{4}-\d{2}-\d{2})\b', text)
     start_date = date_pat[0] if len(date_pat) >= 1 else None
     end_date   = date_pat[1] if len(date_pat) >= 2 else None
 
-    # Year-only: "in 2025" / "for 2024" → full year range
+    # Year-only: "in 2025" / "for 2024" / "2025" → full year range
     if not start_date:
         yr = _re.search(r'\b(20\d{2})\b', text)
         if yr:
@@ -1370,22 +1391,22 @@ def _extract_region_and_dates(text: str) -> tuple:
             start_date = f'{y}-01-01'
             end_date   = f'{y}-12-31'
 
-    # Region: everything before the first known variable keyword / date / preposition
+    # Region: strip all variable tokens first, then extract what remains
     region = None
-    # Strip leading commands like /ffpi, analyse, show, compute, etc.
+    # Remove variable keywords so "FFPI Jakarta in 2025" → "Jakarta in 2025"
+    cleaned = _strip_var_tokens(text)
+    # Strip leading action verbs
     cleaned = _re.sub(
         r'^(?:analyse|analyze|show|compute|calculate|run|get|give me|what is|map)\s+',
-        '', text.strip(), flags=_re.IGNORECASE)
-    # Known stop words before which we'd expect a region name
-    region_stop = _re.search(
-        r'\b(?:in |for |of |from |between |ndvi|evi|savi|ndwi|mndwi|ndbi|'
-        r'ui\b|nbi|bsi|ndsi|lst|uhi|rgb|lulc|no2|co\b|so2|ch4|o3|aerosol|'
-        r'gpp|burned|ffpi|all.?surface|all.?atmo)\b',
-        cleaned, flags=_re.IGNORECASE)
-    if region_stop:
-        candidate = cleaned[:region_stop.start()].strip().rstrip(',')
-        if len(candidate) > 1:
-            region = candidate
+        '', cleaned, flags=_re.IGNORECASE)
+    # Strip leading prepositions left over after variable removal (e.g. "for Bandung" → "Bandung")
+    cleaned = _re.sub(r'^(?:in|for|of|from|between|during|at|the)\s+', '', cleaned, flags=_re.IGNORECASE)
+    # Strip trailing year / date patterns and prepositions
+    cleaned = _re.sub(r'\b(?:in|for|of|from|between|during|at)\s+20\d{2}\b.*$', '', cleaned, flags=_re.IGNORECASE)
+    cleaned = _re.sub(r'\b20\d{2}\b.*$', '', cleaned).strip().rstrip(',').strip()
+
+    if len(cleaned) > 1:
+        region = cleaned
 
     return region, start_date, end_date
 
@@ -1427,10 +1448,13 @@ def call_ollama(user_message, chat_history):
             '{"region": "place name or null", "start_date": "YYYY-MM-DD or null", "end_date": "YYYY-MM-DD or null"}'
         )
         try:
+            # Strip variable tokens from message so Ollama only sees region + dates
+            _clean_msg = _strip_var_tokens(user_message)
+            print(f'  [pre-check] cleaned msg for Ollama: "{_clean_msg}"')
             _resp = requests.post(OLLAMA_URL,
                 json={'model': OLLAMA_MODEL,
                       'messages': [{'role': 'system', 'content': _geo_prompt},
-                                   {'role': 'user',   'content': user_message}],
+                                   {'role': 'user',   'content': _clean_msg}],
                       'stream': False}, timeout=30)
             _geo = json.loads(_resp.json().get('message', {}).get('content', '{}'))
             _pre_region = _pre_region or _geo.get('region')

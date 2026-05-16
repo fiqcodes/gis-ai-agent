@@ -47,6 +47,8 @@ from gis_functions import (
     fetch_web_context, generate_insight,
     # Maps
     SURFACE_INDEX_MAP, ATMO_INDEX_MAP, KEYWORD_MAP, SYSTEM_PROMPT, VIS,
+    # Pre-check helpers — bypass Ollama for known variable keywords
+    _extract_variables_from_text, _extract_region_and_dates, _strip_var_tokens,
 )
 
 # ── Initialize GEE ────────────────────────────────────────────────────────────
@@ -414,15 +416,89 @@ class InsightEval(BaseModel):
     feedback : str   = Field(description="Specific feedback for improvement if score < 7")
     accept   : bool  = Field(description="True if score >= 7 and insight is acceptable")
 
-# ── NODE 1: Router — always use raw JSON fallback for gemma3 ─────────────────
+# ── NODE 1: Router — pre-check first, Ollama only as fallback ────────────────
 def node_router(state: AgentState) -> dict:
-    """Parse user intent using raw JSON (reliable for gemma3:4b)."""
+    """Parse user intent. Uses keyword pre-check to bypass Ollama for known
+    variable names — prevents Gemma from hallucinating on acronyms like FFPI."""
+    user_input = state["user_input"]
     print("\n[ROUTER] Parsing user request...")
+
+    # ── Pre-check: detect variable keywords deterministically ────────────────
+    _pre_vars = _extract_variables_from_text(user_input)
+    if _pre_vars:
+        _pre_region, _pre_start, _pre_end = _extract_region_and_dates(user_input)
+
+        # Full pre-check: skip Ollama entirely
+        if _pre_region and _pre_start:
+            print(f"  [pre-check FULL] vars={_pre_vars} region={_pre_region} start={_pre_start}")
+            vars_out = _pre_vars
+            if "all_surface" in vars_out:
+                vars_out = list(SURFACE_INDEX_MAP.keys()) + ["lst", "uhi"]
+            if "all_atmo" in vars_out:
+                vars_out = list(ATMO_INDEX_MAP.keys())
+            vars_out = [KEYWORD_MAP.get(v.lower(), v.lower()) for v in vars_out]
+            vars_out = list(dict.fromkeys(vars_out))
+            print(f"  Intent: analysis | Region: {_pre_region} | Vars: {vars_out}")
+            return {
+                "intent"    : "analysis",
+                "region"    : _pre_region,
+                "start_date": _pre_start,
+                "end_date"  : _pre_end,
+                "variables" : vars_out,
+                "messages"  : [AIMessage(content=f"Running {', '.join(v.upper() for v in vars_out)} analysis for {_pre_region}.")],
+            }
+
+        # Partial pre-check: variables found but region/date missing
+        # Strip variable tokens so Ollama only sees region + dates
+        print(f"  [pre-check PARTIAL] vars={_pre_vars} — asking Ollama for region/date only")
+        _geo_prompt = (
+            "Extract ONLY the region name and date range from this message. "
+            "Words like FFPI, NDVI, NO2, CO, SO2, CH4, LST, LULC, EVI, NDWI are satellite index names — "
+            "NOT place names or organisations. Ignore them when extracting the region. "
+            'Example: "FFPI Jakarta in 2025" → region="Jakarta", start_date="2025-01-01", end_date="2025-12-31". '
+            "Respond with ONLY this JSON:\n"
+            '{"region": "place name or null", "start_date": "YYYY-MM-DD or null", "end_date": "YYYY-MM-DD or null"}'
+        )
+        _clean_msg = _strip_var_tokens(user_input)
+        print(f"  [pre-check] cleaned msg for Ollama: \"{_clean_msg}\"")
+        try:
+            _resp = requests.post(OLLAMA_URL,
+                json={"model": OLLAMA_MODEL,
+                      "messages": [{"role": "system", "content": _geo_prompt},
+                                   {"role": "user",   "content": _clean_msg}],
+                      "stream": False}, timeout=30)
+            _geo = json.loads(_resp.json().get("message", {}).get("content", "{}"))
+            _pre_region = _pre_region or _geo.get("region")
+            _pre_start  = _pre_start  or _geo.get("start_date")
+            _pre_end    = _pre_end    or _geo.get("end_date")
+        except Exception as _ge:
+            print(f"  [pre-check] geo fallback failed: {_ge}")
+
+        vars_out = _pre_vars
+        if "all_surface" in vars_out:
+            vars_out = list(SURFACE_INDEX_MAP.keys()) + ["lst", "uhi"]
+        if "all_atmo" in vars_out:
+            vars_out = list(ATMO_INDEX_MAP.keys())
+        vars_out = [KEYWORD_MAP.get(v.lower(), v.lower()) for v in vars_out]
+        vars_out = list(dict.fromkeys(vars_out))
+        print(f"  [pre-check MERGED] vars={vars_out} region={_pre_region} start={_pre_start}")
+        return {
+            "intent"    : "analysis",
+            "region"    : _pre_region,
+            "start_date": _pre_start,
+            "end_date"  : _pre_end,
+            "variables" : vars_out,
+            "messages"  : [AIMessage(content=f"Running {', '.join(v.upper() for v in vars_out)} analysis"
+                                     + (f" for {_pre_region}" if _pre_region else "") + ".")],
+        }
+
+    # ── No variable keywords found → full Ollama parse (questions, unknown) ──
+    print("  [router] No variable keywords — falling back to Ollama")
     resp = requests.post(OLLAMA_URL,
         json={"model": OLLAMA_MODEL,
               "messages": [
                   {"role": "system", "content": SYSTEM_PROMPT},
-                  {"role": "user",   "content": state["user_input"]}],
+                  {"role": "user",   "content": user_input}],
               "stream": False}, timeout=60)
     data = resp.json()
     raw  = data.get("message", {}).get("content", "{}").strip()
