@@ -2042,11 +2042,9 @@ html, body {
 /* Side-tab toggle button — floats on the LEFT edge of the right col */
 .kpd-right-tab-btn {
   position: absolute;
-  /* vertically centered in the page, accounting for any top chrome */
   top: 50%;
   transform: translateY(-50%);
-  /* sits just to the left of the right col — we use right-col width via right offset */
-  right: 400px; /* matches kpd-right-col width */
+  right: 400px;
   width: 20px;
   height: 48px;
   background: var(--bg2);
@@ -2948,6 +2946,73 @@ html, body {
   color: var(--text2);
   line-height: 1.8;
   margin: 0;
+}
+
+/* ── Key References (papers) block ───────────────────────── */
+.kpd-papers-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+}
+.kpd-papers-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--text3);
+}
+.kpd-papers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kpd-paper-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.kpd-paper-num {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text3);
+  min-width: 22px;
+  padding-top: 2px;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+.kpd-paper-body {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text2);
+}
+.kpd-paper-authors {
+  font-weight: 600;
+  color: var(--text);
+  margin-right: 3px;
+}
+.kpd-paper-title {
+  font-style: italic;
+  color: var(--text2);
+  margin-right: 3px;
+}
+.kpd-paper-journal {
+  color: var(--text3);
+  margin-right: 6px;
+}
+.kpd-paper-note {
+  display: block;
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+  padding-left: 0;
+  font-style: italic;
 }
 
 /* Chevron transition for collapsible */
