@@ -831,11 +831,12 @@ function pollJob(jobId, onComplete) {
     }
 
     if (data.status === 'complete') {
+      const completedJobId = jobId;   // capture before stopPolling() nulls currentJobId
       stopPolling();
       window._geoShown = false;
       removeTypingIndicator();
       hidePlanWidget();
-      handleResult(data.result);
+      handleResult(data.result, completedJobId);
       if (onComplete) onComplete();
     } else if (data.status === 'error') {
       stopPolling();
@@ -875,7 +876,7 @@ function appendYearDivider(year) {
   scrollToBottom();
 }
 
-function handleResult(result) {
+function handleResult(result, completedJobId) {
   if (!result) { appendAIMessage('<p>No result returned.</p>'); return; }
 
   if (result.type === 'qa') {
@@ -961,13 +962,20 @@ function handleResult(result) {
 
   // 2. Build chat message
   let html = buildResultHTML(region, start_date, end_date, variables, stats, layers, figures, var_insights || {}, conclusion || insight || '');
-  appendAIMessage(html);
+  const resultBubble = appendAIMessage(html);  // capture ref before research chip is appended
 
-  // 3. Render Plotly charts — find the last AI bubble (just appended) and render into its divs
+  // 3a. Store job ID and full result so Research Mode can reference this completed analysis
+  _lastAnalysisJobId  = completedJobId;  // use passed-in id — currentJobId is null after stopPolling()
+  _lastAnalysisResult = result;
+
+  // 3b. If Research Mode is active, auto-generate the paper immediately
+  if (_researchModeActive) {
+    setTimeout(() => _autoStartResearch(completedJobId), 400);
+  }
+
+  // 3. Render Plotly charts — use captured bubble ref (not last-in-DOM, which may be the research chip)
   setTimeout(() => {
-    const bubbles = document.querySelectorAll('.msg-bubble.ai');
-    const lastBubble = bubbles[bubbles.length - 1];
-    if (lastBubble) renderAllPlotlyCharts(stats, figures, lastBubble);
+    if (resultBubble) renderAllPlotlyCharts(stats, figures, resultBubble);
   }, 150);
 
   // Auto-save this chat to history after result is rendered
@@ -3056,12 +3064,15 @@ const STEP_SVG = {
   layer: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
   // AI insight
   insight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.7-3.3 6l-.7 4H9l-.7-4A7 7 0 0 1 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="17" x2="15" y2="17"/></svg>`,
+  // Research paper / document
+  paper: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
   // Generic
   default: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>`,
 };
 
 function getStepIcon(label) {
   const l = label.toLowerCase();
+  if (l.includes('paper') || l.includes('research'))                        return STEP_SVG.paper;
   if (l.includes('init'))                                                    return STEP_SVG.init;
   if (l.includes('detect') || l.includes('identify') || l.includes('type')) return STEP_SVG.detect;
   if (l.includes('geo') || l.includes('locat') || l.includes('region'))     return STEP_SVG.geo;
@@ -3098,6 +3109,7 @@ function resetPlanWidget() {
   widget.style.display = 'block';
   planExpanded = true;
   document.getElementById('planTitle').textContent = 'Plan · Running';
+  _researchPaperStepStatus = 'pending';  // reset research step for new analysis
   // Reset all steps to pending state
   const container = document.getElementById('planSteps');
   if (container) {
@@ -3122,13 +3134,23 @@ function updatePlanSteps(steps) {
   const container = document.getElementById('planSteps');
   const title     = document.getElementById('planTitle');
 
-  const allDone  = steps.every(s => s.status === 'done' || s.status === 'error');
-  const hasError = steps.some(s => s.status === 'error');
+  // If Research Mode is ON, append a synthetic step showing paper generation status
+  const displaySteps = [...steps];
+  if (_researchModeActive) {
+    displaySteps.push({
+      label   : 'Generating research paper',
+      status  : _researchPaperStepStatus,
+      progress: _researchPaperStepStatus === 'running' ? null : (_researchPaperStepStatus === 'done' ? 100 : null),
+    });
+  }
+
+  const allDone  = displaySteps.every(s => s.status === 'done' || s.status === 'error');
+  const hasError = displaySteps.some(s => s.status === 'error');
   title.textContent = hasError ? 'Plan · Error' : (allDone ? 'Plan · Complete' : 'Plan · Running');
 
   container.innerHTML = '';
 
-  steps.forEach((step, i) => {
+  displaySteps.forEach((step, i) => {
     const div = document.createElement('div');
     div.className = `plan-step step-${step.status}`;
     div.style.animationDelay = (i * 0.08) + 's';
@@ -4568,4 +4590,507 @@ function navigateTo(target) {
       document.getElementById('chatNavBtn')?.classList.add('active');
       break;
   }
+}
+// ════════════════════════════════════════════════════════
+// RESEARCH MODE
+// ════════════════════════════════════════════════════════
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let _lastAnalysisJobId      = null;   // job_id of most recent completed analysis
+let _lastAnalysisResult    = null;   // full result dict cached for research fallback
+let _researchModeActive    = false;  // whether Research Mode toggle is ON
+let _researchPaperStepStatus = "pending"; // plan widget step: pending|running|done|error
+let _researchPollTimer  = null;   // setInterval handle for polling report status
+let _activeReportJobId  = null;   // currently-running report job id
+let _sectionTimer       = null;   // setInterval for section animation (modal)
+let _sectionIndex       = 0;      // which section dot is currently active
+
+// ── PDF Viewer — fixed overlay exactly covering the map panel ────────────────
+function openPdfViewer(filename, downloadUrl) {
+  const panel  = document.getElementById('pdfViewerPanel');
+  const viewer = document.getElementById('pdfViewerContent');
+  const title  = document.getElementById('pdfViewerTitle');
+  const dlBtn  = document.getElementById('pdfDownloadBtn');
+  const mapP   = document.getElementById('mapPanel');
+  if (!panel) return;
+
+  // Position over the map panel (right half of the app)
+  if (mapP) {
+    const r = mapP.getBoundingClientRect();
+    panel.style.left   = r.left   + 'px';
+    panel.style.top    = r.top    + 'px';
+    panel.style.width  = r.width  + 'px';
+    panel.style.height = r.height + 'px';
+  }
+
+  if (title) title.textContent = filename;
+  if (dlBtn) { dlBtn.href = downloadUrl + '?download=1'; dlBtn.download = filename; }
+
+  // Show panel immediately with a loading state
+  viewer.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#aaa;font-size:13px;font-family:sans-serif">Loading PDF…</div>`;
+  panel.style.display = 'flex';
+
+  // Fetch as blob — prevents Chrome from opening a new tab
+  fetch(downloadUrl)
+    .then(r => r.blob())
+    .then(blob => {
+      const blobUrl = URL.createObjectURL(blob);
+      viewer.innerHTML = `<iframe src="${blobUrl}"
+        style="width:100%;height:100%;border:none;display:block"
+        title="PDF Viewer"></iframe>`;
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    })
+    .catch(err => {
+      viewer.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#e55;font-size:13px;font-family:sans-serif">Failed to load PDF: ${err.message}</div>`;
+    });
+}
+
+function closePdfViewer() {
+  const panel  = document.getElementById('pdfViewerPanel');
+  const viewer = document.getElementById('pdfViewerContent');
+  if (panel)  panel.style.display = 'none';
+  if (viewer) viewer.innerHTML = '';   // free memory
+}
+
+// ── Toggle button — simple on/off, no modal ───────────────────────────────────
+function toggleResearchMode() {
+  _researchModeActive = !_researchModeActive;
+  const btn = document.getElementById('researchBtn');
+  if (btn) btn.classList.toggle('active', _researchModeActive);
+
+  // Show/hide the inline Research Mode pill in the input bar
+  const pill = document.getElementById('researchModePill');
+  if (pill) pill.style.display = _researchModeActive ? 'flex' : 'none';
+
+  // If toggled ON and a completed analysis already exists, generate the paper now
+  if (_researchModeActive && (_lastAnalysisJobId || _lastAnalysisResult)) {
+    setTimeout(() => _autoStartResearch(_lastAnalysisJobId), 200);
+  }
+}
+
+// ── Called automatically after GIS analysis completes (if mode is active) ─────
+async function _autoStartResearch(jobId) {
+  if (!jobId && !_lastAnalysisResult) {
+    console.warn('[Research] _autoStartResearch: no jobId and no cached result');
+    return;
+  }
+  console.log('[Research] Starting auto-research for job:', jobId);
+
+  // Mark the plan widget step as running
+  _researchPaperStepStatus = 'running';
+  // Re-render the last known steps to show the running state
+  _refreshPlanResearchStep();
+
+  // Insert a "generating" chip into the chat stream
+  const chipId = 'researchChip_' + Date.now();
+  _insertResearchGeneratingChip(chipId);
+
+  try {
+    // First try with job_id reference (fast path — reuses server-side result)
+    let resp, data;
+    if (jobId) {
+      resp = await fetch('/api/generate_report', {
+        method : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body   : JSON.stringify({ job_id: jobId }),
+      });
+      data = await resp.json();
+      console.log('[Research] job_id path response:', resp.status, data);
+    }
+
+    // If server rejected the job_id, fall back to inline result payload
+    if (!resp || !resp.ok || data.error) {
+      console.warn('[Research] job_id path failed — trying inline result fallback');
+      const cachedResult = _lastAnalysisResult;
+      if (cachedResult) {
+        resp = await fetch('/api/generate_report', {
+          method : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body   : JSON.stringify({ result: cachedResult }),
+        });
+        data = await resp.json();
+        console.log('[Research] inline fallback response:', resp.status, data);
+      }
+    }
+
+    if (!resp || !resp.ok || data.error) {
+      _researchPaperStepStatus = 'error';
+      _refreshPlanResearchStep();
+      _updateResearchChipError(chipId, data?.error || 'Failed to start report generation.');
+      return;
+    }
+
+    _activeReportJobId = data.report_job_id;
+    _pollReportForChip(chipId, data.report_job_id);
+
+  } catch (err) {
+    console.error('[Research] fetch error:', err);
+    _researchPaperStepStatus = 'error';
+    _refreshPlanResearchStep();
+    _updateResearchChipError(chipId, `Network error: ${err.message}`);
+  }
+}
+
+// Force-refresh just the plan widget to show updated research step status
+function _refreshPlanResearchStep() {
+  // Re-call updatePlanSteps with whatever steps are currently rendered
+  // by reading them back from the DOM (labels + statuses)
+  const container = document.getElementById('planSteps');
+  if (!container) return;
+  // Build a minimal steps array from what's visible (excluding our injected research step)
+  const stepEls = [...container.querySelectorAll('.plan-step')];
+  const steps = stepEls
+    .filter(el => !el.dataset.research)
+    .map(el => {
+      const label = el.querySelector('.step-label-text')?.textContent || '';
+      const cls   = [...el.classList].find(c => c.startsWith('step-')) || 'step-pending';
+      return { label, status: cls.replace('step-', ''), progress: null };
+    });
+  updatePlanSteps(steps);
+}
+
+// ── Inline "generating" chip ──────────────────────────────────────────────────
+function _insertResearchGeneratingChip(chipId) {
+  const msgs = document.getElementById('messages');
+  if (!msgs) return;
+
+  const chip = document.createElement('div');
+  chip.className = 'msg-row ai';
+  chip.id = chipId;
+  chip.innerHTML = `
+    <div class="msg-bubble ai research-chip-bubble">
+      <div class="research-chip-header">
+        <div class="research-chip-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+        </div>
+        <div>
+          <div class="research-chip-title">Research Paper</div>
+          <div class="research-chip-subtitle">Writing paper from analysis outputs…</div>
+        </div>
+        <div class="research-chip-spinner"></div>
+      </div>
+      <div class="research-chip-sections">
+        <span class="rcs rcs-active">Abstract</span>
+        <span class="rcs">Introduction</span>
+        <span class="rcs">Methodology</span>
+        <span class="rcs">Results</span>
+        <span class="rcs">Discussion</span>
+        <span class="rcs">Conclusion</span>
+      </div>
+    </div>
+  `;
+  msgs.appendChild(chip);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  // Animate section pills
+  _animateChipSections(chipId);
+}
+
+function _animateChipSections(chipId) {
+  const chip = document.getElementById(chipId);
+  if (!chip) return;
+  const pills = chip.querySelectorAll('.rcs');
+  let idx = 0;
+  const tick = () => {
+    pills.forEach((p, i) => {
+      p.classList.remove('rcs-active', 'rcs-done');
+      if (i < idx) p.classList.add('rcs-done');
+    });
+    if (idx < pills.length) pills[idx].classList.add('rcs-active');
+    idx++;
+  };
+  tick();
+  const timer = setInterval(() => {
+    if (!document.getElementById(chipId)) { clearInterval(timer); return; }
+    if (idx >= pills.length) { clearInterval(timer); return; }
+    tick();
+  }, 9000);
+  chip._sectionTimer = timer;
+}
+
+// ── Poll and update chip when report is ready ─────────────────────────────────
+function _pollReportForChip(chipId, reportJobId) {
+  if (_researchPollTimer) clearInterval(_researchPollTimer);
+  _researchPollTimer = setInterval(async () => {
+    try {
+      const resp = await fetch(`/api/report_status/${reportJobId}`);
+      const data = await resp.json();
+      if (data.status === 'complete') {
+        clearInterval(_researchPollTimer);
+        _researchPollTimer = null;
+        _researchPaperStepStatus = 'done';
+        _refreshPlanResearchStep();
+        _upgradeChipToDownload(chipId, data.filename);
+      } else if (data.status === 'error') {
+        clearInterval(_researchPollTimer);
+        _researchPollTimer = null;
+        _researchPaperStepStatus = 'error';
+        _refreshPlanResearchStep();
+        _updateResearchChipError(chipId, data.error || 'Report generation failed.');
+      }
+    } catch (e) {
+      console.warn('[Research] poll error:', e);
+    }
+  }, 3000);
+}
+
+// ── Upgrade chip from "generating" to "download ready" ───────────────────────
+function _upgradeChipToDownload(chipId, filename) {
+  const chip = document.getElementById(chipId);
+  if (!chip) {
+    // Chip was removed from DOM (e.g. chat cleared) — fall back to appending new one
+    _appendResearchDownloadChip(filename);
+    return;
+  }
+  if (chip._sectionTimer) clearInterval(chip._sectionTimer);
+
+  const bubble = chip.querySelector('.research-chip-bubble');
+  if (!bubble) return;
+  bubble.innerHTML = `
+    <div class="research-artifact-card" onclick="openPdfViewer('${filename}', '/api/report/${encodeURIComponent(filename)}')" title="Click to open">
+      <div class="rac-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </div>
+      <div class="rac-meta">
+        <div class="rac-name">${filename}</div>
+        <div class="rac-type">GIS Functions &middot; PDF</div>
+      </div>
+      <a class="rac-download-btn"
+         href="/api/report/${encodeURIComponent(filename)}?download=1"
+         download="${filename}"
+         onclick="event.stopPropagation()"
+         title="Download PDF">
+        Download
+      </a>
+    </div>
+  `;
+  const msgs = document.getElementById('messages');
+  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+
+  // Also update the modal if it happens to be open
+  _showResearchState('done');
+  const filenameEl = document.getElementById('researchDoneFilename');
+  if (filenameEl) filenameEl.textContent = filename;
+  const downloadLink = document.getElementById('researchDownloadLink');
+  if (downloadLink) {
+    downloadLink.href     = `/api/report/${encodeURIComponent(filename)}?download=1`;
+    downloadLink.download = filename;
+  }
+}
+
+function _updateResearchChipError(chipId, errorMsg) {
+  const chip = document.getElementById(chipId);
+  if (!chip) return;
+  if (chip._sectionTimer) clearInterval(chip._sectionTimer);
+  const bubble = chip.querySelector('.research-chip-bubble');
+  if (!bubble) return;
+  bubble.innerHTML = `
+    <div class="research-chip-header">
+      <div class="research-chip-icon" style="background:#c0392b">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <div>
+        <div class="research-chip-title">Research Paper Failed</div>
+        <div class="research-chip-subtitle">${errorMsg}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Legacy modal-based flow (kept for manual "Generate again" use) ─────────────
+function openResearchModal() {
+  const modal = document.getElementById('researchModal');
+  if (!modal) return;
+  _resetResearchModal();
+  modal.style.display = 'flex';
+  const warnEl = document.getElementById('researchNoJobWarning');
+  if (warnEl) warnEl.style.display = _lastAnalysisJobId ? 'none' : 'block';
+  const genBtn = document.getElementById('researchGenerateBtn');
+  if (genBtn) genBtn.disabled = !_lastAnalysisJobId;
+}
+
+function closeResearchModal(e) {
+  if (e && e.target !== document.getElementById('researchModal')) return;
+  _closeResearchModal();
+}
+
+function _closeResearchModal() {
+  const modal = document.getElementById('researchModal');
+  if (modal) modal.style.display = 'none';
+  if (_sectionTimer) { clearInterval(_sectionTimer); _sectionTimer = null; }
+}
+
+function _resetResearchModal() {
+  _showResearchState('idle');
+  document.querySelectorAll('.research-section-row').forEach(r => {
+    r.classList.remove('rs-active', 'rs-done');
+  });
+  if (_sectionTimer) { clearInterval(_sectionTimer); _sectionTimer = null; }
+  _sectionIndex = 0;
+}
+
+function resetResearchModal() {
+  _resetResearchModal();
+  const warnEl = document.getElementById('researchNoJobWarning');
+  if (warnEl) warnEl.style.display = _lastAnalysisJobId ? 'none' : 'block';
+  const genBtn = document.getElementById('researchGenerateBtn');
+  if (genBtn) genBtn.disabled = !_lastAnalysisJobId;
+}
+
+function _showResearchState(state) {
+  const stateMap = {
+    idle:       'researchIdle',
+    generating: 'researchGenerating',
+    done:       'researchDone',
+    error:      'researchError',
+  };
+  Object.entries(stateMap).forEach(([key, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (key === state) ? 'block' : 'none';
+  });
+}
+
+function _startSectionAnimation() {
+  _sectionIndex = 0;
+  document.querySelectorAll('.research-section-row').forEach(r => r.classList.remove('rs-active','rs-done'));
+  _tickSection();
+  _sectionTimer = setInterval(_tickSection, 8500);
+}
+
+function _tickSection() {
+  const rows = document.querySelectorAll('.research-section-row');
+  rows.forEach((r, i) => {
+    r.classList.remove('rs-active');
+    if (i < _sectionIndex) r.classList.add('rs-done');
+  });
+  if (_sectionIndex < rows.length) {
+    rows[_sectionIndex].classList.add('rs-active');
+    const label = document.getElementById('researchProgressLabel');
+    if (label) label.textContent = `Writing ${rows[_sectionIndex].textContent.trim()}...`;
+  }
+  _sectionIndex++;
+}
+
+function _stopSectionAnimation(markAllDone) {
+  if (_sectionTimer) { clearInterval(_sectionTimer); _sectionTimer = null; }
+  if (markAllDone) {
+    document.querySelectorAll('.research-section-row').forEach(r => {
+      r.classList.remove('rs-active');
+      r.classList.add('rs-done');
+    });
+    const label = document.getElementById('researchProgressLabel');
+    if (label) label.textContent = 'Finalizing document...';
+  }
+}
+
+// Manual generate (from modal)
+async function startResearchGeneration() {
+  if (!_lastAnalysisJobId) {
+    const warnEl = document.getElementById('researchNoJobWarning');
+    if (warnEl) warnEl.style.display = 'block';
+    return;
+  }
+  _showResearchState('generating');
+  _startSectionAnimation();
+  try {
+    const resp = await fetch('/api/generate_report', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ job_id: _lastAnalysisJobId }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      _stopSectionAnimation(false);
+      _showResearchState('error');
+      const errEl = document.getElementById('researchErrorMsg');
+      if (errEl) errEl.textContent = data.error || 'Failed to start report generation.';
+      return;
+    }
+    _activeReportJobId = data.report_job_id;
+    // Poll for modal
+    if (_researchPollTimer) clearInterval(_researchPollTimer);
+    _researchPollTimer = setInterval(async () => {
+      if (!_activeReportJobId) return;
+      try {
+        const r2 = await fetch(`/api/report_status/${_activeReportJobId}`);
+        const d2 = await r2.json();
+        if (d2.status === 'complete') {
+          clearInterval(_researchPollTimer); _researchPollTimer = null;
+          _stopSectionAnimation(true);
+          setTimeout(() => _onReportReady(d2.filename), 600);
+        } else if (d2.status === 'error') {
+          clearInterval(_researchPollTimer); _researchPollTimer = null;
+          _stopSectionAnimation(false);
+          _showResearchState('error');
+          const errEl = document.getElementById('researchErrorMsg');
+          if (errEl) errEl.textContent = d2.error || 'Report generation failed.';
+        }
+      } catch (e) { console.warn('[Research modal] poll error:', e); }
+    }, 3000);
+  } catch (err) {
+    _stopSectionAnimation(false);
+    _showResearchState('error');
+    const errEl = document.getElementById('researchErrorMsg');
+    if (errEl) errEl.textContent = `Network error: ${err.message}`;
+  }
+}
+
+function _onReportReady(filename) {
+  _showResearchState('done');
+  const filenameEl = document.getElementById('researchDoneFilename');
+  if (filenameEl) filenameEl.textContent = filename;
+  const downloadLink = document.getElementById('researchDownloadLink');
+  if (downloadLink) {
+    downloadLink.href     = `/api/report/${encodeURIComponent(filename)}?download=1`;
+    downloadLink.download = filename;
+  }
+  _appendResearchDownloadChip(filename);
+}
+
+// ── Standalone download chip (fallback / modal flow) ──────────────────────────
+function _appendResearchDownloadChip(filename) {
+  const msgs = document.getElementById('messages');
+  if (!msgs) return;
+  const chip = document.createElement('div');
+  chip.className = 'msg-row ai';
+  chip.innerHTML = `
+    <div class="msg-bubble ai" style="padding:0;overflow:hidden;max-width:420px;background:transparent">
+    <div class="research-artifact-card" onclick="openPdfViewer('${filename}', '/api/report/${encodeURIComponent(filename)}')" title="Click to open">
+      <div class="rac-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </div>
+      <div class="rac-meta">
+        <div class="rac-name">${filename}</div>
+        <div class="rac-type">GIS Functions &middot; PDF</div>
+      </div>
+      <a class="rac-download-btn"
+         href="/api/report/${encodeURIComponent(filename)}?download=1"
+         download="${filename}"
+         onclick="event.stopPropagation()"
+         title="Download PDF">
+        Download
+      </a>
+    </div>
+    </div>
+  `;
+  msgs.appendChild(chip);
+  msgs.scrollTop = msgs.scrollHeight;
 }

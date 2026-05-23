@@ -1511,6 +1511,121 @@ def health():
         pass
     return jsonify(status)
 
+# ── Research report store (job_id → file path) ────────────────────────────────
+report_jobs = {}   # report_job_id → { status, path, error }
+ 
+REPORTS_DIR = os.path.expanduser('~/Downloads/satellite_agent_outputs/reports')
+os.makedirs(REPORTS_DIR, exist_ok=True)
+ 
+ 
+def _run_research_job(report_job_id: str, analysis_result: dict):
+    """Background thread: run Research Agent and write DOCX."""
+    try:
+        # Import here so it reloads fresh each time (same pattern as GIS agent)
+        import importlib
+        import sys
+ 
+        # Make sure the webapp directory is on the path
+        webapp_dir = Path(__file__).parent
+        if str(webapp_dir) not in sys.path:
+            sys.path.insert(0, str(webapp_dir))
+ 
+        import research_agent as _ra
+        importlib.reload(_ra)
+ 
+        pdf_path  = _ra.generate_research_paper(analysis_result, REPORTS_DIR)
+        if pdf_path and Path(pdf_path).exists():
+            report_jobs[report_job_id]['status'] = 'complete'
+            report_jobs[report_job_id]['path']   = pdf_path
+            report_jobs[report_job_id]['filename'] = Path(pdf_path).name
+        else:
+            report_jobs[report_job_id]['status'] = 'error'
+            report_jobs[report_job_id]['error']  = 'PDF generation failed — check server logs.'
+    except Exception as ex:
+        import traceback
+        traceback.print_exc()
+        report_jobs[report_job_id]['status'] = 'error'
+        report_jobs[report_job_id]['error']  = str(ex)
+ 
+ 
+@app.route('/api/generate_report', methods=['POST'])
+def generate_report():
+    """
+    Start a Research Agent job in the background.
+ 
+    Body JSON:
+        { "job_id": "<gis_job_id>" }   — pulls analysis result from `jobs` store
+        OR
+        { "result": { ... } }           — inline analysis result (for multi-year summary)
+ 
+    Returns immediately:
+        { "report_job_id": "<uuid>" }
+    """
+    body = request.json or {}
+ 
+    # Resolve the analysis result
+    gis_job_id = body.get('job_id')
+    if gis_job_id:
+        if gis_job_id not in jobs:
+            return jsonify({'error': 'GIS job not found'}), 404
+        gis_job = jobs[gis_job_id]
+        if gis_job['status'] != 'complete':
+            return jsonify({'error': 'GIS job not yet complete'}), 400
+        analysis_result = gis_job.get('result') or {}
+        if analysis_result.get('type') not in ('analysis',):
+            return jsonify({'error': 'Job is not an analysis result (must be type=analysis)'}), 400
+    elif body.get('result'):
+        analysis_result = body['result']
+    else:
+        return jsonify({'error': 'Provide job_id or result'}), 400
+ 
+    report_job_id = str(uuid.uuid4())
+    report_jobs[report_job_id] = {
+        'status'  : 'running',
+        'path'    : None,
+        'filename': None,
+        'error'   : None,
+    }
+ 
+    thread = threading.Thread(
+        target=_run_research_job,
+        args=(report_job_id, analysis_result),
+        daemon=True,
+    )
+    thread.start()
+    print(f'[Research] Started report job {report_job_id} for region={analysis_result.get("region")}')
+ 
+    return jsonify({'report_job_id': report_job_id})
+ 
+ 
+@app.route('/api/report_status/<report_job_id>', methods=['GET'])
+def report_status(report_job_id):
+    """Poll Research Agent job status."""
+    if report_job_id not in report_jobs:
+        return jsonify({'error': 'Report job not found'}), 404
+    job = report_jobs[report_job_id]
+    return jsonify({
+        'status'  : job['status'],
+        'filename': job.get('filename'),
+        'error'   : job.get('error'),
+    })
+ 
+ 
+@app.route('/api/report/<filename>', methods=['GET'])
+def download_report(filename):
+    """Serve a generated research paper PDF for download."""
+    safe_name = Path(filename).name   # prevent path traversal
+    file_path = Path(REPORTS_DIR) / safe_name
+    if not file_path.exists():
+        return jsonify({'error': 'File not found'}), 404
+    as_attachment = request.args.get('download') == '1'
+    return send_from_directory(
+        REPORTS_DIR,
+        safe_name,
+        as_attachment=as_attachment,
+        download_name=safe_name,
+        mimetype='application/pdf',
+    )
 
 if __name__ == '__main__':
     print('🛰️  GIS Agent WebApp starting...')
