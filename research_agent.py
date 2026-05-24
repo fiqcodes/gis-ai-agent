@@ -388,48 +388,59 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
     # ── Formulas hardcoded per variable ───────────────────────────────────────
     FORMULAS = {
         'ndvi': [
-            ('NDVI = (NIR − RED) / (NIR + RED)',
-             'Eq. (1) — Normalized Difference Vegetation Index. NIR = Band 5 (0.85–0.88 μm); RED = Band 4 (0.64–0.67 μm). Values range from −1 to +1; values above 0.3 typically indicate healthy vegetation.'),
+            ('NDVI = (NIR - RED) / (NIR + RED)',
+             'Eq. (1) -- Normalized Difference Vegetation Index (Rouse et al., 1974). '
+             'NIR = Band 5 (0.85-0.88 um); RED = Band 4 (0.64-0.67 um). '
+             'Values range from -1 to +1; values above 0.3 typically indicate healthy vegetation cover.'),
         ],
         'evi': [
-            ('EVI = 2.5 × (NIR − RED) / (NIR + 6×RED − 7.5×BLUE + 1)',
-             'Eq. (1) — Enhanced Vegetation Index (Huete et al., 2002). Corrects for atmospheric distortion and canopy background signal. G=2.5, C1=6, C2=7.5, L=1.'),
+            ('EVI = G x (NIR - RED) / (NIR + C1 x RED - C2 x BLUE + L)',
+             'Eq. (1) -- Enhanced Vegetation Index (Huete et al., 2002). '
+             'G=2.5 (gain); C1=6; C2=7.5 (aerosol resistance); L=1 (canopy background). '
+             'Corrects for atmospheric distortion and canopy background signal.'),
         ],
         'savi': [
-            ('SAVI = [(NIR − RED) / (NIR + RED + L)] × (1 + L)',
-             'Eq. (1) — Soil-Adjusted Vegetation Index (Huete, 1988). L=0.5 (standard soil correction factor). Minimizes soil brightness influence in sparsely vegetated areas.'),
+            ('SAVI = [(NIR - RED) / (NIR + RED + L)] x (1 + L)',
+             'Eq. (1) -- Soil-Adjusted Vegetation Index (Huete, 1988). L=0.5 (standard soil correction factor). '
+             'Minimizes soil brightness influence on vegetation signal in sparsely vegetated areas.'),
         ],
         'lst': [
-            ('BT = K2 / ln(K1/Lλ + 1)',
-             'Eq. (1) — At-satellite brightness temperature (K). K1=774.89 W/(m²·sr·μm), K2=1321.08 K for Landsat 8 Band 10 (USGS metadata).'),
-            ('LST = BT / [1 + (λ×BT/ρ) × ln(ε)]',
-             'Eq. (2) — Land Surface Temperature (converted to °C). λ=10.895 μm; ρ=1.438×10⁻² m·K; ε=surface emissivity from NDVI-based fractional vegetation cover.'),
-            ('FVC = [(NDVI − NDVIₛ) / (NDVIᵥ − NDVIₛ)]²',
-             'Eq. (3) — Fractional Vegetation Cover for emissivity computation: ε=εₛ(1−FVC)+εᵥ×FVC+dε, where εₛ=0.966 (soil), εᵥ=0.973 (vegetation).'),
+            ('BT = K2 / ln(K1 / L + 1)',
+             'Eq. (1) — At-satellite brightness temperature (K). L = spectral radiance at Band 10; '
+             'K1 = 774.89 W/(m2·sr·um), K2 = 1321.08 K (Landsat 8 TIRS Band 10 calibration constants, USGS metadata).'),
+            ('LST = BT / [1 + (lam × BT / rho) × ln(eps)]',
+             'Eq. (2) — Land Surface Temperature (K), converted to °C by subtracting 273.15. '
+             'lam = 10.895 um (effective wavelength of Band 10); rho = 1.438 × 10-2 m·K; '
+             'eps = land surface emissivity derived from NDVI-based fractional vegetation cover.'),
+            ('FVC = [(NDVI - NDVI_soil) / (NDVI_veg - NDVI_soil)]^2',
+             'Eq. (3) — Fractional Vegetation Cover (Carlson & Ripley, 1997). NDVI_soil and NDVI_veg '
+             'are the minimum and maximum NDVI values in the scene. Emissivity: '
+             'eps = eps_soil × (1 - FVC) + eps_veg × FVC + d_eps, '
+             'where eps_soil = 0.966, eps_veg = 0.973 (Sobrino et al., 2004).'),
         ],
         'uhi': [
-            ('UHI = LST_urban − LST_rural',
-             'Eq. (1) — Urban Heat Island intensity. Urban pixels: NDVI<0.2 and NDBI>0. Rural/reference pixels: NDVI>0.3. Expressed in °C.'),
+            ('UHI = LST_urban - LST_rural',
+             'Eq. (1) -- Urban Heat Island intensity (Voogt & Oke, 2003). Urban pixels: NDVI < 0.2 and NDBI > 0. Rural reference pixels: NDVI > 0.3. Positive values indicate thermal excess of the urban core over surrounding vegetated areas. Expressed in degrees C.'),
         ],
         'ndwi': [
-            ('NDWI = (GREEN − NIR) / (GREEN + NIR)',
-             'Eq. (1) — Normalized Difference Water Index (McFeeters, 1996). GREEN=Band 3; NIR=Band 5. Positive values delineate open water surfaces.'),
+            ('NDWI = (GREEN - NIR) / (GREEN + NIR)',
+             'Eq. (1) -- Normalized Difference Water Index (McFeeters, 1996). GREEN = Band 3 (0.53-0.59 um); NIR = Band 5 (0.85-0.88 um). Positive values delineate open water surfaces; threshold of 0 commonly used for water body extraction.'),
         ],
         'mndwi': [
-            ('MNDWI = (GREEN − SWIR) / (GREEN + SWIR)',
-             'Eq. (1) — Modified NDWI (Xu, 2006). SWIR=Band 6 (1.57–1.65 μm). Superior to NDWI for suppressing built-up land noise in urban areas.'),
+            ('MNDWI = (GREEN - SWIR) / (GREEN + SWIR)',
+             'Eq. (1) -- Modified Normalized Difference Water Index (Xu, 2006). SWIR = Band 6 (1.57-1.65 um). More effective than NDWI for suppressing built-up land and soil noise in dense urban environments.'),
         ],
         'ndbi': [
-            ('NDBI = (SWIR − NIR) / (SWIR + NIR)',
-             'Eq. (1) — Normalized Difference Built-up Index (Zha et al., 2003). SWIR=Band 6; NIR=Band 5. Positive values correspond to impervious built-up surfaces.'),
+            ('NDBI = (SWIR - NIR) / (SWIR + NIR)',
+             'Eq. (1) -- Normalized Difference Built-up Index (Zha et al., 2003). SWIR = Band 6; NIR = Band 5. Positive values correspond to impervious built-up surfaces and are strongly correlated with elevated land surface temperatures.'),
         ],
         'bsi': [
-            ('BSI = [(SWIR+RED) − (NIR+BLUE)] / [(SWIR+RED) + (NIR+BLUE)]',
-             'Eq. (1) — Bare Soil Index. Higher values indicate absence of vegetation or surface moisture cover.'),
+            ('BSI = [(SWIR + RED) - (NIR + BLUE)] / [(SWIR + RED) + (NIR + BLUE)]',
+             'Eq. (1) -- Bare Soil Index (Rikimaru et al., 2002). BLUE = Band 2; RED = Band 4; NIR = Band 5; SWIR = Band 6. Higher values indicate absence of vegetation or surface moisture and are used to delineate exposed bare land.'),
         ],
         'lulc': [
-            ('NDVI = (NIR − RED) / (NIR + RED)',
-             'Eq. (1) — NDVI used as auxiliary feature for LULC classification. Supervised classification (Maximum Likelihood or Random Forest) applied within Google Earth Engine.'),
+            ('NDVI = (NIR - RED) / (NIR + RED)',
+             'Eq. (1) -- NDVI used as auxiliary spectral feature alongside Landsat 8 multispectral bands for LULC classification. Supervised classification (Random Forest or Maximum Likelihood) applied within Google Earth Engine on cloud-masked, median-composited imagery.'),
         ],
     }
 
@@ -659,13 +670,64 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
     story.append(Paragraph('3. Methodology', S['h1']))
     story += section_body(sections.get('methodology', ''))
 
-    # ── 3.1 Index formulae ─────────────────────────────────────────────────────
+    # ── 3.1 Index formulae + satellite data table ──────────────────────────────
     vars_analyzed = [v.strip().lower() for v in vars_list.split(',') if v.strip()]
     formula_added = False
     for var in vars_analyzed:
         if var in FORMULAS:
             if not formula_added:
-                story.append(Paragraph('3.1 Index Computation', S['h2']))
+                story.append(Paragraph('3.1 Data Sources and Satellite Characteristics', S['h2']))
+                # Satellite data table
+                tbl_data = [
+                    ['Satellite / Sensor', 'Spatial Res.', 'Revisit', 'Bands Used', 'Purpose'],
+                    ['Landsat 8 OLI/TIRS\n(Collection 2 Level-2)', '30 m (optical)\n100 m (thermal)', '16 days',
+                     'B2-B7 (optical)\nB10 (thermal)', 'Surface indices, LST'],
+                    ['Landsat 9 OLI-2/TIRS-2\n(Collection 2 Level-2)', '30 m (optical)\n100 m (thermal)', '16 days',
+                     'B2-B7 (optical)\nB10 (thermal)', 'Surface indices, LST'],
+                    ['Sentinel-5P TROPOMI', '5.5 × 3.5 km', 'Daily',
+                     'UV-NIR-SWIR\nmulti-band', 'Atmospheric variables'],
+                    ['Google Earth Engine', 'Cloud platform', 'Real-time',
+                     'GEE API', 'Processing & compositing'],
+                ]
+                col_w = [3.8*cm, 2.5*cm, 1.8*cm, 3.2*cm, 3.5*cm]
+                tbl = Table(tbl_data, colWidths=col_w, repeatRows=1)
+                tbl.setStyle(TableStyle([
+                    ('FONTNAME',    (0,0), (-1,0),  'Helvetica-Bold'),
+                    ('FONTSIZE',    (0,0), (-1,-1), 8),
+                    ('LEADING',     (0,0), (-1,-1), 11),
+                    ('BACKGROUND',  (0,0), (-1,0),  colors.HexColor('#eeeeee')),
+                    ('TEXTCOLOR',   (0,0), (-1,-1), colors.HexColor('#111111')),
+                    ('ALIGN',       (0,0), (-1,-1), 'LEFT'),
+                    ('VALIGN',      (0,0), (-1,-1), 'TOP'),
+                    ('GRID',        (0,0), (-1,-1), 0.4, colors.HexColor('#aaaaaa')),
+                    ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f7f7f7')]),
+                    ('TOPPADDING',  (0,0), (-1,-1), 4),
+                    ('BOTTOMPADDING',(0,0), (-1,-1), 4),
+                    ('LEFTPADDING', (0,0), (-1,-1), 5),
+                    ('RIGHTPADDING',(0,0), (-1,-1), 5),
+                ]))
+                story.append(Spacer(1, 0.1*cm))
+                story.append(tbl)
+                story.append(Paragraph(
+                    'Table 1. Characteristics of satellite datasets used in this study.',
+                    S['caption']))
+
+                # Preprocessing narrative
+                story.append(Paragraph('3.2 Preprocessing and Index Computation', S['h2']))
+                story.append(Paragraph(
+                    'All satellite imagery was accessed and processed within the Google Earth Engine '
+                    '(GEE) cloud computing platform. Cloud and cloud-shadow masking was performed '
+                    'using the QA_PIXEL band (CFMask algorithm) for Landsat Collection 2 products, '
+                    'retaining only pixels with clear-sky confidence. A median composite was '
+                    'generated from all valid observations within the study period to produce a '
+                    'spatially continuous, cloud-free surface reflectance and brightness temperature '
+                    'dataset at 30 m resolution. Radiometric calibration applied the official USGS '
+                    'scaling factors (scale = 0.0000275, offset = -0.2) to convert digital numbers '
+                    'to surface reflectance. Thermal Band 10 DN values were converted to at-sensor '
+                    'spectral radiance using the multiplicative and additive rescaling coefficients '
+                    'from the Level-2 metadata file prior to brightness temperature derivation. '
+                    'The following spectral indices were computed from the processed composites:',
+                    S['body']))
                 formula_added = True
             for eq_str, eq_desc in FORMULAS[var]:
                 story.append(Paragraph(_esc(eq_str), S['formula']))
