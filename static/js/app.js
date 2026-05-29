@@ -1079,6 +1079,20 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
 
       // For LULC: show RGB overview first (same as non-LULC vars), then LULC map
       if (isLULC) {
+        // Show error banner if LULC analysis failed
+        if (fig.error) {
+          if (fig.rgb_overview) {
+            html += `<div class="result-img-wrap">
+              <img src="${fig.rgb_overview}" class="result-img" loading="lazy"/>
+              <div class="result-img-caption">Study Area Overview (${escapeHtml(region)}) — True Color RGB</div>
+            </div>`;
+          }
+          html += `<div style="background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.3);border-radius:8px;padding:12px 16px;margin:12px 0;color:var(--red)">
+            <strong>⚠ Land Cover analysis failed:</strong> ${escapeHtml(fig.error)}
+          </div>`;
+          html += `</div>`;
+          continue;
+        }
         // 1a. RGB overview (same as study area block for other vars)
         if (fig.rgb_overview) {
           

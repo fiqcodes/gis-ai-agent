@@ -214,6 +214,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         from gis_functions import (
             SURFACE_INDEX_MAP, ATMO_INDEX_MAP, KEYWORD_MAP, SYSTEM_PROMPT,
             resolve_region, fetch_web_context, generate_insight,
+            _extract_variables_from_text, _extract_region_and_dates,
         )
 
         # ── Local helpers (defined here so they're always in scope) ──────────
@@ -380,22 +381,54 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
 
         update_step(0, 'done', 100)
 
-        # ── Step 2: parse intent via Ollama ───────────────────────────────────
+        # ── Step 2: parse intent — pre-check first, Ollama as fallback ─────────
+        # Deterministic keyword detection prevents Ollama from hallucinating
+        # "Land Cover Jakarta 2025" as a "question" instead of an analysis.
         update_step(1, 'running', 20)
         import requests as req
-        resp = req.post(OLLAMA_URL,
-            json={'model': OLLAMA_MODEL,
-                  'messages': [
-                      {'role': 'system', 'content': SYSTEM_PROMPT},
-                      {'role': 'user',   'content': user_input}],
-                  'stream': False}, timeout=60)
-        data = resp.json()
-        raw = data.get('message', {}).get('content', '{}').strip()
-        if '```' in raw:
-            raw = raw.split('```')[1]
-            if raw.startswith('json'): raw = raw[4:]
-        s = raw.find('{'); e = raw.rfind('}') + 1
-        parsed = json.loads(raw[s:e]) if s >= 0 and e > s else {}
+
+        _pre_vars   = _extract_variables_from_text(user_input)
+        _pre_region, _pre_start, _pre_end = _extract_region_and_dates(user_input)
+
+        if _pre_vars and _pre_region and _pre_start:
+            # Full pre-check: skip Ollama entirely
+            print(f'  [pre-check] vars={_pre_vars} region={_pre_region} — skipping Ollama')
+            _vars_out = [KEYWORD_MAP.get(v.lower(), v.lower()) for v in _pre_vars]
+            _vars_out = list(dict.fromkeys(_vars_out))
+            parsed = {
+                'intent'    : 'analysis',
+                'region'    : _pre_region,
+                'start_date': _pre_start,
+                'end_date'  : _pre_end,
+                'variables' : _vars_out,
+            }
+        else:
+            # Fall back to Ollama
+            resp = req.post(OLLAMA_URL,
+                json={'model': OLLAMA_MODEL,
+                      'messages': [
+                          {'role': 'system', 'content': SYSTEM_PROMPT},
+                          {'role': 'user',   'content': user_input}],
+                      'stream': False}, timeout=60)
+            data = resp.json()
+            raw = data.get('message', {}).get('content', '{}').strip()
+            if '```' in raw:
+                raw = raw.split('```')[1]
+                if raw.startswith('json'): raw = raw[4:]
+            s = raw.find('{'); e = raw.rfind('}') + 1
+            parsed = json.loads(raw[s:e]) if s >= 0 and e > s else {}
+
+            # If pre-check found vars or region, merge them in (override LLM guesses)
+            if _pre_vars:
+                _vars_merged = [KEYWORD_MAP.get(v.lower(), v.lower()) for v in _pre_vars]
+                parsed['variables']  = list(dict.fromkeys(_vars_merged))
+                parsed['intent']     = 'analysis'
+            if _pre_region:
+                parsed['region']     = _pre_region
+            if _pre_start:
+                parsed['start_date'] = _pre_start
+                parsed['end_date']   = parsed.get('end_date') or _pre_end
+
         update_step(1, 'done', 100)
 
         region_name = parsed.get('region') or 'Unknown'
@@ -403,6 +436,16 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         end_date    = parsed.get('end_date')   or '2023-12-31'
         variables   = parsed.get('variables')  or []
         intent      = parsed.get('intent', 'analysis')
+
+        # ── Guard: if user mentioned only ONE year, collapse dates to that year ──
+        import re as _re
+        _years_in_input = _re.findall(r'(20\d{2}|19\d{2})', user_input)
+        _unique_years   = list(dict.fromkeys(_years_in_input))
+        if len(_unique_years) == 1:
+            _forced_year = _unique_years[0]
+            start_date   = f'{_forced_year}-01-01'
+            end_date     = f'{_forced_year}-12-31'
+            print(f'  [parse] Single year {_forced_year} detected — forcing date range.')
 
         # Normalize variables
         normalized = []
@@ -424,10 +467,11 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
         }
 
         # ── Multi-year detection: return year list, frontend fires one job per year ──
+        # Only when user explicitly typed 2+ different years in their input.
         if intent != 'question':
             try:
                 sy = int(start_date[:4]); ey = int(end_date[:4])
-                if ey > sy:
+                if ey > sy and len(_unique_years) >= 2:
                     year_queries = []
                     for yr in range(sy, ey + 1):
                         year_queries.append({
@@ -904,7 +948,7 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 bbox = geo.get('bbox')
 
                 # Generate one RGB overview for all atmo vars (reuse if surface already made one)
-                atmo_rgb_overview = rgb_overview_b64 if 'rgb_overview_b64' in dir() and rgb_overview_b64 else None
+                atmo_rgb_overview = locals().get('rgb_overview_b64') or None
                 if atmo_rgb_overview is None and bbox and not surface_vars and not lulc_vars:
                     try:
                         from gis_functions import make_rgb_overview, load_landsat
@@ -1100,8 +1144,87 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                 from gis_functions import compute_lulc, make_lulc_charts
                 study_area_lulc = study_area_main
                 lulc_result = compute_lulc(study_area_lulc, start_date, end_date, region_name)
-                if lulc_result['success']:
+                if not lulc_result['success']:
+                    _fail_msg = lulc_result.get('message', 'Unknown LULC error')
+                    print(f'  LULC failed: {_fail_msg}')
+                    _lulc_rgb_err = locals().get('rgb_overview_b64') or None
+                    all_stats['LULC'] = {'error': _fail_msg}
+                    figures['LULC'] = {
+                        'error'       : _fail_msg,
+                        'analysis_map': None,
+                        'charts'      : [],
+                        'rgb_overview': _lulc_rgb_err,
+                    }
+                elif lulc_result['success']:
                     all_stats['LULC'] = lulc_result['stats']
+
+                    # ── Run validation in app.py — independent of gis_functions version ──
+                    _ml = lulc_result.get('ml_metrics', {})
+                    if not _ml:
+                        # Try to compute validation here using returned GEE objects
+                        _clf  = lulc_result.get('_classifier')
+                        _ts   = lulc_result.get('_test_set')
+                        _sids = lulc_result.get('_sampled_ids', [])
+                        _ntot = lulc_result.get('_n_total', 0)
+                        if _clf is not None and _ts is not None and _sids:
+                            try:
+                                from gis_functions import ESRI_CLASSES
+                                import ee
+                                print('  [app] Running validation (aggregate_array)...', flush=True)
+                                _tested     = _ts.classify(_clf)
+                                _act        = _tested.aggregate_array('landcover').getInfo()
+                                _pred       = _tested.aggregate_array('classification').getInfo()
+                                print(f'  [app] Labels: {len(_act)} actual, {len(_pred)} predicted', flush=True)
+                                if _act and _pred and len(_act) == len(_pred):
+                                    _seen   = set(int(x) for x in _act if x is not None)
+                                    _order  = [c for c in _sids if c in _seen] or sorted(_seen)
+                                    _imap   = {c: i for i, c in enumerate(_order)}
+                                    _nc     = len(_order)
+                                    _mat    = [[0]*_nc for _ in range(_nc)]
+                                    for a, p in zip(_act, _pred):
+                                        ai = _imap.get(int(a) if a is not None else -1, -1)
+                                        pi = _imap.get(int(p) if p is not None else -1, -1)
+                                        if ai >= 0 and pi >= 0:
+                                            _mat[ai][pi] += 1
+                                    _tot  = sum(sum(r) for r in _mat)
+                                    _corr = sum(_mat[i][i] for i in range(_nc))
+                                    _oa   = round(_corr/_tot, 4) if _tot else 0.0
+                                    _rs   = [sum(_mat[i]) for i in range(_nc)]
+                                    _cs   = [sum(_mat[r][i] for r in range(_nc)) for i in range(_nc)]
+                                    _pe   = sum(_rs[i]*_cs[i] for i in range(_nc))/(_tot**2) if _tot else 0
+                                    _kap  = round((_oa-_pe)/(1-_pe), 4) if (1-_pe) > 0 else 0.0
+                                    _cnames = [ESRI_CLASSES[c][0] for c in _order]
+                                    _ccolors= [ESRI_CLASSES[c][1] for c in _order]
+                                    _pl,_rl,_fl,_fpl,_al = [],[],[],[],[]
+                                    for i in range(_nc):
+                                        tp=_mat[i][i]; fp=_cs[i]-tp; fn=_rs[i]-tp; tn=_tot-tp-fp-fn
+                                        p=round(tp/(tp+fp),4) if tp+fp>0 else 0.0
+                                        r=round(tp/(tp+fn),4) if tp+fn>0 else 0.0
+                                        f=round(2*p*r/(p+r),4) if p+r>0 else 0.0
+                                        fpr=round(fp/(fp+tn),4) if fp+tn>0 else 0.0
+                                        ac=round((tp+tn)/_tot,4) if _tot>0 else 0.0
+                                        _pl.append(p);_rl.append(r);_fl.append(f);_fpl.append(fpr);_al.append(ac)
+                                    _ml = {
+                                        'overall_accuracy': _oa, 'kappa': _kap,
+                                        'avg_precision': round(sum(_pl)/_nc,4),
+                                        'avg_recall'   : round(sum(_rl)/_nc,4),
+                                        'avg_f1'       : round(sum(_fl)/_nc,4),
+                                        'auc_approx'   : round(1.0-sum(_fpl)/_nc,4),
+                                        'per_class': {_cnames[i]: {
+                                            'precision':_pl[i],'recall':_rl[i],'f1':_fl[i],
+                                            'fpr':_fpl[i],'color':_ccolors[i],'accuracy':_al[i]
+                                        } for i in range(_nc)},
+                                        'confusion_matrix': _mat, 'class_names': _cnames,
+                                        'n_train': int(_ntot*0.8), 'n_test': int(_ntot*0.2),
+                                        'n_total': _ntot,
+                                    }
+                                    lulc_result['ml_metrics'] = _ml
+                                    print(f'  [app] ✓ Validation: OA={_oa:.3f} | Kappa={_kap:.3f}', flush=True)
+                            except Exception as _ve:
+                                import traceback as _vtb
+                                print(f'  [app] Validation failed: {type(_ve).__name__}: {_ve}', flush=True)
+                                _vtb.print_exc()
+
                     if lulc_result.get('ml_metrics'):
                         all_stats['LULC']['ml_metrics'] = lulc_result['ml_metrics']
                     lulc_vis     = lulc_result['vis_params']
@@ -1166,8 +1289,159 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
 
                     lulc_charts = make_lulc_charts(lulc_result['stats'])
 
+                    # ── Generate confusion matrix + metrics panel images ───────
+                    # Same approach as pie chart — generate as b64 and pass in charts
+                    ml = lulc_result.get('ml_metrics', {})
+                    if ml and ml.get('confusion_matrix') and ml.get('class_names'):
+                        try:
+                            import matplotlib
+                            matplotlib.use('Agg')
+                            import matplotlib.pyplot as plt
+                            import matplotlib.colors as mcolors
+                            import io, base64 as _b64m
+                            from gis_functions import fig_to_base64
+
+                            # ── Confusion matrix heatmap ──────────────────────
+                            cm      = ml['confusion_matrix']
+                            cnames  = ml['class_names']
+                            n       = len(cnames)
+                            oa      = ml.get('overall_accuracy', 0)
+                            kap     = ml.get('kappa', 0)
+
+                            cm_arr = [[cm[r][c] for c in range(n)] for r in range(n)]
+                            row_totals = [sum(cm_arr[r]) for r in range(n)]
+                            # Normalize per row for color (proportion)
+                            cm_norm = [[cm_arr[r][c]/row_totals[r] if row_totals[r]>0 else 0
+                                        for c in range(n)] for r in range(n)]
+
+                            fig, ax = plt.subplots(figsize=(max(7, n*1.2), max(6, n*1.0)))
+                            fig.patch.set_facecolor('white')
+                            cmap = mcolors.LinearSegmentedColormap.from_list(
+                                'cm', ['#1565c0', '#e3f2fd', '#ffcdd2', '#c62828'])
+                            im = ax.imshow(cm_norm, cmap=cmap, vmin=0, vmax=1, aspect='auto')
+
+                            ax.set_xticks(range(n)); ax.set_yticks(range(n))
+                            ax.set_xticklabels(cnames, rotation=30, ha='right', fontsize=9)
+                            ax.set_yticklabels(cnames, fontsize=9)
+                            ax.set_xlabel('Predicted', fontsize=11, labelpad=8)
+                            ax.set_ylabel('Actual', fontsize=11, labelpad=8)
+                            ax.set_title(
+                                f'Confusion Matrix\nOverall Accuracy: {oa*100:.1f}%  |  Kappa: {kap:.3f}',
+                                fontsize=12, fontweight='bold', pad=12)
+
+                            for r in range(n):
+                                for c in range(n):
+                                    val  = cm_arr[r][c]
+                                    bg   = cm_norm[r][c]
+                                    fc   = 'white' if bg > 0.45 else '#1a1a1a'
+                                    ax.text(c, r, str(val), ha='center', va='center',
+                                            fontsize=9, fontweight='bold', color=fc)
+
+                            cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
+                            cbar.set_label('Proportion', fontsize=9)
+                            cbar.ax.tick_params(labelsize=8)
+
+                            plt.tight_layout()
+                            lulc_charts.append(('lulc_confusion_matrix', fig_to_base64(fig)))
+                            plt.close(fig)
+                            print('  ✓ Confusion matrix chart generated')
+
+                            # ── Per-class metrics panel ───────────────────────
+                            per_class = ml.get('per_class', {})
+                            apr = ml.get('avg_precision', 0)
+                            arc = ml.get('avg_recall', 0)
+                            af1 = ml.get('avg_f1', 0)
+                            auc = ml.get('auc_approx', None)
+                            fpr_vals = [v.get('fpr',0) for v in per_class.values()]
+                            avg_fpr  = sum(fpr_vals)/len(fpr_vals) if fpr_vals else 0
+                            n_cls    = len(per_class)
+
+                            row_h   = 0.45
+                            panel_h = 0.9 + n_cls*row_h + 1.6
+                            fig2, ax2 = plt.subplots(figsize=(9, panel_h))
+                            ax2.set_facecolor('#1a1a2e'); fig2.patch.set_facecolor('#1a1a2e')
+                            ax2.axis('off')
+
+                            def fy(ly): return 1.0 - ly/panel_h
+                            WHITE='#ffffff'; LGRAY='#aaaaaa'
+
+                            fig2.text(0.03, fy(0.15), 'Per-class Performance',
+                                      color=WHITE, fontsize=11, fontweight='bold',
+                                      transform=fig2.transFigure)
+                            hdrs = ['Class','Accuracy','Precision','Recall','F1 Score','FPR']
+                            hxs  = [0.03, 0.28, 0.42, 0.56, 0.70, 0.84]
+                            for hx,ht in zip(hxs,hdrs):
+                                fig2.text(hx, fy(0.42), ht, color=LGRAY, fontsize=8,
+                                          fontweight='bold', transform=fig2.transFigure)
+
+                            tab10 = plt.cm.get_cmap('tab10')
+                            for i,(cls_name,cls_m) in enumerate(per_class.items()):
+                                ry  = fy(0.62 + i*row_h)
+                                p   = cls_m.get('precision',0)
+                                r   = cls_m.get('recall',0)
+                                f1  = cls_m.get('f1',0)
+                                acc = cls_m.get('accuracy',0)
+                                fpr = cls_m.get('fpr',0)
+                                raw_c = cls_m.get('color',None)
+                                if raw_c and isinstance(raw_c,str) and raw_c.startswith('#'):
+                                    dc = raw_c
+                                else:
+                                    rgba = tab10(i%10)
+                                    dc = '#{:02x}{:02x}{:02x}'.format(
+                                        int(rgba[0]*255),int(rgba[1]*255),int(rgba[2]*255))
+                                fig2.text(hxs[0]-0.005, ry, '●', color=dc, fontsize=11,
+                                          transform=fig2.transFigure, va='center')
+                                fig2.text(hxs[0]+0.025, ry, cls_name, color=WHITE,
+                                          fontsize=9, fontweight='bold',
+                                          transform=fig2.transFigure, va='center')
+                                for xi,(cx,val) in enumerate(zip(hxs[1:],
+                                    [f'{acc*100:.1f}%',f'{p*100:.1f}%',
+                                     f'{r*100:.1f}%', f'{f1*100:.1f}%',f'{fpr*100:.1f}%'])):
+                                    raw_v = [acc,p,r,f1,fpr][xi]
+                                    if xi in (1,2,3):
+                                        vc = '#4ade80' if raw_v>=0.7 else '#facc15' if raw_v>=0.4 else '#f87171'
+                                    else: vc = WHITE
+                                    fig2.text(cx, ry, val, color=vc, fontsize=9,
+                                              transform=fig2.transFigure, va='center')
+
+                            sep_y = fy(0.62+n_cls*row_h+0.12)
+                            fig2.add_artist(plt.Line2D([0.03,0.97],[sep_y,sep_y],
+                                color='#555577', lw=0.6, transform=fig2.transFigure))
+
+                            omy = fy(0.62+n_cls*row_h+0.40)
+                            fig2.text(0.03, omy, 'Overall Model Metrics', color=WHITE,
+                                      fontsize=10, fontweight='bold', transform=fig2.transFigure)
+
+                            overall_items = [
+                                ('Overall Accuracy', f'{oa*100:.1f}%'),
+                                ('Kappa Coefficient', f'{kap:.3f}'),
+                                ('Macro Precision', f'{(apr or 0)*100:.1f}%'),
+                                ('Macro Recall', f'{(arc or 0)*100:.1f}%'),
+                                ('Macro F1 Score', f'{(af1 or 0)*100:.1f}%'),
+                                ('Avg False Positive Rate', f'{avg_fpr*100:.1f}%'),
+                            ]
+                            if auc: overall_items.append(('AUC (approx.)', f'{auc:.3f}'))
+                            for idx,(lbl,val) in enumerate(overall_items):
+                                xp = 0.03 if idx%2==0 else 0.52
+                                ry2 = fy(0.62+n_cls*row_h+0.78+(idx//2)*0.40)
+                                fig2.text(xp, ry2, f'• {lbl}:', color=LGRAY,
+                                          fontsize=8.5, transform=fig2.transFigure)
+                                fig2.text(xp+0.22, ry2, val, color=WHITE,
+                                          fontsize=8.5, fontweight='bold',
+                                          transform=fig2.transFigure)
+
+                            plt.tight_layout(pad=0.1)
+                            lulc_charts.append(('lulc_metrics_panel',
+                                fig_to_base64(fig2)))
+                            plt.close(fig2)
+                            print('  ✓ Metrics panel chart generated')
+
+                        except Exception as cm_err:
+                            print(f'  Confusion matrix/metrics chart failed: {cm_err}')
+                            import traceback; traceback.print_exc()
+
                     # Generate RGB overview for LULC if surface analysis didn't already do it
-                    lulc_rgb_overview = rgb_overview_b64 if 'rgb_overview_b64' in dir() and rgb_overview_b64 else None
+                    lulc_rgb_overview = locals().get('rgb_overview_b64') or None
                     if lulc_rgb_overview is None and bbox:
                         try:
                             from gis_functions import make_rgb_overview, load_landsat

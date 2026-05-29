@@ -85,11 +85,17 @@ def apply_cloud_mask(image):
 
 def load_landsat(study_area, start, end):
     gee_init_for_thread()
-    col = (ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
-             .filterDate(start, end)
-             .filterBounds(study_area)
-             .map(apply_scaling)
-             .map(apply_cloud_mask))
+    col8 = (ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+              .filterDate(start, end)
+              .filterBounds(study_area)
+              .map(apply_scaling)
+              .map(apply_cloud_mask))
+    col9 = (ee.ImageCollection('LANDSAT/LC09/C02/T1_L2')
+              .filterDate(start, end)
+              .filterBounds(study_area)
+              .map(apply_scaling)
+              .map(apply_cloud_mask))
+    col = col8.merge(col9)
     return col, col.median()
 
 # =============================================================================
@@ -121,20 +127,93 @@ CITY_BBOX_FALLBACK = {
     'mexico city':[-99.30,19.25, -98.95, 19.60],
 }
 
+# GAUL name overrides for known cities where the GAUL name differs from common name.
+# Format: city_key (from CITY_BBOX_FALLBACK) → (gaul_level_dataset, field, gaul_name)
+# Use level1 (province) for cities that are provinces, level2 for districts.
+CITY_GAUL_OVERRIDE = {
+    'jakarta':     ('FAO/GAUL/2015/level1', 'ADM1_NAME', 'Jakarta Raya'),
+    'tokyo':       None,   # GAUL "Tokyo-to" spans remote islands — use bbox
+    'osaka':       ('FAO/GAUL/2015/level1', 'ADM1_NAME', 'Osaka'),
+    'beijing':     ('FAO/GAUL/2015/level1', 'ADM1_NAME', 'Beijing'),
+    'shanghai':    ('FAO/GAUL/2015/level1', 'ADM1_NAME', 'Shanghai'),
+    'london':      ('FAO/GAUL/2015/level2', 'ADM2_NAME', 'London'),
+    'paris':       ('FAO/GAUL/2015/level2', 'ADM2_NAME', 'Paris'),
+    'singapore':   ('FAO/GAUL/2015/level0', 'ADM0_NAME', 'Singapore'),
+    'seoul':       ('FAO/GAUL/2015/level1', 'ADM1_NAME', 'Seoul'),
+    'bangkok':     ('FAO/GAUL/2015/level1', 'ADM1_NAME', 'Bangkok Metropolis'),
+    'dubai':       ('FAO/GAUL/2015/level1', 'ADM1_NAME', 'Dubai'),
+    'mumbai':      ('FAO/GAUL/2015/level2', 'ADM2_NAME', 'Mumbai'),
+    'berlin':      ('FAO/GAUL/2015/level1', 'ADM1_NAME', 'Berlin'),
+    'cairo':       ('FAO/GAUL/2015/level1', 'ADM1_NAME', 'Al Qahirah'),
+    'nairobi':     ('FAO/GAUL/2015/level1', 'ADM1_NAME', 'Nairobi'),
+    'sao paulo':   ('FAO/GAUL/2015/level1', 'ADM1_NAME', 'Sao Paulo'),
+    'mexico city': ('FAO/GAUL/2015/level1', 'ADM1_NAME', 'Distrito Federal'),
+    'sydney':      ('FAO/GAUL/2015/level1', 'ADM1_NAME', 'New South Wales'),
+    'los angeles': None,   # use bbox — LA County is very large
+    'new york':    None,   # use bbox — NY state is too large
+}
+
+
 def resolve_region(region_name):
     print(f'  Resolving region: "{region_name}"...')
     key = region_name.lower().strip()
 
-    # ── Step 0: Known-city hardcoded bbox — return immediately, skip GAUL ──────
-    # GAUL stores Tokyo as "Tokyo-to" which includes remote island chains
-    # spanning 20°–36°N. Always use the hardcoded urban bbox for known cities.
+    # ── Step 0: Known-city check ──────────────────────────────────────────────
+    # For known cities, try GAUL with the correct administrative name first.
+    # This gives the real city boundary polygon, not a rectangle.
+    # Fall back to hardcoded bbox if GAUL lookup fails or is explicitly None.
+    matched_city   = None
+    hardcoded_bbox = None
     for city_key, bbox in CITY_BBOX_FALLBACK.items():
         if city_key in key or key in city_key:
-            w, s, e, n = bbox
-            print(f'  Matched known city "{city_key}" → hardcoded bbox [{w},{s},{e},{n}]')
-            return ee.Geometry.Rectangle([w, s, e, n])
+            matched_city   = city_key
+            hardcoded_bbox = bbox
+            break
 
-    # ── Step 1: Nominatim with bbox size validation ───────────────────────────
+    if matched_city is not None:
+        gaul_override = CITY_GAUL_OVERRIDE.get(matched_city)
+        if gaul_override is not None:
+            gaul_dataset, gaul_field, gaul_name = gaul_override
+            # Try multiple name variants to handle GAUL spelling differences
+            _name_variants = [gaul_name, gaul_name.upper(), gaul_name.lower(),
+                              gaul_name.replace(' Raya', '').replace(' raya', '')]
+            _geom = None
+            for _variant in _name_variants:
+                try:
+                    fc    = ee.FeatureCollection(gaul_dataset)
+                    match = fc.filter(ee.Filter.stringContains(gaul_field, _variant)).limit(1)
+                    feat  = match.first()
+                    info  = feat.getInfo()
+                    if info and info.get('geometry'):
+                        print(f'  ✓ Matched "{matched_city}" → GAUL "{_variant}" polygon')
+                        _geom = feat.geometry()
+                        break
+                except Exception as _ge:
+                    continue
+            # Jakarta special case: union of 5 kabupaten/kota at level2 if level1 fails
+            if _geom is None and matched_city == 'jakarta':
+                try:
+                    _jkt_names = ['Jakarta Pusat', 'Jakarta Utara', 'Jakarta Barat',
+                                  'Jakarta Selatan', 'Jakarta Timur']
+                    _fc2 = ee.FeatureCollection('FAO/GAUL/2015/level2')
+                    _parts = []
+                    for _jn in _jkt_names:
+                        _m = _fc2.filter(ee.Filter.stringContains('ADM2_NAME', _jn)).first()
+                        _parts.append(_m.geometry())
+                    _geom = ee.Geometry.MultiPolygon(
+                        [p.getInfo()['coordinates'] for p in _parts])
+                    print(f'  ✓ Jakarta: built from 5-kota level2 union')
+                except Exception as _je:
+                    print(f'  Jakarta level2 union failed: {_je}')
+            if _geom is not None:
+                return _geom
+            print(f'  GAUL override for "{matched_city}" returned no geometry, using bbox')
+        # Explicit None override or GAUL failed → hardcoded bbox
+        w, s, e, n = hardcoded_bbox
+        print(f'  Matched known city "{matched_city}" → hardcoded bbox [{w},{s},{e},{n}]')
+        return ee.Geometry.Rectangle([w, s, e, n])
+
+    # ── Step 1: Nominatim with bbox size validation (non-city queries) ────────
     nom_coords  = None
     nom_geojson = None
     try:
@@ -1115,14 +1194,17 @@ def make_stats_charts(stats, var_name, label):
     return charts
 
 
-def make_lulc_charts(lulc_stats):
+def make_lulc_charts(lulc_stats, ml_metrics=None):
     """
-    Generate pie chart + horizontal bar chart for LULC class breakdown.
-    Returns list of [('lulc_pie', b64), ('lulc_bar', b64)].
+    Generate pie chart + confusion matrix heatmap for LULC class breakdown.
+    ml_metrics must be passed directly — it is NOT stored inside lulc_stats.
+    Returns list of [('lulc_pie', b64), ('confusion_matrix', b64)].
     """
     charts  = []
     classes = lulc_stats.get('classes', {})
     total_ha = lulc_stats.get('total_ha', 0)
+    if ml_metrics is None:
+        ml_metrics = {}
     if not classes:
         return charts
 
@@ -1152,7 +1234,60 @@ def make_lulc_charts(lulc_stats):
     except Exception as e:
         print(f'  LULC pie chart failed: {e}')
 
-    # ── Horizontal bar chart — removed, pie chart is sufficient ──────────────
+    # ── Confusion matrix heatmap ──────────────────────────────────────────────
+    conf_matrix = ml_metrics.get('confusion_matrix', None)
+    class_names = ml_metrics.get('class_names', [])
+    oa          = ml_metrics.get('overall_accuracy', None)
+    kappa       = ml_metrics.get('kappa', None)
+
+    if conf_matrix and class_names:
+        try:
+            import numpy as np
+            import matplotlib.colors as mcolors
+
+            cm_arr = np.array(conf_matrix, dtype=float)
+            n = len(class_names)
+            row_sums = cm_arr.sum(axis=1, keepdims=True)
+            row_sums[row_sums == 0] = 1
+            cm_norm = cm_arr / row_sums
+
+            cmap = mcolors.LinearSegmentedColormap.from_list(
+                'rb', ['#1565C0', '#1976D2', '#BBDEFB', '#ffffff', '#FFCDD2', '#E53935', '#B71C1C']
+            )
+            fig_size = max(5.5, n * 1.15)
+            fig, ax = plt.subplots(figsize=(fig_size + 1.5, fig_size))
+            ax.set_facecolor('white'); fig.patch.set_facecolor('white')
+
+            im = ax.imshow(cm_norm, cmap=cmap, vmin=0, vmax=1, aspect='auto')
+            cbar = fig.colorbar(im, ax=ax, fraction=0.035, pad=0.02)
+            cbar.set_label('Proportion', fontsize=9)
+            cbar.ax.tick_params(labelsize=8)
+            cbar.set_ticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
+
+            for i in range(n):
+                for j in range(n):
+                    val = int(cm_arr[i, j])
+                    bg  = cm_norm[i, j]
+                    txt_color = 'white' if (bg > 0.65 or bg < 0.15) else 'black'
+                    ax.text(j, i, str(val), ha='center', va='center',
+                            fontsize=9, fontweight='bold', color=txt_color)
+
+            ax.set_xticks(range(n)); ax.set_yticks(range(n))
+            ax.set_xticklabels(class_names, rotation=30, ha='right', fontsize=9)
+            ax.set_yticklabels(class_names, fontsize=9)
+            ax.set_xlabel('Predicted', fontsize=10, labelpad=6)
+            ax.set_ylabel('Actual', fontsize=10, labelpad=6)
+            title = 'Confusion Matrix'
+            if oa is not None and kappa is not None:
+                title += f'\nOverall Accuracy: {oa*100:.1f}%  |  Kappa: {kappa:.3f}'
+            ax.set_title(title, fontsize=10.5, fontweight='bold', pad=10)
+            plt.tight_layout(pad=1.2)
+            charts.append(('lulc_confusion_matrix', fig_to_base64(fig)))
+            print(f'  ✓ LULC confusion matrix chart generated ({n}x{n})')
+        except Exception as e:
+            print(f'  LULC confusion matrix chart failed: {e}')
+    else:
+        print(f'  Note: no ml_metrics for confusion matrix (conf={conf_matrix is not None}, names={len(class_names)})')
 
     return charts
 
@@ -1901,17 +2036,24 @@ def compute_lulc(study_area, start_date, end_date, region_name):
             return {'success': False, 'message': 'No Landsat scenes found'}
         print(f'  {count} Landsat scenes loaded')
 
-        # Feature stack: 6 bands + 6 indices = 12 features
+        # Feature stack: 6 bands + 6 indices + 1 SWIR ratio = 13 features
         ndvi  = compute_ndvi(composite)
         ndbi  = compute_ndbi(composite)
         ndwi  = compute_ndwi(composite)
         mndwi = compute_mndwi(composite)
         savi  = compute_savi(composite)
         bsi   = compute_bsi(composite)
+        # SWIR2/SWIR1 ratio: bare soil and exposed ground have distinctly higher
+        # SWIR2 relative to SWIR1 compared to impervious built surfaces.
+        # This is the key spectral feature to separate Bare Ground from Built Area.
+        swir_ratio = (composite.select('SR_B7')
+                               .divide(composite.select('SR_B6').add(1e-6))
+                               .rename('SWIR_ratio'))
 
         features = (composite.select(['SR_B2','SR_B3','SR_B4','SR_B5','SR_B6','SR_B7'])
                               .addBands(ndvi).addBands(ndbi).addBands(ndwi)
-                              .addBands(mndwi).addBands(savi).addBands(bsi))
+                              .addBands(mndwi).addBands(savi).addBands(bsi)
+                              .addBands(swir_ratio))
 
         # ── Step 4: Stratified sampling ───────────────────────────────────────
         # Use ee.Image.stratifiedSample — samples proportionally from each class
@@ -1920,27 +2062,30 @@ def compute_lulc(study_area, start_date, end_date, region_name):
         training_stack = features.addBands(ref_lc)
 
         # Filter relevant_ids to only those present — SINGLE batch GEE call
+        # Minimum pixel threshold is 10px @ 100m to avoid phantom classes
+        # that appear only due to ESA noise (e.g. isolated Crop pixels in Jakarta city).
+        # Lowered from 50 → 10 so sparse-but-real classes like Bare Ground in urban
+        # cities (exposed rooftops, concrete yards) are not silently dropped.
+        _MIN_PX_100M = 10
         present_classes = []
         try:
-            # Count pixels per class in one reduceRegion call
+            # Count pixels per class at 100m scale for accurate filtering
             counts = ref_lc.reduceRegion(
                 reducer  = ee.Reducer.frequencyHistogram(),
                 geometry = study_area,
-                scale    = 500,
-                maxPixels= 1e8
+                scale    = 100,
+                maxPixels= 1e9
             ).getInfo().get('landcover', {})
-            # counts is a dict like {'1': 65, '2': 163, ...}
             counts_by_id = {int(float(k)): int(v) for k, v in counts.items()}
             for class_id in relevant_ids:
                 count = counts_by_id.get(class_id, 0)
-                if count > 2:
+                if count >= _MIN_PX_100M:
                     present_classes.append(class_id)
-                    print(f'    {ESRI_CLASSES[class_id][0]}: present ({count} px @ 500m)')
+                    print(f'    {ESRI_CLASSES[class_id][0]}: present ({count} px @ 100m)')
                 else:
-                    print(f'    {ESRI_CLASSES[class_id][0]}: absent in this region, skipping')
+                    print(f'    {ESRI_CLASSES[class_id][0]}: too sparse ({count} px) — skipping')
         except Exception as e:
             print(f'  Presence check failed: {e}')
-            # Fallback: use all relevant classes
             present_classes = relevant_ids
             print(f'  Fallback: using all {len(present_classes)} LLM-selected classes')
 
@@ -1949,18 +2094,17 @@ def compute_lulc(study_area, start_date, end_date, region_name):
                     'message': f'Only {len(present_classes)} class(es) present — need ≥2'}
 
         print(f'  Sampling {len(present_classes)} classes...')
-        # No per-class getInfo() — build collections lazily, merge once
+        # 500 samples per class at 30m scale for better spectral coverage
         all_samples = []
         sampled_ids = []
         for class_id in present_classes:
             try:
                 class_mask = ref_lc.eq(class_id)
-                # Build sample collection without calling getInfo()
                 samples = (training_stack
                            .updateMask(class_mask)
                            .sample(region    = study_area,
-                                   scale     = 100,
-                                   numPixels = 200,
+                                   scale     = 30,
+                                   numPixels = 500,
                                    seed      = 42 + class_id,
                                    geometries= False))
                 all_samples.append(samples)
@@ -1988,7 +2132,7 @@ def compute_lulc(study_area, start_date, end_date, region_name):
         # ── Step 6: Train Random Forest ───────────────────────────────────────
         print('  Training Random Forest (200 trees)...')
         band_names = ['SR_B2','SR_B3','SR_B4','SR_B5','SR_B6','SR_B7',
-                      'NDVI','NDBI','NDWI','MNDWI','SAVI','BSI']
+                      'NDVI','NDBI','NDWI','MNDWI','SAVI','BSI','SWIR_ratio']
         classifier = ee.Classifier.smileRandomForest(
             numberOfTrees     = 200,
             variablesPerSplit = None,
@@ -2001,86 +2145,133 @@ def compute_lulc(study_area, start_date, end_date, region_name):
             inputProperties = band_names
         )
 
-        # ── Step 6b: Validation — confusion matrix on test set ────────────────
-        print('  Computing validation metrics...')
+        # ── Classify full feature image ───────────────────────────────────────
+        classified = features.classify(classifier).rename('classification')
+
+        # ── Post-classification spectral override: Bare Ground correction ─────
+        # Problem: ESA WorldCover labels large bright-roof structures (e.g. O2 Arena,
+        # stadium roofs, industrial sheds) as Built Area (class 7), so the RF never
+        # learns their spectral signature as Bare Ground. We apply a rule-based
+        # correction AFTER classification to catch these pixels.
+        #
+        # Bare Ground spectral signature (Landsat SR, surface reflectance):
+        #   - High visible brightness: mean(B2+B3+B4) > 0.25  (bright surface)
+        #   - Very low vegetation:     NDVI < 0.05            (no plant signal)
+        #   - High BSI:                BSI  > 0.05            (bare soil index)
+        #   - Low NIR:                 SR_B5 < 0.20           (unlike healthy vegetation)
+        #   - RF predicted Built Area: classification == 7    (only override Built pixels)
+        #
+        # Only apply override when class 8 (Bare Ground) is actually in the sampled
+        # classes, so the area stats pipeline already knows about it.
+        if 8 in sampled_ids:
+            print('  Applying Bare Ground spectral override (bright-roof correction)...')
+            brightness = (composite.select('SR_B2')
+                          .add(composite.select('SR_B3'))
+                          .add(composite.select('SR_B4'))
+                          .divide(3))
+            bare_override_mask = (
+                brightness.gt(0.25)
+                .And(ndvi.lt(0.05))
+                .And(bsi.gt(0.05))
+                .And(composite.select('SR_B5').lt(0.20))
+                .And(classified.eq(7))   # only pixels the RF called Built Area
+            )
+            classified = classified.where(bare_override_mask,
+                                          ee.Image.constant(8)).rename('classification')
+            try:
+                override_count = bare_override_mask.rename('override').reduceRegion(
+                    reducer=ee.Reducer.sum(),
+                    geometry=study_area, scale=100, maxPixels=1e9
+                ).getInfo().get('override', 0)
+                print(f'  Bare Ground override applied to ~{int(override_count)} px @ 100m')
+            except Exception:
+                print('  Bare Ground override applied (count unavailable)')
+
+        # ── Step 6b: Validation — build confusion matrix in Python
+        print('  Computing validation metrics...', flush=True)
         ml_metrics = {}
         try:
-            tested       = test_set.classify(classifier)
-            conf_matrix  = tested.errorMatrix('landcover', 'classification', sampled_ids)
-            overall_acc  = conf_matrix.accuracy().getInfo()
-            kappa        = conf_matrix.kappa().getInfo()
-            matrix_arr   = conf_matrix.array().getInfo()   # list of lists
+            print('  Step 1: classifying test set...', flush=True)
+            tested      = test_set.classify(classifier)
+            print('  Step 2: downloading actual labels...', flush=True)
+            actual_list = tested.aggregate_array('landcover').getInfo()
+            print('  Step 3: downloading predicted labels...', flush=True)
+            pred_list   = tested.aggregate_array('classification').getInfo()
+            print(f'  Labels: {len(actual_list)} actual, {len(pred_list)} predicted', flush=True)
 
-            # Per-class producer (recall) and consumer (precision) accuracy
-            producers  = conf_matrix.producersAccuracy().getInfo()   # [[v], [v], ...]
-            consumers  = conf_matrix.consumersAccuracy().getInfo()
+            if actual_list and pred_list and len(actual_list) == len(pred_list):
+                seen_ids  = set(int(x) for x in actual_list if x is not None)
+                order_ids = [c for c in sampled_ids if c in seen_ids]
+                if not order_ids:
+                    order_ids = sorted(seen_ids)
+                idx_map = {c: i for i, c in enumerate(order_ids)}
+                n_cls   = len(order_ids)
 
-            # Flatten nested lists GEE returns
-            prod_flat = [row[0] if isinstance(row, list) else row for row in producers]
-            cons_flat = [row[0] if isinstance(row, list) else row for row in consumers]
+                matrix_arr = [[0] * n_cls for _ in range(n_cls)]
+                for a, p in zip(actual_list, pred_list):
+                    ai = idx_map.get(int(a) if a is not None else -1, -1)
+                    pi = idx_map.get(int(p) if p is not None else -1, -1)
+                    if ai >= 0 and pi >= 0:
+                        matrix_arr[ai][pi] += 1
 
-            # Per-class F1
-            f1_scores = []
-            for p, c in zip(prod_flat, cons_flat):
-                denom = (p + c)
-                f1_scores.append(round(2 * p * c / denom, 4) if denom > 0 else 0.0)
-
-            # Macro-average precision, recall, F1
-            avg_precision = round(sum(cons_flat) / len(cons_flat), 4) if cons_flat else None
-            avg_recall    = round(sum(prod_flat) / len(prod_flat),  4) if prod_flat else None
-            avg_f1        = round(sum(f1_scores)  / len(f1_scores),  4) if f1_scores else None
-
-            # False positive rate per class: FP / (FP + TN)
-            fpr_list = []
-            for i, cid in enumerate(sampled_ids):
-                row_sum = sum(matrix_arr[i])
-                tp      = matrix_arr[i][i]
-                fn      = row_sum - tp
-                col_sum = sum(matrix_arr[r][i] for r in range(len(matrix_arr)))
-                fp      = col_sum - tp
                 total   = sum(sum(r) for r in matrix_arr)
-                tn      = total - tp - fn - fp
-                denom   = fp + tn
-                fpr_list.append(round(fp / denom, 4) if denom > 0 else 0.0)
+                correct = sum(matrix_arr[i][i] for i in range(n_cls))
+                overall_acc = round(correct / total, 4) if total > 0 else 0.0
 
-            # AUC approximation: 1 - mean(FPR) weighted by recall (simple trapezoidal)
-            auc_approx = round(1.0 - (sum(fpr_list) / len(fpr_list)), 4) if fpr_list else None
+                row_sums = [sum(matrix_arr[i]) for i in range(n_cls)]
+                col_sums = [sum(matrix_arr[r][i] for r in range(n_cls)) for i in range(n_cls)]
+                p_e   = sum(row_sums[i]*col_sums[i] for i in range(n_cls)) / (total**2) if total > 0 else 0
+                kappa = round((overall_acc - p_e) / (1 - p_e), 4) if (1 - p_e) > 0 else 0.0
 
-            class_names = [ESRI_CLASSES[c][0] for c in sampled_ids]
-            class_colors = [ESRI_CLASSES[c][1] for c in sampled_ids]
+                class_names  = [ESRI_CLASSES[c][0] for c in order_ids]
+                class_colors = [ESRI_CLASSES[c][1] for c in order_ids]
 
-            total_samples = sum(sum(row) for row in matrix_arr)
-            ml_metrics = {
-                'overall_accuracy' : round(overall_acc, 4),
-                'kappa'            : round(kappa, 4),
-                'avg_precision'    : avg_precision,
-                'avg_recall'       : avg_recall,
-                'avg_f1'           : avg_f1,
-                'auc_approx'       : auc_approx,
-                'per_class'        : {
-                    class_names[i]: {
-                        'precision' : round(cons_flat[i], 4),
-                        'recall'    : round(prod_flat[i], 4),
-                        'f1'        : f1_scores[i],
-                        'fpr'       : fpr_list[i],
-                        'color'     : class_colors[i],
-                        'accuracy'  : round(
-                            (matrix_arr[i][i] + total_samples
-                             - sum(matrix_arr[i])
-                             - sum(matrix_arr[r][i] for r in range(len(matrix_arr)))
-                             + matrix_arr[i][i]) / (total_samples or 1), 4),
-                    }
-                    for i in range(len(class_names))
-                },
-                'confusion_matrix' : matrix_arr,
-                'class_names'      : class_names,
-                'n_train'          : int(n_total * 0.8),
-                'n_test'           : int(n_total * 0.2),
-                'n_total'          : n_total,
-            }
-            print(f'  Overall accuracy: {overall_acc:.3f} | Kappa: {kappa:.3f}')
+                prec_list, rec_list, f1_list, fpr_list, acc_list = [], [], [], [], []
+                for i in range(n_cls):
+                    tp  = matrix_arr[i][i]
+                    fp  = col_sums[i] - tp
+                    fn  = row_sums[i] - tp
+                    tn  = total - tp - fp - fn
+                    p   = round(tp/(tp+fp), 4) if (tp+fp) > 0 else 0.0
+                    r   = round(tp/(tp+fn), 4) if (tp+fn) > 0 else 0.0
+                    f1  = round(2*p*r/(p+r), 4) if (p+r) > 0 else 0.0
+                    fpr = round(fp/(fp+tn), 4) if (fp+tn) > 0 else 0.0
+                    ac  = round((tp+tn)/total, 4) if total > 0 else 0.0
+                    prec_list.append(p); rec_list.append(r)
+                    f1_list.append(f1); fpr_list.append(fpr); acc_list.append(ac)
+
+                avg_precision = round(sum(prec_list)/n_cls, 4) if n_cls else None
+                avg_recall    = round(sum(rec_list)/n_cls,   4) if n_cls else None
+                avg_f1        = round(sum(f1_list)/n_cls,    4) if n_cls else None
+                auc_approx    = round(1.0 - sum(fpr_list)/n_cls, 4) if n_cls else None
+
+                ml_metrics = {
+                    'overall_accuracy': overall_acc,
+                    'kappa'           : kappa,
+                    'avg_precision'   : avg_precision,
+                    'avg_recall'      : avg_recall,
+                    'avg_f1'          : avg_f1,
+                    'auc_approx'      : auc_approx,
+                    'per_class'       : {
+                        class_names[i]: {
+                            'precision': prec_list[i], 'recall': rec_list[i],
+                            'f1': f1_list[i], 'fpr': fpr_list[i],
+                            'color': class_colors[i], 'accuracy': acc_list[i],
+                        } for i in range(n_cls)
+                    },
+                    'confusion_matrix': matrix_arr,
+                    'class_names'     : class_names,
+                    'n_train'         : int(n_total * 0.8),
+                    'n_test'          : int(n_total * 0.2),
+                    'n_total'         : n_total,
+                }
+                print(f'  ✓ Validation: OA={overall_acc:.3f} | Kappa={kappa:.3f} | Macro-F1={avg_f1:.3f} | classes={class_names}', flush=True)
+            else:
+                print('  Validation skipped: empty/mismatched labels', flush=True)
         except Exception as me:
-            print(f'  Validation metrics failed: {me}')
+            import traceback as _vtb
+            print(f'  Validation failed: {type(me).__name__}: {me}', flush=True)
+            _vtb.print_exc()
             ml_metrics = {}
 
         # ── Step 7: Area statistics at appropriate scale ──────────────────────
@@ -2157,16 +2348,21 @@ def compute_lulc(study_area, start_date, end_date, region_name):
         remapped    = classified
 
         return {
-            'success'   : True,
-            'lulc_img'  : remapped,
-            'vis_params': vis_params,
-            'stats'     : {
+            'success'    : True,
+            'lulc_img'   : remapped,
+            'vis_params' : vis_params,
+            'stats'      : {
                 'classes'  : area_stats,
                 'total_ha' : total_ha,
                 'scale_m'  : stats_scale,
                 'n_classes': len(area_stats),
             },
-            'ml_metrics': ml_metrics,
+            'ml_metrics' : ml_metrics,
+            # Pass back GEE objects so app.py can run validation independently
+            '_classifier' : classifier,
+            '_test_set'   : test_set,
+            '_sampled_ids': sampled_ids,
+            '_n_total'    : n_total,
             'message': f'LULC done: {len(area_stats)} classes, {total_ha:,.0f} ha total',
         }
 
