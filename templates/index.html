@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GIS Agent — Satellite Analysis</title>
+<title>Orbiview — Satellite Analysis</title>
 
 <!-- Fonts -->
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -36,9 +36,34 @@
      SIDEBAR NAV
 ════════════════════════════════════════════════════════ -->
 <nav class="sidebar-nav">
-  <div class="nav-logo">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+  <div class="nav-logo" title="Orbiview">
+    <!-- Orbiview logo mark: orange globe with wave bands -->
+    <svg width="24" height="24" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <clipPath id="globe-clip">
+          <circle cx="50" cy="50" r="46"/>
+        </clipPath>
+        <radialGradient id="orb-grad" cx="38%" cy="36%" r="62%">
+          <stop offset="0%" stop-color="#ff6a1a"/>
+          <stop offset="100%" stop-color="#e03a00"/>
+        </radialGradient>
+      </defs>
+      <!-- Base circle -->
+      <circle cx="50" cy="50" r="46" fill="url(#orb-grad)"/>
+      <!-- Wave band lines clipped inside globe -->
+      <g clip-path="url(#globe-clip)" fill="none" stroke="#2a1200" stroke-width="5.5" stroke-linecap="round">
+        <path d="M4 58 Q28 46 50 58 Q72 70 96 58"/>
+        <path d="M4 42 Q28 30 50 42 Q72 54 96 42"/>
+      </g>
+      <!-- Upper flame/curl shape -->
+      <g clip-path="url(#globe-clip)">
+        <path d="M50 8 C38 8 20 18 18 34 C16 48 28 52 36 44 C42 38 40 28 50 24 C60 20 68 30 64 42 C60 52 70 58 76 50 C84 40 80 20 66 12 C62 9 56 8 50 8Z"
+              fill="#2a1200" opacity="0.55"/>
+        <path d="M50 8 C38 8 20 18 18 34 C16 48 28 52 36 44 C42 38 40 28 50 24 C60 20 68 30 64 42 C60 52 70 58 76 50 C84 40 80 20 66 12 C62 9 56 8 50 8Z"
+              fill="none" stroke="#2a1200" stroke-width="2" opacity="0.3"/>
+      </g>
+      <!-- Outer ring -->
+      <circle cx="50" cy="50" r="46" fill="none" stroke="#2a1200" stroke-width="3" opacity="0.25"/>
     </svg>
   </div>
   <button class="nav-btn active" title="Chat" id="chatNavBtn" onclick="navigateTo('chat')">
@@ -153,7 +178,26 @@
   <!-- Header -->
   <div class="chat-header">
     <div class="chat-header-left">
-      <span class="chat-title">GIS Agent</span>
+      <!-- Orbiview logo + wordmark in header -->
+      <svg width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+        <defs>
+          <clipPath id="hdr-clip"><circle cx="50" cy="50" r="46"/></clipPath>
+          <radialGradient id="hdr-grad" cx="38%" cy="36%" r="62%">
+            <stop offset="0%" stop-color="#ff6a1a"/>
+            <stop offset="100%" stop-color="#e03a00"/>
+          </radialGradient>
+        </defs>
+        <circle cx="50" cy="50" r="46" fill="url(#hdr-grad)"/>
+        <g clip-path="url(#hdr-clip)" fill="none" stroke="#2a1200" stroke-width="5.5" stroke-linecap="round">
+          <path d="M4 58 Q28 46 50 58 Q72 70 96 58"/>
+          <path d="M4 42 Q28 30 50 42 Q72 54 96 42"/>
+        </g>
+        <g clip-path="url(#hdr-clip)">
+          <path d="M50 8 C38 8 20 18 18 34 C16 48 28 52 36 44 C42 38 40 28 50 24 C60 20 68 30 64 42 C60 52 70 58 76 50 C84 40 80 20 66 12 C62 9 56 8 50 8Z" fill="#2a1200" opacity="0.55"/>
+        </g>
+        <circle cx="50" cy="50" r="46" fill="none" stroke="#2a1200" stroke-width="3" opacity="0.25"/>
+      </svg>
+      <span class="chat-title">Orbiview</span>
       <span class="status-dot" id="statusDot" title="Checking..."></span>
     </div>
     <div class="chat-header-right">
@@ -170,7 +214,7 @@
     <!-- Welcome message -->
     <div class="msg-row ai">
       <div class="msg-bubble ai">
-        <p>Hello! I'm your GIS Agent powered by Google Earth Engine.</p>
+        <p>Hello! I'm <strong>Orbiview</strong>, your GIS Agent powered by Google Earth Engine.</p>
         <p>I can analyze satellite data for any region. Try:</p>
         <ul>
           <li><code>/ndvi</code> — Vegetation analysis</li>
@@ -255,8 +299,25 @@
               <line x1="16" y1="17" x2="8" y2="17"/>
             </svg>
             Research
+            <span class="beta-tag">BETA</span>
           </button>
-          <!-- researchModePill removed — Research ON state is now silent -->
+          <!-- Research Mode active pill — shown below the toolbar when mode is ON -->
+          <div id="researchModePill" style="display:none;align-items:center;gap:5px;
+               padding:3px 9px 3px 7px;border-radius:20px;
+               background:linear-gradient(135deg,rgba(58,142,246,0.18),rgba(111,66,193,0.18));
+               border:1px solid rgba(111,66,193,0.35);font-size:10.5px;
+               color:#a78bfa;font-weight:500;margin-left:2px">
+            <span style="width:6px;height:6px;border-radius:50%;background:#a78bfa;
+                         box-shadow:0 0 6px #a78bfa;animation:researchPulse 1.6s ease-in-out infinite"></span>
+            Research ON
+          </div>
+          <button class="tb-btn" id="assetsBtn" title="Assets">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
+            </svg>
+            Assets
+            <span class="badge" id="assetsBadge">0</span>
+          </button>
         </div>
         <button class="send-btn" id="sendBtn" onclick="sendMessage()">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">

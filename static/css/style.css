@@ -69,7 +69,7 @@ html, body {
 .nav-logo {
   width: 34px; height: 34px;
   border-radius: var(--radius-sm);
-  background: var(--accent-dim);
+  background: transparent;
   color: var(--accent);
   display: flex; align-items: center; justify-content: center;
   margin-bottom: 10px;
@@ -692,7 +692,7 @@ html, body {
 
 /* Gradient BETA pill — special style */
 .tb-btn.gradient-btn {
-  background: linear-gradient(135deg, #3a8ef6 0%, #6f42c1 50%, #e91e8c 100%);
+  background: linear-gradient(135deg, #fc4703 0%, #1f9cfe 55%, #fc4703 100%);
   border: none;
   color: #fff;
   font-weight: 500;
@@ -3022,7 +3022,7 @@ html, body {
 
 /* ── Research button — green→orange gradient ────────────────────────────────── */
 .tb-btn.research-btn {
-  background: linear-gradient(135deg, #3aab6f 0%, #ff4d00 100%);
+  background: linear-gradient(135deg, #fc4703 0%, #1f9cfe 55%, #fc4703 100%);
   border: none;
   color: #fff;
   font-weight: 500;
@@ -3031,7 +3031,7 @@ html, body {
 }
 .tb-btn.research-btn:hover  { opacity: 0.88; }
 .tb-btn.research-btn.active {
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #ff4d00;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #fc4703;
   transform: scale(1.04);
 }
  
@@ -3070,7 +3070,7 @@ html, body {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #3a8ef6, #6f42c1);
+  background: linear-gradient(135deg, #fc4703, #1f9cfe);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3132,7 +3132,7 @@ html, body {
   color: var(--text2, #a0a8c0);
   line-height: 1.4;
 }
-.research-info-item svg { flex-shrink: 0; margin-top: 1px; color: #6f42c1; }
+.research-info-item svg { flex-shrink: 0; margin-top: 1px; color: #1f9cfe; }
  
 /* ── Warning ────────────────────────────────────────────────────────────────── */
 .research-warning {
@@ -3149,7 +3149,7 @@ html, body {
 .research-generate-btn {
   width: 100%;
   padding: 11px 0;
-  background: linear-gradient(135deg, #3a8ef6 0%, #6f42c1 60%, #e91e8c 100%);
+  background: linear-gradient(135deg, #fc4703 0%, #1f9cfe 55%, #fc4703 100%);
   border: none;
   border-radius: 10px;
   color: #fff;
@@ -3177,7 +3177,7 @@ html, body {
   width: 20px;
   height: 20px;
   border: 2.5px solid var(--border2, #2e3340);
-  border-top-color: #6f42c1;
+  border-top-color: #fc4703;
   border-radius: 50%;
   animation: researchSpin 0.8s linear infinite;
   flex-shrink: 0;
@@ -3223,8 +3223,8 @@ html, body {
   transition: background 0.2s;
 }
 .rs-done .rs-dot  { background: #4caf7d; border-color: #4caf7d; }
-.rs-active .rs-dot { background: #6f42c1; border-color: #6f42c1;
-                     box-shadow: 0 0 5px #6f42c1; }
+.rs-active .rs-dot { background: #fc4703; border-color: #fc4703;
+                     box-shadow: 0 0 5px #fc4703; }
  
 /* ── Done state ─────────────────────────────────────────────────────────────── */
 .research-done-icon {
@@ -3314,7 +3314,7 @@ html, body {
   height: 34px;
   border-radius: 9px;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #3a8ef6, #6f42c1);
+  background: linear-gradient(135deg, #fc4703, #1f9cfe);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3342,8 +3342,8 @@ html, body {
   margin-left: auto;
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(111, 66, 193, 0.25);
-  border-top-color: #6f42c1;
+  border: 2px solid rgba(31, 156, 254, 0.25);
+  border-top-color: #fc4703;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   flex-shrink: 0;
@@ -3440,7 +3440,7 @@ html, body {
 }
 .research-artifact-card:hover {
   background: var(--bg3, #252840);
-  border-color: rgba(255, 77, 0, 0.4);
+  border-color: rgba(252, 71, 3, 0.4);
 }
 
 .rac-icon {
@@ -3448,7 +3448,7 @@ html, body {
   height: 40px;
   border-radius: 9px;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #3aab6f, #ff4d00);
+  background: linear-gradient(135deg, #fc4703, #1f9cfe);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3492,7 +3492,7 @@ html, body {
 }
 .rac-download-btn:hover {
   background: var(--bg3, #252840);
-  border-color: rgba(255, 77, 0, 0.5);
+  border-color: rgba(252, 71, 3, 0.5);
 }
 /* ════════════════════════════════════════════════════════
    PDF VIEWER — RESIZE HANDLE & WIDTH CONTROLS
