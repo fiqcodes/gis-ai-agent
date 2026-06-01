@@ -3494,3 +3494,283 @@ html, body {
   background: var(--bg3, #252840);
   border-color: rgba(99, 102, 241, 0.5);
 }
+/* ════════════════════════════════════════════════════════
+   PDF VIEWER — RESIZE HANDLE & WIDTH CONTROLS
+════════════════════════════════════════════════════════ */
+
+/* Left-edge drag handle */
+.pdf-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+.pdf-resize-handle:hover,
+.pdf-resize-handle.dragging {
+  background: rgba(37, 99, 235, 0.35);
+}
+.pdf-resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 32px;
+  border-radius: 2px;
+  background: var(--border2);
+  transition: background 0.15s;
+}
+.pdf-resize-handle:hover::after,
+.pdf-resize-handle.dragging::after {
+  background: #2563eb;
+}
+
+/* Width preset buttons */
+.pdf-width-controls {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.pdf-width-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--text3);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.pdf-width-btn:hover {
+  background: var(--bg3);
+  color: var(--text);
+}
+.pdf-width-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.pdf-viewer-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  flex-shrink: 0;
+  margin: 0 4px;
+}
+
+/* ════════════════════════════════════════════════════════
+   RESEARCH PAPER — GENERATION LOADING CHIP (v2)
+   Redesigned to match the plan-widget style (Screenshot #3)
+════════════════════════════════════════════════════════ */
+
+/* Replace old pill-based chip with a plan-widget-style card */
+.research-chip-bubble {
+  max-width: 420px !important;
+  padding: 0 !important;
+  background: var(--bg2) !important;
+  border: 1px solid var(--border2) !important;
+  border-radius: var(--radius) !important;
+  overflow: hidden !important;
+}
+
+/* ── Card header row ─────────────────────────────────── */
+.rcp-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+}
+
+.rcp-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #3a8ef6, #6f42c1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rcp-icon-done {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+}
+
+.rcp-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.rcp-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.rcp-subtitle {
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Spinning ring (matches plan widget step-ring style) */
+.rcp-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border2);
+  border-top-color: #6f42c1;
+  border-right-color: #3a8ef6;
+  animation: rcp-spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes rcp-spin { to { transform: rotate(360deg); } }
+
+/* ── Steps list ──────────────────────────────────────── */
+.rcp-steps {
+  padding: 8px 13px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rcp-step {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 6px;
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--text3);
+  transition: background 0.2s, color 0.2s;
+}
+
+.rcp-step.rcp-step-active {
+  background: rgba(111, 66, 193, 0.1);
+  color: var(--text2);
+}
+
+.rcp-step.rcp-step-done {
+  color: var(--text3);
+  opacity: 0.65;
+}
+
+/* Step status icon area */
+.rcp-step-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* Pending dot */
+.rcp-step-icon::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0.4;
+}
+
+/* Active: spinning ring overlay */
+.rcp-step-active .rcp-step-icon::before {
+  opacity: 0;
+}
+.rcp-step-active .rcp-step-icon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  border-top-color: #6f42c1;
+  border-right-color: #3a8ef6;
+  animation: rcp-spin 0.8s linear infinite;
+}
+
+/* Done: check mark replaces the border dot */
+.rcp-step-done .rcp-step-icon::before {
+  opacity: 0;
+}
+.rcp-step-done .rcp-step-icon-check {
+  display: flex;
+}
+.rcp-step-icon-check {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  color: #4ade80;
+}
+
+/* Active step progress bar */
+.rcp-step-bar {
+  flex: 1;
+  height: 2px;
+  background: var(--bg4);
+  border-radius: 2px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.rcp-step-active .rcp-step-bar {
+  opacity: 1;
+}
+.rcp-step-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3a8ef6, #6f42c1);
+  border-radius: 2px;
+  width: 30%;
+  animation: rcp-shimmer 1.6s ease infinite;
+  transform-origin: left;
+}
+@keyframes rcp-shimmer {
+  0%   { width: 20%; }
+  50%  { width: 65%; }
+  100% { width: 20%; }
+}
+
+.rcp-step-name {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Hide bar when it's not the active step to avoid layout shift */
+.rcp-step:not(.rcp-step-active) .rcp-step-bar {
+  display: none;
+}
+
+/* Status label badge on the right */
+.rcp-step-status {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text3);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.rcp-step-active .rcp-step-status {
+  opacity: 1;
+  color: #a78bfa;
+}
+.rcp-step-done .rcp-step-status {
+  opacity: 0.5;
+  color: var(--text3);
+}

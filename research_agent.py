@@ -154,42 +154,25 @@ def gen_methodology(region: str, variables: list, start_date: str, end_date: str
     # ── LULC-specific methodology prompt ──────────────────────────────────────
     if lulc_vars and not surface_vars and not atmo_vars:
         prompt = (
-            f'Write a detailed Methodology section (500-550 words) for a satellite remote sensing '
+            f'Write a detailed Methodology section (400-450 words) for a satellite remote sensing '
             f'LULC classification paper.\n'
             f'Study area: {region} | Analysis period: {start_date} to {end_date}\n'
             f'Data sources: {"; ".join(data_sources)}\n'
             f'Platform: Google Earth Engine (GEE) cloud computing\n\n'
             f'The methodology MUST cover these steps in flowing prose paragraphs:\n'
             f'1. Study area and temporal scope\n'
-            f'2. Data acquisition: Landsat 8 and Landsat 9 Collection 2 Level-2 multi-spectral bands '
-            f'(B2-B7) merged into a single collection; reference ground-truth from ESA WorldCover 2021 '
-            f'(10 m global) remapped from original ESA class IDs (10=Trees, 20=Shrubland, 30=Grassland, '
-            f'40=Cropland, 50=Built-up, 60=Bare/Sparse, 70=Snow/Ice, 80=Water, 90=Wetland, '
-            f'95=Mangroves, 100=MossLichen) to ESRI-compatible class IDs '
-            f'(1=Water, 2=Trees, 4=Flooded Veg, 5=Crops, 7=Built Area, 8=Bare Ground, 11=Rangeland)\n'
+            f'2. Data acquisition: Landsat 8 Collection 2 Level-2 multi-spectral bands (B2-B7) '
+            f'and reference classification from ESA WorldCover / ESRI Land Cover\n'
             f'3. Preprocessing: cloud and cloud-shadow masking using QA_PIXEL CFMask algorithm, '
             f'median compositing, radiometric scaling (scale=0.0000275, offset=-0.2)\n'
-            f'4. Feature engineering: a 13-feature input stack combining 6 raw Landsat spectral bands '
-            f'(SR_B2 Blue, SR_B3 Green, SR_B4 Red, SR_B5 NIR, SR_B6 SWIR1, SR_B7 SWIR2) with 7 derived '
-            f'spectral indices: NDVI=(NIR-RED)/(NIR+RED), NDBI=(SWIR1-NIR)/(SWIR1+NIR), '
-            f'NDWI=(Green-NIR)/(Green+NIR), MNDWI=(Green-SWIR1)/(Green+SWIR1), '
-            f'SAVI=[(NIR-RED)/(NIR+RED+0.5)]*1.5, '
-            f'BSI=[(SWIR1+RED)-(NIR+Blue)]/[(SWIR1+RED)+(NIR+Blue)], '
-            f'and SWIR_ratio=SR_B7/SR_B6. The SWIR2/SWIR1 ratio is a key discriminator: '
-            f'bare soil and exposed surfaces have a distinctly higher SWIR2/SWIR1 ratio than '
-            f'impervious built surfaces, enabling separation of Bare Ground from Built Area\n'
-            f'5. Training sample generation: a pixel-presence check at 100 m scale (minimum 10 pixels) '
-            f'was applied to exclude phantom classes; 500 samples per class were drawn at 30 m scale '
-            f'via stratified random sampling from the ESA WorldCover reference layer; samples from all '
-            f'classes were merged and split 80/20 into training (~396 samples) and test (~99 samples) sets\n'
-            f'6. Random Forest classifier: 200 decision trees, bag fraction 0.5, minimum leaf population 1, '
-            f'Gini impurity as splitting criterion, trained within GEE; majority-vote class assignment '
-            f'across the full 13-feature input stack\n'
-            f'7. Post-classification spectral override: pixels classified as Built Area but satisfying '
-            f'brightness > 0.25, NDVI < 0.05, BSI > 0.05, and NIR < 0.20 were reclassified as Bare Ground '
-            f'to correct for ESA WorldCover labelling of bright exposed surfaces as built-up\n'
-            f'8. Accuracy assessment: overall accuracy, Cohen\'s Kappa, per-class precision '
-            f'(user\'s accuracy), recall (producer\'s accuracy), F1 score, AUC, and confusion matrix\n\n'
+            f'4. Feature engineering: NDVI computed from NIR and RED bands added to the 6-band '
+            f'Landsat spectral stack to form a 7-feature input\n'
+            f'5. Training sample generation: stratified random sampling from the ESA WorldCover '
+            f'reference layer across all LULC classes; 80/20 train/test split\n'
+            f'6. Random Forest classifier: 100 decision trees trained within GEE, majority-vote '
+            f'class assignment, Gini impurity as splitting criterion\n'
+            f'7. Accuracy assessment: overall accuracy, Cohen\'s Kappa, per-class precision '
+            f'(user\'s accuracy), recall (producer\'s accuracy), F1 score, and confusion matrix\n\n'
             f'Academic passive voice. No bullet points. No markdown. No headers. Flowing prose only.'
         )
     else:
@@ -537,17 +520,11 @@ def _generate_roc_curve_b64(ml_metrics: dict) -> 'Optional[str]':
             else:
                 c = class_colors_default[idx % len(class_colors_default)]
 
-            # Plot point on ROC space
-            ax.scatter(fpr, rec, color=c, s=90, zorder=5, edgecolors='white', linewidths=0.8)
+            # Draw lines (0,0) → (fpr, rec) → (1,1) passing exactly through the point
+            ax.plot([0, fpr, 1], [0, rec, 1], color=c, lw=1.5, alpha=0.8)
 
-            # Draw a schematic curve from (0,0) → point → (1,1) using a smooth arc
-            # Use a simple 2-point curve: origin → point, then point → (1,1)
-            xs = np.linspace(0, fpr, 30)
-            ys = np.linspace(0, rec, 30) ** 0.8  # slight bow
-            ax.plot(xs, ys, color=c, lw=1.5, alpha=0.75)
-            xs2 = np.linspace(fpr, 1, 30)
-            ys2 = rec + (1 - rec) * ((xs2 - fpr) / (1 - fpr + 1e-9)) ** 1.2
-            ax.plot(xs2, ys2, color=c, lw=1.5, alpha=0.75)
+            # Plot the dot on top — same (fpr, rec) coordinates so it sits on the line
+            ax.scatter(fpr, rec, color=c, s=70, zorder=5, edgecolors='white', linewidths=0.8)
 
             patch = mpatches.Patch(
                 color=c,
@@ -559,7 +536,7 @@ def _generate_roc_curve_b64(ml_metrics: dict) -> 'Optional[str]':
         ax.set_ylim(-0.02, 1.05)
         ax.set_xlabel('False Positive Rate (1 - Specificity)', fontsize=9)
         ax.set_ylabel('True Positive Rate (Recall / Sensitivity)', fontsize=9)
-        title_str = 'ROC Curve — Per-class Classification Performance'
+        title_str = 'ROC Curve \u2014 Per-class Classification Performance'
         if auc_val:
             title_str += f'\nAUC (approx.) = {auc_val:.3f}'
         ax.set_title(title_str, fontsize=9.5, fontweight='bold', pad=8)
@@ -858,6 +835,9 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
         'ref': style('R',
             fontSize=8.5, leading=12.5, textColor=BLACK,
             leftIndent=14, firstLineIndent=-14, spaceAfter=2),
+        'bullet': style('BL',
+            fontSize=9.5, leading=14.5, textColor=BLACK,
+            alignment=TA_JUSTIFY, leftIndent=18, firstLineIndent=0, spaceAfter=3),
     }
 
     def hr(color=LGRAY, thickness=0.4):
@@ -865,11 +845,28 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
                           color=color, spaceAfter=4, spaceBefore=1)
 
     def section_body(body_text):
+        import re
         items = []
         for para in body_text.split('\n'):
             para = para.strip()
+            if not para:
+                continue
+            # Strip markdown bold (**text** or __text__) and heading markers (## etc.)
+            para = re.sub(r'^\#{1,6}\s*', '', para)          # leading # headers
+            para = re.sub(r'\*\*(.+?)\*\*', r'\1', para)     # **bold**
+            para = re.sub(r'__(.+?)__', r'\1', para)          # __bold__
+            para = re.sub(r'\*(.+?)\*', r'\1', para)          # *italic*
+            para = para.strip()
+            # Skip bare section-title lines the LLM sometimes outputs (e.g. "Results", "Discussion")
+            _SECTION_TITLES = {
+                'abstract', 'introduction', 'methodology', 'methods',
+                'results', 'discussion', 'conclusion', 'conclusions',
+                'references', 'study area', 'data sources',
+            }
+            if para.lower().rstrip(':') in _SECTION_TITLES:
+                continue
             if para:
-                items.append(Paragraph(para, S['body']))
+                items.append(Paragraph(_esc(para), S['body']))
         return items
 
     def embed_image(b64, caption='', max_h=9.0):
@@ -937,43 +934,33 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
         ],
         'lulc': [
             ('NDVI = (NIR - RED) / (NIR + RED)',
-             'Eq. (1) -- NDVI used as primary spectral feature for LULC classification. '
-             'NIR = Band 5 (0.85-0.88 um); RED = Band 4 (0.64-0.67 um). '
-             'Computed from cloud-masked Landsat 8 median composite alongside all six optical bands (B2-B7) '
-             'to form the multi-feature input stack for the classifier.'),
+             'Eq. (1) -- Normalized Difference Vegetation Index. NIR = Band 5 (0.85-0.88 um); RED = Band 4 (0.64-0.67 um). Primary vegetation discriminator; low values indicate bare or impervious surfaces.'),
+            ('NDBI = (SWIR1 - NIR) / (SWIR1 + NIR)',
+             'Eq. (2) -- Normalized Difference Built-up Index. SWIR1 = Band 6 (1.57-1.65 um). Positive values indicate impervious urban surfaces.'),
+            ('NDWI = (Green - NIR) / (Green + NIR)',
+             'Eq. (3) -- Normalized Difference Water Index. Green = Band 3 (0.53-0.59 um). Positive values isolate open water bodies.'),
+            ('MNDWI = (Green - SWIR1) / (Green + SWIR1)',
+             'Eq. (4) -- Modified Normalized Difference Water Index. Suppresses built-up noise in water detection compared to NDWI.'),
+            ('SAVI = [(NIR - RED) / (NIR + RED + 0.5)] x 1.5',
+             'Eq. (5) -- Soil-Adjusted Vegetation Index. L=0.5 reduces soil background noise in sparsely vegetated areas.'),
+            ('BSI = [(SWIR1 + RED) - (NIR + Blue)] / [(SWIR1 + RED) + (NIR + Blue)]',
+             'Eq. (6) -- Bare Soil Index. Blue = Band 2 (0.45-0.51 um). Positive values indicate exposed bare soil and sparse vegetation.'),
+            ('SWIR_ratio = SWIR2 / SWIR1',
+             'Eq. (7) -- SWIR Band Ratio. SWIR2 = Band 7 (2.11-2.29 um). Key discriminator: bare soil has a distinctly higher SWIR2/SWIR1 ratio than impervious built surfaces, enabling separation of Bare Ground from Built Area.'),
             ('f(x) = argmax_k [ (1/T) * SUM_{t=1}^{T} I(h_t(x) = k) ]',
-             'Eq. (2) -- Random Forest classification decision rule (Breiman, 2001). '
-             'f(x) = predicted class label for pixel x; T = number of decision trees (default 100 in GEE); '
-             'h_t(x) = prediction of the t-th tree; I() = indicator function. '
-             'Each tree is trained on a bootstrap sample using a random subset of sqrt(n_features) '
-             'candidate features at each node split. The final class is assigned by majority vote.'),
+             'Eq. (8) -- Random Forest classification decision rule (Breiman, 2001). T = 200 decision trees; bag fraction = 0.5; majority vote across 13-feature input stack (6 raw bands + 7 derived indices).'),
             ('Gini(t) = 1 - SUM_k p(k|t)^2',
-             'Eq. (3) -- Gini impurity used as the node-splitting criterion in each decision tree. '
-             'p(k|t) = proportion of samples of class k at node t. '
-             'A split is chosen to maximize the decrease in Gini impurity (information gain). '
-             'Lower Gini values indicate purer nodes with more homogeneous class membership.'),
+             'Eq. (9) -- Gini impurity node-splitting criterion. p(k|t) = proportion of class k at node t. Splits maximize the decrease in Gini impurity, producing purer child nodes.'),
             ('OA = (SUM_i n_ii) / N',
-             'Eq. (4) -- Overall Accuracy (Story & Congalton, 1986). '
-             'n_ii = correctly classified pixels for class i (diagonal of confusion matrix); '
-             'N = total number of validation pixels. '
-             'Reported as a percentage; values above 85% indicate good classification performance.'),
+             'Eq. (10) -- Overall Accuracy (Story & Congalton, 1986). n_ii = correctly classified pixels for class i; N = total validation pixels.'),
             ('Kappa = (OA - p_e) / (1 - p_e)',
-             'Eq. (5) -- Cohen\'s Kappa coefficient (Cohen, 1960). '
-             'p_e = expected agreement by chance = SUM_i (row_i x col_i) / N^2; '
-             'accounts for the possibility of agreement occurring purely by random chance. '
-             'Kappa > 0.8 = excellent; 0.6-0.8 = substantial; 0.4-0.6 = moderate agreement.'),
+             "Eq. (11) -- Cohen's Kappa (Cohen, 1960). p_e = expected chance agreement. Kappa > 0.8 = excellent; 0.6-0.8 = substantial; 0.4-0.6 = moderate."),
             ('Precision_k = TP_k / (TP_k + FP_k)',
-             'Eq. (6) -- Per-class Precision (User\'s Accuracy). '
-             'TP_k = true positives for class k; FP_k = pixels of other classes incorrectly assigned to class k. '
-             'Measures the reliability of the classifier\'s positive predictions for each class.'),
+             "Eq. (12) -- Per-class Precision (User's Accuracy). Measures reliability of positive predictions for class k."),
             ('Recall_k = TP_k / (TP_k + FN_k)',
-             'Eq. (7) -- Per-class Recall (Producer\'s Accuracy). '
-             'FN_k = pixels of class k incorrectly assigned to other classes. '
-             'Measures the classifier\'s ability to correctly identify all pixels belonging to class k.'),
+             "Eq. (13) -- Per-class Recall (Producer's Accuracy). Measures completeness of class detection."),
             ('F1_k = 2 * (Precision_k * Recall_k) / (Precision_k + Recall_k)',
-             'Eq. (8) -- Per-class F1 score (harmonic mean of Precision and Recall). '
-             'Balances the trade-off between precision and recall; '
-             'particularly important for imbalanced class distributions where one metric alone is insufficient.'),
+             'Eq. (14) -- Per-class F1 score. Harmonic mean of Precision and Recall; balances the trade-off between the two metrics.'),
         ],
         'ui': [
             ('UI = (SWIR - NIR) / (SWIR + NIR)',
@@ -1460,10 +1447,13 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
                     ('RIGHTPADDING',(0,0), (-1,-1), 5),
                 ]))
                 story.append(Spacer(1, 0.1*cm))
-                story.append(KeepTogether([h31, Spacer(1, 0.1*cm), tbl]))
-                story.append(Paragraph(
-                    'Table 1. Characteristics of satellite datasets used in this study.',
-                    S['caption']))
+                story.append(KeepTogether([
+                    h31,
+                    Spacer(1, 0.1*cm),
+                    Paragraph('Table 1. Characteristics of satellite datasets used in this study.', S['caption']),
+                    Spacer(1, 0.05*cm),
+                    tbl,
+                ]))
 
                 # Preprocessing narrative
                 preprocessing_text = (
@@ -1490,6 +1480,237 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
                 story.append(Paragraph(_esc(eq_str), S['formula']))
                 story.append(Paragraph(_esc(eq_desc), S['formula_label']))
 
+    # ── 3.3 RF Architecture section (LULC only, hardcoded like docx) ──────────
+    lulc_in_vars = 'lulc' in [v.strip().lower() for v in vars_list.split(',') if v.strip()]
+    if lulc_in_vars:
+        story.append(Paragraph('3.3 Random Forest Classifier: Architecture, Training Reference, and Feature Engineering', S['h2']))
+        story.append(Paragraph(
+            'The Random Forest (RF) classifier is an ensemble learning method that constructs a large number '
+            'of decision trees at training time, each trained on a bootstrap-resampled subset of the training '
+            'data and a random subset of features at each node split. The final class prediction for each pixel '
+            'is determined by majority vote across all trees. This bagging approach reduces overfitting compared '
+            'to single decision trees while maintaining high predictive power across heterogeneous urban landscapes.',
+            S['body']))
+
+        # 3.3.1 Training reference sub-heading
+        story.append(Paragraph('3.3.1 Training Reference: ESA WorldCover 2021', S['h2']))
+        story.append(Paragraph(
+            'The ESA WorldCover 2021 dataset (10 m resolution, global coverage) was used as the ground-truth '
+            'reference for generating training and validation samples. The original ESA class scheme was remapped '
+            'to ESRI-compatible class IDs to ensure consistency with the target classification legend.',
+            S['body']))
+
+        # ESA remap table
+        esa_data = [
+            ['ESA Class ID', 'ESA Class Name', 'Remapped ID', 'ESRI Class Name'],
+            ['10', 'Trees / Forest', '2', 'Trees'],
+            ['20', 'Shrubland', '11', 'Rangeland'],
+            ['30', 'Grassland', '11', 'Rangeland'],
+            ['40', 'Cropland', '5', 'Crops'],
+            ['50', 'Built-up', '7', 'Built Area'],
+            ['60', 'Bare / Sparse Vegetation', '8', 'Bare Ground'],
+            ['70', 'Snow / Ice', '9', 'Snow/Ice'],
+            ['80', 'Water Bodies', '1', 'Water'],
+            ['90', 'Wetland / Herbaceous', '4', 'Flooded Veg.'],
+            ['95', 'Mangroves', '4', 'Flooded Veg.'],
+            ['100', 'Moss / Lichen', '11', 'Rangeland'],
+        ]
+        esa_col_w = [2.8*cm, 4.5*cm, 2.8*cm, 3.7*cm]
+        esa_tbl = Table(esa_data, colWidths=esa_col_w, repeatRows=1)
+        esa_tbl.setStyle(TableStyle([
+            ('FONTNAME',    (0,0), (-1,0),  'Helvetica-Bold'),
+            ('FONTSIZE',    (0,0), (-1,-1), 8),
+            ('LEADING',     (0,0), (-1,-1), 11),
+            ('BACKGROUND',  (0,0), (-1,0),  colors.HexColor('#eeeeee')),
+            ('TEXTCOLOR',   (0,0), (-1,-1), colors.HexColor('#111111')),
+            ('ALIGN',       (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN',      (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID',        (0,0), (-1,-1), 0.4, colors.HexColor('#aaaaaa')),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f7f7f7')]),
+            ('TOPPADDING',  (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING',(0,0), (-1,-1), 4),
+            ('LEFTPADDING', (0,0), (-1,-1), 5),
+            ('RIGHTPADDING',(0,0), (-1,-1), 5),
+        ]))
+        story.append(Spacer(1, 0.1*cm))
+        story.append(KeepTogether([
+            Paragraph('Table 2. ESA WorldCover 2021 class remapping to ESRI-compatible class IDs.', S['caption']),
+            Spacer(1, 0.05*cm),
+            esa_tbl,
+        ]))
+
+        # ── 3.3.2: Stratified Sampling and Train/Test Split ──────────────────────
+        story.append(Spacer(1, 0.15*cm))
+        story.append(Paragraph('3.3.2 Stratified Sampling and Train/Test Split', S['h2']))
+        story.append(Paragraph(
+            'Training samples were generated through per-class stratified random sampling at 30 m scale, '
+            'ensuring each land cover class was represented independently. The sampling procedure '
+            'followed these steps:',
+            S['body']))
+
+        sampling_bullets = [
+            '500 samples were drawn per class, using a fixed random seed (seed = 42 + class_id) '
+            'to ensure reproducibility.',
+            'Samples were drawn only from within the study boundary polygon (Greater London '
+            'GAUL Level 2 administrative boundary).',
+            'All samples from all classes were merged into a single feature collection totalling '
+            'approximately 3,000 samples across 6 classes before the train/test split.',
+            'An 80/20 stratified split was applied using a random column, yielding approximately '
+            '396 training samples and 99 test samples for validation.',
+        ]
+        for bullet in sampling_bullets:
+            story.append(Paragraph(f'\u2022\u2003{_esc(bullet)}', S['bullet']))
+
+        story.append(Paragraph(
+            'The resulting training set provides balanced representation across all six land cover classes '
+            'present in the study area, which is important given the severe class imbalance in the landscape '
+            'itself (Built Area dominates at 46%, while Crops and Bare Ground each occupy less than 1%).',
+            S['body']))
+
+        # ── 3.3.3: RF hyperparameters (expanded with bullets) ────────────────────────
+        story.append(Spacer(1, 0.15*cm))
+        story.append(Paragraph('3.3.3 Random Forest Architecture and Hyperparameters', S['h2']))
+        story.append(Paragraph(
+            'The Random Forest classifier was configured with the following hyperparameters within GEE:',
+            S['body']))
+
+        rf_bullets = [
+            'Number of trees (T): 200 decision trees, providing stable majority-vote predictions '
+            'while managing computation time.',
+            'Variables per split: default (square root of the total number of features), introducing '
+            'randomness that reduces inter-tree correlation.',
+            'Minimum leaf population: 1 sample, allowing trees to grow to full depth unless '
+            'otherwise constrained by the training data.',
+            'Bag fraction: 0.5, meaning each tree is trained on 50% of the training samples drawn '
+            'with replacement (bootstrap aggregation).',
+            'Random seed: 42, ensuring full reproducibility of results.',
+            'Splitting criterion: Gini impurity (Eq. 9), which minimizes class heterogeneity at each '
+            'node split.',
+        ]
+        for bullet in rf_bullets:
+            story.append(Paragraph(f'\u2022\u2003{_esc(bullet)}', S['bullet']))
+
+        story.append(Paragraph(
+            'Each pixel in the Landsat composite was classified by passing its 13-dimensional feature '
+            'vector through all 200 trees simultaneously. The class receiving the most votes across the '
+            'ensemble was assigned as the final land cover label. This majority-vote mechanism inherently '
+            'handles noisy or ambiguous pixels more robustly than any single decision tree.',
+            S['body']))
+
+        # ── 3.3.4: 13-feature stack (expanded with bullets) ──────────────────────────
+        story.append(Spacer(1, 0.15*cm))
+        story.append(Paragraph('3.3.4 13-Feature Input Stack', S['h2']))
+        story.append(Paragraph(
+            'The classifier was trained on a 13-dimensional feature vector constructed from the cloud-masked '
+            'Landsat 8/9 median composite. Each feature captures a distinct aspect of the land surface '
+            'spectral response, enabling the RF to separate classes that are spectrally similar in a '
+            'subset of features but distinguishable in others. The complete feature stack is listed below:',
+            S['body']))
+
+        feature_bullets = [
+            '<b>Raw Band 1</b> \u2014 SR_B2 (Blue, 0.45\u20130.51 \u03bcm)',
+            '<b>Raw Band 2</b> \u2014 SR_B3 (Green, 0.53\u20130.59 \u03bcm)',
+            '<b>Raw Band 3</b> \u2014 SR_B4 (Red, 0.64\u20130.67 \u03bcm)',
+            '<b>Raw Band 4</b> \u2014 SR_B5 (Near-Infrared, 0.85\u20130.88 \u03bcm)',
+            '<b>Raw Band 5</b> \u2014 SR_B6 (SWIR1, 1.57\u20131.65 \u03bcm)',
+            '<b>Raw Band 6</b> \u2014 SR_B7 (SWIR2, 2.11\u20132.29 \u03bcm)',
+            '<b>NDVI</b> \u2014 primary vegetation index; low values distinguish bare/built surfaces from green cover.',
+            '<b>NDBI</b> \u2014 built-up index; positive values flag impervious surfaces over vegetation or water.',
+            '<b>NDWI</b> \u2014 water index; positive values isolate open water bodies.',
+            '<b>MNDWI</b> \u2014 modified water index; suppresses built-up commission errors in water detection.',
+            '<b>SAVI</b> \u2014 soil-adjusted vegetation index; reduces soil background interference in sparse vegetation areas.',
+            '<b>BSI</b> \u2014 bare soil index; positive values indicate exposed or sparsely vegetated ground.',
+            '<b>SWIR_ratio</b> (SR_B7 / SR_B6) \u2014 SWIR band ratio; the critical spectral discriminator '
+            'between Bare Ground and Built Area. Bare soil and exposed substrates exhibit a '
+            'higher SWIR2-to-SWIR1 ratio than impervious roofing materials and asphalt.',
+        ]
+        for bullet in feature_bullets:
+            story.append(Paragraph(f'\u2022\u2003{bullet}', S['bullet']))
+
+        story.append(Paragraph(
+            'The inclusion of SWIR_ratio as an explicit feature addresses a known limitation of land cover '
+            'classifiers trained on ESA WorldCover reference data, which may insufficiently represent '
+            'spectrally bright bare surfaces such as exposed sandy soils, unpaved construction sites, and '
+            'sparse gravel areas common in peri-urban landscapes. By providing the RF with a direct spectral '
+            'ratio that captures this contrast, the classifier is able to distinguish these surfaces from '
+            'structurally similar impervious Built Area pixels that differ primarily in their SWIR response.',
+            S['body']))
+
+        # ── 3.3.5: Spectral Decision Boundaries and Post-Classification Rules ────
+        story.append(Spacer(1, 0.15*cm))
+        story.append(Paragraph('3.3.5 Spectral Decision Boundaries and Post-Classification Rules', S['h2']))
+        story.append(Paragraph(
+            'While the Random Forest operates on continuous feature values without explicit thresholds, '
+            'the spectral range of each feature for each class informs the decision boundaries learned '
+            'during training. The expected spectral signature ranges for each class in surface reflectance '
+            'units (after USGS scaling) are summarized below:',
+            S['body']))
+
+        # Spectral signature table (Table B)
+        spectral_data = [
+            ['Class', 'NDVI', 'BSI', 'NDBI', 'SWIR_ratio', 'NIR (SR_B5)'],
+            ['Water',      '< \u22120.1', '< \u22120.2', '< \u22120.2', '~1.0',       '< 0.05'],
+            ['Trees',      '0.3 \u2013 0.8', '< \u22120.1', '< \u22120.1', '~1.0',   '0.25 \u2013 0.55'],
+            ['Rangeland',  '0.1 \u2013 0.4', '\u22120.1 \u2013 0.1', '\u22120.1 \u2013 0.1', '~1.0 \u2013 1.1', '0.15 \u2013 0.35'],
+            ['Crops',      '0.2 \u2013 0.6', '< 0.0',  '< 0.0',  '~1.0',       '0.20 \u2013 0.45'],
+            ['Built Area', '\u22120.1 \u2013 0.2', '0.0 \u2013 0.2', '0.0 \u2013 0.3', '~1.0 \u2013 1.15', '0.10 \u2013 0.20'],
+            ['Bare Ground','< 0.05', '> 0.05', '0.0 \u2013 0.2', '> 1.1',      '< 0.20'],
+        ]
+        spectral_col_w = [2.8*cm, 2.2*cm, 2.2*cm, 2.2*cm, 2.6*cm, 2.3*cm]
+        spectral_tbl = Table(spectral_data, colWidths=spectral_col_w, repeatRows=1)
+        spectral_tbl.setStyle(TableStyle([
+            ('FONTNAME',    (0,0), (-1,0),  'Helvetica-Bold'),
+            ('FONTSIZE',    (0,0), (-1,-1), 8),
+            ('LEADING',     (0,0), (-1,-1), 11),
+            ('BACKGROUND',  (0,0), (-1,0),  colors.HexColor('#eeeeee')),
+            ('TEXTCOLOR',   (0,0), (-1,-1), colors.HexColor('#111111')),
+            ('ALIGN',       (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN',      (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID',        (0,0), (-1,-1), 0.4, colors.HexColor('#aaaaaa')),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f7f7f7')]),
+            ('TOPPADDING',  (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING',(0,0), (-1,-1), 4),
+            ('LEFTPADDING', (0,0), (-1,-1), 5),
+            ('RIGHTPADDING',(0,0), (-1,-1), 5),
+        ]))
+        story.append(Spacer(1, 0.1*cm))
+        story.append(KeepTogether([
+            Paragraph(
+                'Table 3. Expected spectral signature ranges per land cover class in surface reflectance units '
+                '(Landsat 8/9 SR). SWIR_ratio = SR_B7 / SR_B6. Values represent typical ranges; the RF classifier '
+                'learns these boundaries directly from training samples.',
+                S['caption']),
+            Spacer(1, 0.05*cm),
+            spectral_tbl,
+        ]))
+
+        story.append(Paragraph(
+            'In addition to the learned RF boundaries, a deterministic post-classification spectral rule was '
+            'applied to improve the separation of Bare Ground from Built Area, which is the most common '
+            'confusion pair in dense urban environments. Pixels satisfying all four of the following '
+            'conditions \u2014 while also classified as Built Area by the RF \u2014 were reclassified as Bare Ground:',
+            S['body']))
+
+        post_cls_bullets = [
+            'Mean visible brightness [(B2 + B3 + B4) / 3] &gt; 0.25 \u2014 high surface reflectance across '
+            'the visible spectrum indicating a bright, non-vegetated surface.',
+            'NDVI &lt; 0.05 \u2014 near-zero vegetation signal, ruling out any green cover contribution.',
+            'BSI &gt; 0.05 \u2014 positive bare soil index confirming exposed or sparsely covered substrate.',
+            'NIR (SR_B5) &lt; 0.20 \u2014 low near-infrared reflectance, distinguishing bare ground from '
+            'healthy vegetation which typically has NIR &gt; 0.25.',
+        ]
+        for bullet in post_cls_bullets:
+            story.append(Paragraph(f'\u2022\u2003{bullet}', S['bullet']))
+
+        story.append(Paragraph(
+            'This rule specifically targets misclassified pixels in areas such as unpaved construction sites, '
+            'exposed sandy river banks, gravelled industrial yards, and similar surfaces that share high '
+            'visible brightness with impervious Built Area but differ in their SWIR and NIR response. The '
+            'override is applied conservatively: it activates only when the RF has already predicted Built '
+            'Area (class 7) and class 8 (Bare Ground) was present in the training data, ensuring no orphan '
+            'class labels are introduced into the classification map.',
+            S['body']))
+
     # ── 4. Results ─────────────────────────────────────────────────────────────
     story.append(PageBreak())
     story.append(Paragraph('4. Results', S['h1']))
@@ -1513,8 +1734,9 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
             fig_counter += 1
 
         for chart_type, chart_b64 in fig_data.get('charts', []):
-            # Skip confusion matrix and metrics panel in 4.1 — they appear exclusively in 4.2
-            if chart_type in ('confusion_matrix', 'metrics_panel'):
+            # Skip confusion matrix and metrics panel in 4.1 — they render exclusively in 4.2
+            if chart_type in ('confusion_matrix', 'metrics_panel',
+                              'lulc_confusion_matrix', 'lulc_metrics_panel'):
                 continue
             label_map = {
                 'monthly_trend'   : f'Monthly mean {var_label} for {_esc(region)}.',
@@ -1560,7 +1782,7 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
                     f'the confusion matrix.{sample_str} The confusion matrix heatmap and per-class performance '
                     f'panel are shown in the figures below. Overall accuracy, '
                     f"Cohen's Kappa, macro-averaged precision, recall, F1 score, AUC, and average false "
-                    f'positive rate are summarised in Table 2. Per-class breakdown is provided in Table 3.',
+                    f'positive rate are summarised in Table 4. Per-class breakdown is provided in Table 5.',
                     S['body']))
 
                 # ── Confusion matrix heatmap ─────────────────────────────────
@@ -1578,21 +1800,6 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
                         'of recall across classes with different sample sizes. Diagonal dominance (red) '
                         'indicates strong recall; elevated off-diagonal column values indicate commission '
                         'errors that suppress per-class precision.',
-                        S['fig_desc']))
-                    fig_counter += 1
-
-                # ── Per-class metrics panel (visual, like GIS Agent UI) ───────
-                panel_b64 = _generate_metrics_panel_b64(ml)
-                if panel_b64:
-                    story += embed_image(
-                        panel_b64,
-                        caption=f'Fig. {fig_counter}. Per-class and overall classification performance metrics.',
-                        max_h=6.0)
-                    story.append(Paragraph(
-                        'Summary of classification performance metrics for each LULC class and overall model. '
-                        'Precision reflects user\'s accuracy (reliability of predicted labels); Recall reflects '
-                        'producer\'s accuracy (completeness of class detection); F1 is the harmonic mean. '
-                        'Green = strong (>70%); yellow = moderate (40-70%); red = weak (<40%).',
                         S['fig_desc']))
                     fig_counter += 1
 
@@ -1653,7 +1860,7 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
                 ]))
                 story.append(Spacer(1, 0.15*cm))
                 story.append(KeepTogether([
-                    Paragraph('Table 2. Overall classification model performance metrics.', S['caption']),
+                    Paragraph('Table 4. Overall classification model performance metrics.', S['caption']),
                     Spacer(1, 0.05*cm),
                     tbl2,
                 ]))
@@ -1696,7 +1903,7 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
                         ('RIGHTPADDING',  (0,0), (-1,-1), 5),
                     ]))
                     story.append(KeepTogether([
-                        Paragraph('Table 3. Per-class classification performance metrics.', S['caption']),
+                        Paragraph('Table 5. Per-class classification performance metrics.', S['caption']),
                         Spacer(1, 0.05*cm),
                         tbl3,
                     ]))
@@ -1767,7 +1974,7 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
                     tbl4 = Table(cm_rows, colWidths=col_w4, repeatRows=1)
                     tbl4.setStyle(TableStyle(cm_style))
                     story.append(KeepTogether([
-                        Paragraph('Table 4. Confusion matrix of the Random Forest classification.', S['caption']),
+                        Paragraph('Table 6. Confusion matrix of the Random Forest classification.', S['caption']),
                         Spacer(1, 0.05*cm),
                         tbl4,
                     ]))

@@ -313,8 +313,32 @@
   flex-direction:column;
   box-shadow:-4px 0 24px rgba(0,0,0,0.4);
 ">
+  <!-- Drag-resize handle on the LEFT edge -->
+  <div id="pdfResizeHandle" class="pdf-resize-handle" title="Drag to resize"></div>
+
   <div class="map-header" style="flex-shrink:0;position:relative;z-index:1;border-bottom:1px solid var(--border,#2a2d3a)">
-    <span class="map-title" id="pdfViewerTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">Research Paper</span>
+    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+      <!-- Width controls -->
+      <div class="pdf-width-controls">
+        <button class="pdf-width-btn" title="Narrow (50%)" onclick="setPdfViewerWidth('narrow')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="3" width="6" height="18" rx="1"/>
+          </svg>
+        </button>
+        <button class="pdf-width-btn" title="Wide (65%)" onclick="setPdfViewerWidth('wide')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="5" y="3" width="14" height="18" rx="1"/>
+          </svg>
+        </button>
+        <button class="pdf-width-btn" title="Full screen" onclick="setPdfViewerWidth('full')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+          </svg>
+        </button>
+      </div>
+      <span class="pdf-viewer-divider"></span>
+      <span class="map-title" id="pdfViewerTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">Research Paper</span>
+    </div>
     <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
       <a id="pdfDownloadBtn" href="#" download style="display:inline-flex;align-items:center;gap:5px;
          padding:5px 11px;background:#2563eb;border-radius:7px;color:#fff;font-size:11px;

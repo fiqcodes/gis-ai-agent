@@ -4620,6 +4620,81 @@ let _sectionTimer       = null;   // setInterval for section animation (modal)
 let _sectionIndex       = 0;      // which section dot is currently active
 
 // ── PDF Viewer — fixed overlay exactly covering the map panel ────────────────
+// ── PDF Viewer width preset helper ───────────────────────────────────────────
+function setPdfViewerWidth(preset) {
+  const panel = document.getElementById('pdfViewerPanel');
+  const mapP  = document.getElementById('mapPanel');
+  if (!panel || !mapP) return;
+
+  const mapRect = mapP.getBoundingClientRect();
+  const chatPanel = document.getElementById('chatPanel');
+  const navW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-w')) || 52;
+  const totalW = window.innerWidth - navW;
+
+  let newWidth;
+  if (preset === 'narrow') {
+    // ~50% of total usable width
+    newWidth = Math.round(totalW * 0.50);
+  } else if (preset === 'wide') {
+    // ~65% of total usable width
+    newWidth = Math.round(totalW * 0.65);
+  } else {
+    // full — entire right portion from map panel start to edge
+    newWidth = mapRect.width;
+  }
+
+  // Clamp: min 320px, max = map panel right edge minus nav
+  newWidth = Math.min(newWidth, window.innerWidth - navW - 60);
+  newWidth = Math.max(newWidth, 320);
+
+  // Left anchor: panel right edge stays at window right
+  const newLeft = window.innerWidth - newWidth;
+  panel.style.left  = newLeft + 'px';
+  panel.style.width = newWidth + 'px';
+
+  // Mark the active preset button
+  document.querySelectorAll('.pdf-width-btn').forEach(b => b.classList.remove('active'));
+  const idx = { narrow: 0, wide: 1, full: 2 }[preset];
+  const btns = document.querySelectorAll('.pdf-width-btn');
+  if (btns[idx]) btns[idx].classList.add('active');
+}
+
+// ── PDF Viewer drag-resize initialiser (called once when panel opens) ─────────
+function _initPdfResizeHandle() {
+  const handle = document.getElementById('pdfResizeHandle');
+  const panel  = document.getElementById('pdfViewerPanel');
+  if (!handle || !panel || handle._resizeInitialised) return;
+  handle._resizeInitialised = true;
+
+  const navW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-w')) || 52;
+
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    handle.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+
+    const onMove = (mv) => {
+      const newLeft  = mv.clientX;
+      const newWidth = window.innerWidth - newLeft;
+      if (newWidth < 320 || newLeft < navW + 60) return;
+      panel.style.left  = newLeft + 'px';
+      panel.style.width = newWidth + 'px';
+      // deactivate preset buttons while free-dragging
+      document.querySelectorAll('.pdf-width-btn').forEach(b => b.classList.remove('active'));
+    };
+    const onUp = () => {
+      handle.classList.remove('dragging');
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
 function openPdfViewer(filename, downloadUrl) {
   const panel  = document.getElementById('pdfViewerPanel');
   const viewer = document.getElementById('pdfViewerContent');
@@ -4643,6 +4718,14 @@ function openPdfViewer(filename, downloadUrl) {
   // Show panel immediately with a loading state
   viewer.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#aaa;font-size:13px;font-family:sans-serif">Loading PDF…</div>`;
   panel.style.display = 'flex';
+
+  // Init resize handle (idempotent)
+  _initPdfResizeHandle();
+
+  // Reset to 'full' preset button state
+  document.querySelectorAll('.pdf-width-btn').forEach(b => b.classList.remove('active'));
+  const btns = document.querySelectorAll('.pdf-width-btn');
+  if (btns[2]) btns[2].classList.add('active');
 
   // Fetch as blob — prevents Chrome from opening a new tab
   fetch(downloadUrl)
@@ -4768,13 +4851,30 @@ function _insertResearchGeneratingChip(chipId) {
   const msgs = document.getElementById('messages');
   if (!msgs) return;
 
+  const sections = ['Abstract', 'Introduction', 'Methodology', 'Results', 'Discussion', 'Conclusion'];
+
+  const stepsHtml = sections.map((s, i) => `
+    <div class="rcp-step${i === 0 ? ' rcp-step-active' : ''}" data-section="${s.toLowerCase()}">
+      <div class="rcp-step-icon">
+        <span class="rcp-step-icon-check">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </span>
+      </div>
+      <span class="rcp-step-name">${s}</span>
+      <div class="rcp-step-bar"><div class="rcp-step-bar-fill"></div></div>
+      <span class="rcp-step-status">${i === 0 ? 'writing…' : ''}</span>
+    </div>
+  `).join('');
+
   const chip = document.createElement('div');
   chip.className = 'msg-row ai';
   chip.id = chipId;
   chip.innerHTML = `
     <div class="msg-bubble ai research-chip-bubble">
-      <div class="research-chip-header">
-        <div class="research-chip-icon">
+      <div class="rcp-header">
+        <div class="rcp-icon">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <polyline points="14 2 14 8 20 8"/>
@@ -4782,46 +4882,59 @@ function _insertResearchGeneratingChip(chipId) {
             <line x1="16" y1="17" x2="8" y2="17"/>
           </svg>
         </div>
-        <div>
-          <div class="research-chip-title">Research Paper</div>
-          <div class="research-chip-subtitle">Writing paper from analysis outputs…</div>
+        <div class="rcp-meta">
+          <div class="rcp-title">Research Paper</div>
+          <div class="rcp-subtitle" id="${chipId}_subtitle">Writing paper from analysis outputs…</div>
         </div>
-        <div class="research-chip-spinner"></div>
+        <div class="rcp-spinner"></div>
       </div>
-      <div class="research-chip-sections">
-        <span class="rcs rcs-active">Abstract</span>
-        <span class="rcs">Introduction</span>
-        <span class="rcs">Methodology</span>
-        <span class="rcs">Results</span>
-        <span class="rcs">Discussion</span>
-        <span class="rcs">Conclusion</span>
+      <div class="rcp-steps" id="${chipId}_steps">
+        ${stepsHtml}
       </div>
     </div>
   `;
   msgs.appendChild(chip);
   msgs.scrollTop = msgs.scrollHeight;
 
-  // Animate section pills
+  // Animate section steps
   _animateChipSections(chipId);
 }
 
 function _animateChipSections(chipId) {
   const chip = document.getElementById(chipId);
   if (!chip) return;
-  const pills = chip.querySelectorAll('.rcs');
   let idx = 0;
+
   const tick = () => {
-    pills.forEach((p, i) => {
-      p.classList.remove('rcs-active', 'rcs-done');
-      if (i < idx) p.classList.add('rcs-done');
+    const steps = chip.querySelectorAll('.rcp-step');
+    if (!steps.length) return;
+    steps.forEach((s, i) => {
+      s.classList.remove('rcp-step-active', 'rcp-step-done');
+      const statusEl = s.querySelector('.rcp-step-status');
+      const checkEl  = s.querySelector('.rcp-step-icon-check');
+      if (i < idx) {
+        s.classList.add('rcp-step-done');
+        if (statusEl) statusEl.textContent = 'done';
+        if (checkEl)  checkEl.style.display = 'flex';
+      } else {
+        if (checkEl) checkEl.style.display = 'none';
+      }
     });
-    if (idx < pills.length) pills[idx].classList.add('rcs-active');
+    if (idx < steps.length) {
+      steps[idx].classList.add('rcp-step-active');
+      const statusEl = steps[idx].querySelector('.rcp-step-status');
+      if (statusEl) statusEl.textContent = 'writing…';
+      // Update subtitle
+      const subtitle = document.getElementById(chipId + '_subtitle');
+      if (subtitle) subtitle.textContent = `Writing ${steps[idx].querySelector('.rcp-step-name').textContent}…`;
+    }
     idx++;
   };
+
   tick();
   const timer = setInterval(() => {
     if (!document.getElementById(chipId)) { clearInterval(timer); return; }
-    if (idx >= pills.length) { clearInterval(timer); return; }
+    if (idx >= chip.querySelectorAll('.rcp-step').length) { clearInterval(timer); return; }
     tick();
   }, 9000);
   chip._sectionTimer = timer;
