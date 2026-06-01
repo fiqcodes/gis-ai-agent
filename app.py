@@ -23,22 +23,33 @@ CORS(app)
 
 # ── Initialize GEE ONCE at startup, keep credentials alive ───────────────────
 import os as _os
+import socket as _socket
 import ee as _ee
 from config import (GEE_PROJECT as _GEE_PROJECT,
                     GEE_SERVICE_ACCOUNT_FILE as _SA_FILE,
                     GEE_SERVICE_ACCOUNT_EMAIL as _SA_EMAIL)
 
+# Fix: httplib2 (used internally by earthengine-api) tries IPv6 first and
+# hangs for 10-16 minutes on networks where IPv6 TCP connections stall.
+# Forcing IPv4 globally cuts startup from ~16 min back to ~4 seconds.
+_orig_getaddrinfo = _socket.getaddrinfo
+_socket.getaddrinfo = lambda h, p, family=0, *a, **k: \
+    _orig_getaddrinfo(h, p, _socket.AF_INET, *a, **k)
+
 # Global credentials object — refreshed before each use, never re-initialized
 _GEE_CREDENTIALS = None
 
 def _build_gee_credentials():
-    """Build fresh credentials from service account file."""
+    """Build credentials using requests transport to avoid httplib2 slowness."""
     import google.oauth2.service_account as _sa
-    import google.auth.transport.requests as _ga_req
+    import requests as _requests
+    from google.auth.transport.requests import Request as _Request
     scopes = ['https://www.googleapis.com/auth/earthengine',
               'https://www.googleapis.com/auth/cloud-platform']
     creds = _sa.Credentials.from_service_account_file(_SA_FILE, scopes=scopes)
-    creds.refresh(_ga_req.Request())
+    # Use requests session instead of httplib2 for the token refresh —
+    # avoids the secondary IPv6 hang during oauth2.googleapis.com token fetch
+    creds.refresh(_Request(session=_requests.Session()))
     return creds
 
 try:

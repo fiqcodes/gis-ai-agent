@@ -4627,72 +4627,106 @@ function setPdfViewerWidth(preset) {
   if (!panel || !mapP) return;
 
   const mapRect = mapP.getBoundingClientRect();
-  const chatPanel = document.getElementById('chatPanel');
   const navW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-w')) || 52;
   const totalW = window.innerWidth - navW;
 
   let newWidth;
   if (preset === 'narrow') {
-    // ~50% of total usable width
     newWidth = Math.round(totalW * 0.50);
   } else if (preset === 'wide') {
-    // ~65% of total usable width
     newWidth = Math.round(totalW * 0.65);
   } else {
-    // full — entire right portion from map panel start to edge
+    // full — entire map panel width
     newWidth = mapRect.width;
   }
 
-  // Clamp: min 320px, max = map panel right edge minus nav
+  // Clamp
   newWidth = Math.min(newWidth, window.innerWidth - navW - 60);
   newWidth = Math.max(newWidth, 320);
 
-  // Left anchor: panel right edge stays at window right
+  // Panel is right-anchored: left edge = window.innerWidth - newWidth
   const newLeft = window.innerWidth - newWidth;
   panel.style.left  = newLeft + 'px';
   panel.style.width = newWidth + 'px';
 
-  // Mark the active preset button
+  // Keep handle in sync
+  _syncPdfResizeHandle();
+
+  // Mark active preset button
   document.querySelectorAll('.pdf-width-btn').forEach(b => b.classList.remove('active'));
   const idx = { narrow: 0, wide: 1, full: 2 }[preset];
   const btns = document.querySelectorAll('.pdf-width-btn');
   if (btns[idx]) btns[idx].classList.add('active');
 }
 
+// ── Keep the handle element aligned with the panel's left edge ───────────────
+function _syncPdfResizeHandle() {
+  const handle = document.getElementById('pdfResizeHandle');
+  const panel  = document.getElementById('pdfViewerPanel');
+  if (!handle || !panel) return;
+  const r = panel.getBoundingClientRect();
+  // Centre the 12px handle on the left edge of the panel
+  handle.style.left   = (r.left - 6) + 'px';
+  handle.style.top    = r.top    + 'px';
+  handle.style.height = r.height + 'px';
+}
+
 // ── PDF Viewer drag-resize initialiser (called once when panel opens) ─────────
 function _initPdfResizeHandle() {
   const handle = document.getElementById('pdfResizeHandle');
   const panel  = document.getElementById('pdfViewerPanel');
-  if (!handle || !panel || handle._resizeInitialised) return;
-  handle._resizeInitialised = true;
+  if (!handle || !panel) return;
+
+  // Remove any old listener to avoid duplicates when panel reopens
+  if (handle._mdHandler) handle.removeEventListener('mousedown', handle._mdHandler);
 
   const navW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-w')) || 52;
+  const MIN_WIDTH = 320;
 
-  handle.addEventListener('mousedown', (e) => {
+  handle._mdHandler = (e) => {
     e.preventDefault();
+    e.stopPropagation();
+
     handle.classList.add('dragging');
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'col-resize';
 
+    // Capture the offset between the mouse and the panel's left edge AT the moment of mousedown
+    // This prevents the jump — the panel moves relative to how far you drag, not where the cursor is
+    const panelRect  = panel.getBoundingClientRect();
+    const grabOffset = e.clientX - panelRect.left;  // how far into the handle the user clicked
+
     const onMove = (mv) => {
-      const newLeft  = mv.clientX;
+      // The new panel left = cursor position minus the initial grab offset
+      const newLeft  = mv.clientX - grabOffset;
       const newWidth = window.innerWidth - newLeft;
-      if (newWidth < 320 || newLeft < navW + 60) return;
+
+      if (newWidth < MIN_WIDTH) return;
+      if (newLeft  < navW + 40) return;
+
       panel.style.left  = newLeft + 'px';
       panel.style.width = newWidth + 'px';
-      // deactivate preset buttons while free-dragging
+
+      // Keep handle in sync with panel
+      handle.style.left = (newLeft - 6) + 'px';
+
+      // Clear preset active state while free-dragging
       document.querySelectorAll('.pdf-width-btn').forEach(b => b.classList.remove('active'));
     };
+
     const onUp = () => {
       handle.classList.remove('dragging');
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
       document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('mouseup',   onUp);
     };
+
     document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
+    document.addEventListener('mouseup',   onUp);
+  };
+
+  handle.addEventListener('mousedown', handle._mdHandler);
 }
 
 function openPdfViewer(filename, downloadUrl) {
@@ -4719,13 +4753,12 @@ function openPdfViewer(filename, downloadUrl) {
   viewer.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#aaa;font-size:13px;font-family:sans-serif">Loading PDF…</div>`;
   panel.style.display = 'flex';
 
-  // Init resize handle (idempotent)
+  // Wire up drag-resize (re-runs each open to clear stale listeners)
   _initPdfResizeHandle();
-
-  // Reset to 'full' preset button state
-  document.querySelectorAll('.pdf-width-btn').forEach(b => b.classList.remove('active'));
-  const btns = document.querySelectorAll('.pdf-width-btn');
-  if (btns[2]) btns[2].classList.add('active');
+  // Position the handle flush against the panel's left edge
+  const handle = document.getElementById('pdfResizeHandle');
+  if (handle) handle.style.display = '';
+  _syncPdfResizeHandle();
 
   // Fetch as blob — prevents Chrome from opening a new tab
   fetch(downloadUrl)
@@ -4745,8 +4778,10 @@ function openPdfViewer(filename, downloadUrl) {
 function closePdfViewer() {
   const panel  = document.getElementById('pdfViewerPanel');
   const viewer = document.getElementById('pdfViewerContent');
+  const handle = document.getElementById('pdfResizeHandle');
   if (panel)  panel.style.display = 'none';
   if (viewer) viewer.innerHTML = '';   // free memory
+  if (handle) handle.style.display = 'none';
 }
 
 // ── Toggle button — simple on/off, no modal ───────────────────────────────────
@@ -4846,25 +4881,21 @@ function _refreshPlanResearchStep() {
   updatePlanSteps(steps);
 }
 
-// ── Inline "generating" chip ──────────────────────────────────────────────────
+// ── Inline "generating" chip — minimal Claude-style ──────────────────────────
 function _insertResearchGeneratingChip(chipId) {
   const msgs = document.getElementById('messages');
   if (!msgs) return;
 
   const sections = ['Abstract', 'Introduction', 'Methodology', 'Results', 'Discussion', 'Conclusion'];
 
+  // Terminal icon SVG reused per step
+  const termSvg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`;
+
   const stepsHtml = sections.map((s, i) => `
     <div class="rcp-step${i === 0 ? ' rcp-step-active' : ''}" data-section="${s.toLowerCase()}">
-      <div class="rcp-step-icon">
-        <span class="rcp-step-icon-check">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        </span>
-      </div>
+      <div class="rcp-step-icon">${termSvg}</div>
       <span class="rcp-step-name">${s}</span>
-      <div class="rcp-step-bar"><div class="rcp-step-bar-fill"></div></div>
-      <span class="rcp-step-status">${i === 0 ? 'writing…' : ''}</span>
+      <span class="rcp-step-tag">Writing</span>
     </div>
   `).join('');
 
@@ -4873,31 +4904,31 @@ function _insertResearchGeneratingChip(chipId) {
   chip.id = chipId;
   chip.innerHTML = `
     <div class="msg-bubble ai research-chip-bubble">
-      <div class="rcp-header">
-        <div class="rcp-icon">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-          </svg>
-        </div>
-        <div class="rcp-meta">
-          <div class="rcp-title">Research Paper</div>
-          <div class="rcp-subtitle" id="${chipId}_subtitle">Writing paper from analysis outputs…</div>
-        </div>
-        <div class="rcp-spinner"></div>
+      <div class="rcp-summary open" id="${chipId}_summary" onclick="_toggleRcpSteps('${chipId}')">
+        <span id="${chipId}_label">Writing 6 sections</span>
+        <span class="rcp-chevron">›</span>
       </div>
-      <div class="rcp-steps" id="${chipId}_steps">
+      <div class="rcp-steps open" id="${chipId}_steps">
         ${stepsHtml}
+      </div>
+      <div class="rcp-done-row" id="${chipId}_done">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        Done
       </div>
     </div>
   `;
   msgs.appendChild(chip);
   msgs.scrollTop = msgs.scrollHeight;
 
-  // Animate section steps
   _animateChipSections(chipId);
+}
+
+function _toggleRcpSteps(chipId) {
+  const summary = document.getElementById(chipId + '_summary');
+  const steps   = document.getElementById(chipId + '_steps');
+  if (!summary || !steps) return;
+  const open = steps.classList.toggle('open');
+  summary.classList.toggle('open', open);
 }
 
 function _animateChipSections(chipId) {
@@ -4910,23 +4941,20 @@ function _animateChipSections(chipId) {
     if (!steps.length) return;
     steps.forEach((s, i) => {
       s.classList.remove('rcp-step-active', 'rcp-step-done');
-      const statusEl = s.querySelector('.rcp-step-status');
-      const checkEl  = s.querySelector('.rcp-step-icon-check');
+      const tag = s.querySelector('.rcp-step-tag');
       if (i < idx) {
         s.classList.add('rcp-step-done');
-        if (statusEl) statusEl.textContent = 'done';
-        if (checkEl)  checkEl.style.display = 'flex';
-      } else {
-        if (checkEl) checkEl.style.display = 'none';
+        if (tag) tag.textContent = 'Done';
       }
     });
     if (idx < steps.length) {
       steps[idx].classList.add('rcp-step-active');
-      const statusEl = steps[idx].querySelector('.rcp-step-status');
-      if (statusEl) statusEl.textContent = 'writing…';
-      // Update subtitle
-      const subtitle = document.getElementById(chipId + '_subtitle');
-      if (subtitle) subtitle.textContent = `Writing ${steps[idx].querySelector('.rcp-step-name').textContent}…`;
+      const label = document.getElementById(chipId + '_label');
+      const sectionName = steps[idx].dataset.section;
+      const displayName = sectionName
+        ? sectionName.charAt(0).toUpperCase() + sectionName.slice(1)
+        : `Section ${idx + 1}`;
+      if (label) label.textContent = `Writing ${displayName}...`;
     }
     idx++;
   };
@@ -4970,7 +4998,6 @@ function _pollReportForChip(chipId, reportJobId) {
 function _upgradeChipToDownload(chipId, filename) {
   const chip = document.getElementById(chipId);
   if (!chip) {
-    // Chip was removed from DOM (e.g. chat cleared) — fall back to appending new one
     _appendResearchDownloadChip(filename);
     return;
   }
@@ -4978,33 +5005,62 @@ function _upgradeChipToDownload(chipId, filename) {
 
   const bubble = chip.querySelector('.research-chip-bubble');
   if (!bubble) return;
-  bubble.innerHTML = `
-    <div class="research-artifact-card" onclick="openPdfViewer('${filename}', '/api/report/${encodeURIComponent(filename)}')" title="Click to open">
-      <div class="rac-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="16" y1="13" x2="8" y2="13"/>
-          <line x1="16" y1="17" x2="8" y2="17"/>
-        </svg>
-      </div>
-      <div class="rac-meta">
-        <div class="rac-name">${filename}</div>
-        <div class="rac-type">GIS Functions &middot; PDF</div>
-      </div>
-      <a class="rac-download-btn"
-         href="/api/report/${encodeURIComponent(filename)}?download=1"
-         download="${filename}"
-         onclick="event.stopPropagation()"
-         title="Download PDF">
-        Download
-      </a>
-    </div>
-  `;
-  const msgs = document.getElementById('messages');
-  if (msgs) msgs.scrollTop = msgs.scrollHeight;
 
-  // Also update the modal if it happens to be open
+  // Mark all steps done
+  bubble.querySelectorAll('.rcp-step').forEach(s => {
+    s.classList.remove('rcp-step-active');
+    s.classList.add('rcp-step-done');
+    const tag = s.querySelector('.rcp-step-tag');
+    if (tag) tag.textContent = 'Done';
+  });
+
+  // Update summary label
+  const summaryLabel = bubble.querySelector('.rcp-summary span:first-child');
+  if (summaryLabel) summaryLabel.textContent = 'All 6 confirmed. Copy to output.';
+
+  // Mark summary as done (stops breathing animation)
+  const summaryEl = bubble.querySelector('.rcp-summary');
+  if (summaryEl) summaryEl.classList.add('rcp-summary-done');
+
+  // Show done row
+  const doneRow = bubble.querySelector('.rcp-done-row');
+  if (doneRow) doneRow.classList.add('visible');
+
+  // Append artifact card as a new message row after the chip
+  const msgs = document.getElementById('messages');
+  if (msgs) {
+    const card = document.createElement('div');
+    card.className = 'msg-row ai';
+    card.innerHTML = `
+      <div class="msg-bubble ai">
+        <div class="research-artifact-card" onclick="openPdfViewer('${filename}', '/api/report/${encodeURIComponent(filename)}')" title="Click to open">
+          <div class="rac-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+          </div>
+          <div class="rac-meta">
+            <div class="rac-name">${filename}</div>
+            <div class="rac-type">GIS Research Paper &middot; PDF</div>
+          </div>
+          <a class="rac-download-btn"
+             href="/api/report/${encodeURIComponent(filename)}?download=1"
+             download="${filename}"
+             onclick="event.stopPropagation()"
+             title="Download PDF">
+            Download
+          </a>
+        </div>
+      </div>
+    `;
+    msgs.appendChild(card);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  // Also update the modal if open
   _showResearchState('done');
   const filenameEl = document.getElementById('researchDoneFilename');
   if (filenameEl) filenameEl.textContent = filename;
@@ -5021,20 +5077,11 @@ function _updateResearchChipError(chipId, errorMsg) {
   if (chip._sectionTimer) clearInterval(chip._sectionTimer);
   const bubble = chip.querySelector('.research-chip-bubble');
   if (!bubble) return;
-  bubble.innerHTML = `
-    <div class="research-chip-header">
-      <div class="research-chip-icon" style="background:#c0392b">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5">
-          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-      </div>
-      <div>
-        <div class="research-chip-title">Research Paper Failed</div>
-        <div class="research-chip-subtitle">${errorMsg}</div>
-      </div>
-    </div>
-  `;
+
+  const summaryLabel = bubble.querySelector('.rcp-summary span:first-child');
+  if (summaryLabel) summaryLabel.textContent = `Failed: ${errorMsg}`;
+  const chevron = bubble.querySelector('.rcp-chevron');
+  if (chevron) chevron.style.display = 'none';
 }
 
 // ── Legacy modal-based flow (kept for manual "Generate again" use) ─────────────

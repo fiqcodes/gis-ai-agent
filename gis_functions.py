@@ -43,17 +43,26 @@ def gee_init_for_thread():
     """Initialize GEE fresh in the current thread using service account credentials.
     Called at the start of every analysis job and every major GEE function."""
     import os
+    import socket
     from config import GEE_SERVICE_ACCOUNT_FILE, GEE_PROJECT
     try:
         if not os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
             return
         import google.oauth2.service_account as _sa_t
-        import google.auth.transport.requests as _req_t
+        from google.auth.transport.requests import Request as _Request
+        import requests as _requests
+
+        # Force IPv4 — prevents httplib2 from hanging on IPv6 for 10+ min
+        _orig = socket.getaddrinfo
+        socket.getaddrinfo = lambda h, p, family=0, *a, **k: \
+            _orig(h, p, socket.AF_INET, *a, **k)
+
         scopes = ['https://www.googleapis.com/auth/earthengine',
                   'https://www.googleapis.com/auth/cloud-platform']
         creds = _sa_t.Credentials.from_service_account_file(
             GEE_SERVICE_ACCOUNT_FILE, scopes=scopes)
-        creds.refresh(_req_t.Request())
+        # Use requests.Session() — avoids httplib2 IPv6 hang on token refresh
+        creds.refresh(_Request(session=_requests.Session()))
         ee.Initialize(creds, project=GEE_PROJECT,
                       opt_url='https://earthengine.googleapis.com')
     except Exception as e:
