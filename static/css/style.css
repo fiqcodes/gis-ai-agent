@@ -3020,18 +3020,18 @@ html, body {
   transition: transform 0.2s ease;
 }
 
-/* ── Research button — replaces gradient-btn ────────────────────────────────── */
+/* ── Research button — green→orange gradient ────────────────────────────────── */
 .tb-btn.research-btn {
-  background: linear-gradient(135deg, #3a8ef6 0%, #6f42c1 50%, #e91e8c 100%);
+  background: linear-gradient(135deg, #3aab6f 0%, #ff4d00 100%);
   border: none;
   color: #fff;
   font-weight: 500;
   gap: 6px;
   transition: opacity 0.15s, transform 0.1s;
 }
-.tb-btn.research-btn:hover  { opacity: 0.9; }
+.tb-btn.research-btn:hover  { opacity: 0.88; }
 .tb-btn.research-btn.active {
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #6f42c1;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #ff4d00;
   transform: scale(1.04);
 }
  
@@ -3440,7 +3440,7 @@ html, body {
 }
 .research-artifact-card:hover {
   background: var(--bg3, #252840);
-  border-color: rgba(99, 102, 241, 0.4);
+  border-color: rgba(255, 77, 0, 0.4);
 }
 
 .rac-icon {
@@ -3448,7 +3448,7 @@ html, body {
   height: 40px;
   border-radius: 9px;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #3a8ef6, #6f42c1);
+  background: linear-gradient(135deg, #3aab6f, #ff4d00);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3492,7 +3492,7 @@ html, body {
 }
 .rac-download-btn:hover {
   background: var(--bg3, #252840);
-  border-color: rgba(99, 102, 241, 0.5);
+  border-color: rgba(255, 77, 0, 0.5);
 }
 /* ════════════════════════════════════════════════════════
    PDF VIEWER — RESIZE HANDLE & WIDTH CONTROLS
@@ -3665,6 +3665,28 @@ html, body {
   50%     { text-shadow: 0 0 6px color-mix(in srgb, var(--accent, #00d4b8) 55%, transparent); color: #ffffff; }
 }
 
+/* ── Minimized (collapsed) glow — gentle white pulse on the summary label ── */
+@keyframes rcp-summary-glow {
+  0%,100% {
+    color: var(--text2);
+    text-shadow: none;
+  }
+  50% {
+    color: #e8e8e8;
+    text-shadow: 0 0 4px rgba(255,255,255,0.25);
+  }
+}
+
+/* When collapsed (steps NOT open) and still generating, animate the summary */
+.research-chip-bubble:not(.rcp-done) .rcp-summary:not(.open):not(.rcp-summary-done) {
+  animation: rcp-summary-glow 2.2s ease-in-out infinite;
+}
+
+/* Also animate the chevron arrow to match */
+.research-chip-bubble:not(.rcp-done) .rcp-summary:not(.open):not(.rcp-summary-done) .rcp-chevron {
+  animation: rcp-summary-glow 2.2s ease-in-out infinite;
+}
+
 .rcp-step.rcp-step-active .rcp-step-name {
   animation: rcp-glow-pulse 2.2s ease-in-out infinite;
 }
@@ -3673,18 +3695,21 @@ html, body {
   animation: rcp-glow-pulse 2.2s ease-in-out infinite;
 }
 
-/* Small tag pill (matches screenshot "Script" tag) */
+/* Step tags — plain text only, no pill box for any state */
 .rcp-step-tag {
   font-size: 10.5px;
   font-family: var(--font-mono);
   color: var(--text3);
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 1px 6px;
+  background: transparent;
+  border: none;
+  padding: 0;
   white-space: nowrap;
 }
-/* rcp-step-active tag styling handled by glow animation above */
+
+/* Active "Writing" tag — text color/animation handled by glow keyframes above */
+.rcp-step.rcp-step-active .rcp-step-tag {
+  padding: 0;
+}
 
 /* Done row at the bottom */
 .rcp-done-row {

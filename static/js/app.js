@@ -3229,7 +3229,7 @@ function stopAnalysis() {
 // ASSETS BADGE
 // ════════════════════════════════════════════════════════
 function updateAssetsBadge() {
-  document.getElementById('assetsBadge').textContent = assetCount;
+  // Assets panel removed — no-op
 }
 
 // ════════════════════════════════════════════════════════
@@ -4790,10 +4790,6 @@ function toggleResearchMode() {
   const btn = document.getElementById('researchBtn');
   if (btn) btn.classList.toggle('active', _researchModeActive);
 
-  // Show/hide the inline Research Mode pill in the input bar
-  const pill = document.getElementById('researchModePill');
-  if (pill) pill.style.display = _researchModeActive ? 'flex' : 'none';
-
   // If toggled ON and a completed analysis already exists, generate the paper now
   if (_researchModeActive && (_lastAnalysisJobId || _lastAnalysisResult)) {
     setTimeout(() => _autoStartResearch(_lastAnalysisJobId), 200);
@@ -5022,6 +5018,9 @@ function _upgradeChipToDownload(chipId, filename) {
   const summaryEl = bubble.querySelector('.rcp-summary');
   if (summaryEl) summaryEl.classList.add('rcp-summary-done');
 
+  // Stop minimized glow animation
+  bubble.classList.add('rcp-done');
+
   // Show done row
   const doneRow = bubble.querySelector('.rcp-done-row');
   if (doneRow) doneRow.classList.add('visible');
@@ -5082,6 +5081,7 @@ function _updateResearchChipError(chipId, errorMsg) {
   if (summaryLabel) summaryLabel.textContent = `Failed: ${errorMsg}`;
   const chevron = bubble.querySelector('.rcp-chevron');
   if (chevron) chevron.style.display = 'none';
+  bubble.classList.add('rcp-done');
 }
 
 // ── Legacy modal-based flow (kept for manual "Generate again" use) ─────────────
