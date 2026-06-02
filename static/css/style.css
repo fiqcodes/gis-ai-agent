@@ -70,7 +70,6 @@ html, body {
   width: 34px; height: 34px;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--accent);
   display: flex; align-items: center; justify-content: center;
   margin-bottom: 10px;
 }
@@ -123,7 +122,7 @@ html, body {
    CHAT HEADER
 ════════════════════════════════════════════════════════ */
 .chat-header {
-  height: 52px;
+  height: 64px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -692,7 +691,7 @@ html, body {
 
 /* Gradient BETA pill — special style */
 .tb-btn.gradient-btn {
-  background: linear-gradient(135deg, #fc4703 0%, #1f9cfe 55%, #fc4703 100%);
+  background: linear-gradient(135deg, #ff4602 0%, #3aad70 50%, #1689fe 100%);
   border: none;
   color: #fff;
   font-weight: 500;
@@ -3022,7 +3021,7 @@ html, body {
 
 /* ── Research button — green→orange gradient ────────────────────────────────── */
 .tb-btn.research-btn {
-  background: linear-gradient(135deg, #fc4703 0%, #1f9cfe 55%, #fc4703 100%);
+  background: linear-gradient(135deg, #ff4602 0%, #3aad70 50%, #1689fe 100%);
   border: none;
   color: #fff;
   font-weight: 500;
@@ -3031,7 +3030,7 @@ html, body {
 }
 .tb-btn.research-btn:hover  { opacity: 0.88; }
 .tb-btn.research-btn.active {
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #fc4703;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #ff4602;
   transform: scale(1.04);
 }
  
@@ -3070,7 +3069,7 @@ html, body {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #fc4703, #1f9cfe);
+  background: linear-gradient(135deg, #ff4602 0%, #3aad70 50%, #1689fe 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3132,7 +3131,7 @@ html, body {
   color: var(--text2, #a0a8c0);
   line-height: 1.4;
 }
-.research-info-item svg { flex-shrink: 0; margin-top: 1px; color: #1f9cfe; }
+.research-info-item svg { flex-shrink: 0; margin-top: 1px; color: #1689fe; }
  
 /* ── Warning ────────────────────────────────────────────────────────────────── */
 .research-warning {
@@ -3149,7 +3148,7 @@ html, body {
 .research-generate-btn {
   width: 100%;
   padding: 11px 0;
-  background: linear-gradient(135deg, #fc4703 0%, #1f9cfe 55%, #fc4703 100%);
+  background: linear-gradient(135deg, #ff4602 0%, #3aad70 50%, #1689fe 100%);
   border: none;
   border-radius: 10px;
   color: #fff;
@@ -3177,7 +3176,7 @@ html, body {
   width: 20px;
   height: 20px;
   border: 2.5px solid var(--border2, #2e3340);
-  border-top-color: #fc4703;
+  border-top-color: #ff4602;
   border-radius: 50%;
   animation: researchSpin 0.8s linear infinite;
   flex-shrink: 0;
@@ -3207,7 +3206,7 @@ html, body {
   transition: background 0.2s, color 0.2s;
 }
 .research-section-row.rs-active {
-  background: rgba(111, 66, 193, 0.12);
+  background: rgba(255, 70, 2, 0.1);
   color: var(--text2, #a0a8c0);
 }
 .research-section-row.rs-done {
@@ -3223,8 +3222,8 @@ html, body {
   transition: background 0.2s;
 }
 .rs-done .rs-dot  { background: #4caf7d; border-color: #4caf7d; }
-.rs-active .rs-dot { background: #fc4703; border-color: #fc4703;
-                     box-shadow: 0 0 5px #fc4703; }
+.rs-active .rs-dot { background: #ff4602; border-color: #ff4602;
+                     box-shadow: 0 0 5px #ff4602; }
  
 /* ── Done state ─────────────────────────────────────────────────────────────── */
 .research-done-icon {
@@ -3314,7 +3313,7 @@ html, body {
   height: 34px;
   border-radius: 9px;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #fc4703, #1f9cfe);
+  background: linear-gradient(135deg, #ff4602 0%, #3aad70 50%, #1689fe 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3322,7 +3321,8 @@ html, body {
 }
 
 .research-chip-icon-done {
-  background: linear-gradient(135deg, #16a34a, #15803d);
+  background: linear-gradient(135deg, #ff4602 0%, #3aad70 50%, #1689fe 100%);
+  opacity: 0.7;
 }
 
 .research-chip-title {
@@ -3342,8 +3342,8 @@ html, body {
   margin-left: auto;
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(31, 156, 254, 0.25);
-  border-top-color: #fc4703;
+  border: 2px solid rgba(22, 137, 254, 0.25);
+  border-top-color: #ff4602;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   flex-shrink: 0;
@@ -3440,7 +3440,7 @@ html, body {
 }
 .research-artifact-card:hover {
   background: var(--bg3, #252840);
-  border-color: rgba(252, 71, 3, 0.4);
+  border-color: rgba(255, 70, 2, 0.4);
 }
 
 .rac-icon {
@@ -3448,7 +3448,7 @@ html, body {
   height: 40px;
   border-radius: 9px;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #fc4703, #1f9cfe);
+  background: linear-gradient(135deg, #ff4602 0%, #3aad70 50%, #1689fe 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3492,7 +3492,7 @@ html, body {
 }
 .rac-download-btn:hover {
   background: var(--bg3, #252840);
-  border-color: rgba(252, 71, 3, 0.5);
+  border-color: rgba(255, 70, 2, 0.5);
 }
 /* ════════════════════════════════════════════════════════
    PDF VIEWER — RESIZE HANDLE & WIDTH CONTROLS
@@ -3722,3 +3722,85 @@ html, body {
   padding-left: 0;
 }
 .rcp-done-row.visible { display: flex; }
+
+/* ════════════════════════════════════════════════════════
+   WELCOME SPLASH — centered logo + desc + 4 question cards
+════════════════════════════════════════════════════════ */
+.welcome-splash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 48px 24px 32px;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+/* Logo row */
+.welcome-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.welcome-wordmark {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+/* Description */
+.welcome-desc {
+  font-size: 14px;
+  color: var(--text2);
+  line-height: 1.6;
+  max-width: 480px;
+  margin: 0 0 32px;
+}
+
+/* 2×2 card grid */
+.welcome-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+}
+
+.welcome-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 5px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.welcome-card:hover {
+  background: var(--bg3);
+}
+
+.welcome-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.welcome-card-sub {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.45;
+}
+
+/* Make the welcome row full-width so it can center properly */
+.msg-row.ai:has(.welcome-splash) {
+  justify-content: center;
+  width: 100%;
+}

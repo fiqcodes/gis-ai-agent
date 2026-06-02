@@ -560,6 +560,10 @@ function sendMessage() {
   let text    = input.value.trim();
   if (!text || isAnalyzing) return;
 
+  // Dismiss welcome splash on any send
+  const splash = document.getElementById('welcomeSplash');
+  if (splash) splash.style.display = 'none';
+
   // Inject active ROI name if '@' not present but ROI is active
   if (activeROI && !text.includes('@')) {
     text += ` @${activeROI.name}`;
@@ -773,6 +777,21 @@ function clearChat() {
   clearAllLayers();
   hidePlanWidget();
   stopPolling();
+}
+
+// ── Welcome splash card handler ──────────────────────────────────────────────
+function useWelcomePrompt(btn) {
+  const text = btn.querySelector('.welcome-card-sub').textContent;
+  const input = document.getElementById('chatInput');
+  if (input) {
+    input.value = text;
+    input.dispatchEvent(new Event('input'));
+  }
+  // Hide the splash so the real chat takes over
+  const splash = document.getElementById('welcomeSplash');
+  if (splash) splash.style.display = 'none';
+  // Auto-submit
+  sendMessage();
 }
 
 function escapeHtml(s) {

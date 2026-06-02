@@ -37,34 +37,7 @@
 ════════════════════════════════════════════════════════ -->
 <nav class="sidebar-nav">
   <div class="nav-logo" title="Orbiview">
-    <!-- Orbiview logo mark: orange globe with wave bands -->
-    <svg width="24" height="24" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <clipPath id="globe-clip">
-          <circle cx="50" cy="50" r="46"/>
-        </clipPath>
-        <radialGradient id="orb-grad" cx="38%" cy="36%" r="62%">
-          <stop offset="0%" stop-color="#ff6a1a"/>
-          <stop offset="100%" stop-color="#e03a00"/>
-        </radialGradient>
-      </defs>
-      <!-- Base circle -->
-      <circle cx="50" cy="50" r="46" fill="url(#orb-grad)"/>
-      <!-- Wave band lines clipped inside globe -->
-      <g clip-path="url(#globe-clip)" fill="none" stroke="#2a1200" stroke-width="5.5" stroke-linecap="round">
-        <path d="M4 58 Q28 46 50 58 Q72 70 96 58"/>
-        <path d="M4 42 Q28 30 50 42 Q72 54 96 42"/>
-      </g>
-      <!-- Upper flame/curl shape -->
-      <g clip-path="url(#globe-clip)">
-        <path d="M50 8 C38 8 20 18 18 34 C16 48 28 52 36 44 C42 38 40 28 50 24 C60 20 68 30 64 42 C60 52 70 58 76 50 C84 40 80 20 66 12 C62 9 56 8 50 8Z"
-              fill="#2a1200" opacity="0.55"/>
-        <path d="M50 8 C38 8 20 18 18 34 C16 48 28 52 36 44 C42 38 40 28 50 24 C60 20 68 30 64 42 C60 52 70 58 76 50 C84 40 80 20 66 12 C62 9 56 8 50 8Z"
-              fill="none" stroke="#2a1200" stroke-width="2" opacity="0.3"/>
-      </g>
-      <!-- Outer ring -->
-      <circle cx="50" cy="50" r="46" fill="none" stroke="#2a1200" stroke-width="3" opacity="0.25"/>
-    </svg>
+    <img src="/assets/orbiview.png" alt="Orbiview" style="height:30px;width:30px;object-fit:cover;object-position:left center;">
   </div>
   <button class="nav-btn active" title="Chat" id="chatNavBtn" onclick="navigateTo('chat')">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -178,26 +151,7 @@
   <!-- Header -->
   <div class="chat-header">
     <div class="chat-header-left">
-      <!-- Orbiview logo + wordmark in header -->
-      <svg width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
-        <defs>
-          <clipPath id="hdr-clip"><circle cx="50" cy="50" r="46"/></clipPath>
-          <radialGradient id="hdr-grad" cx="38%" cy="36%" r="62%">
-            <stop offset="0%" stop-color="#ff6a1a"/>
-            <stop offset="100%" stop-color="#e03a00"/>
-          </radialGradient>
-        </defs>
-        <circle cx="50" cy="50" r="46" fill="url(#hdr-grad)"/>
-        <g clip-path="url(#hdr-clip)" fill="none" stroke="#2a1200" stroke-width="5.5" stroke-linecap="round">
-          <path d="M4 58 Q28 46 50 58 Q72 70 96 58"/>
-          <path d="M4 42 Q28 30 50 42 Q72 54 96 42"/>
-        </g>
-        <g clip-path="url(#hdr-clip)">
-          <path d="M50 8 C38 8 20 18 18 34 C16 48 28 52 36 44 C42 38 40 28 50 24 C60 20 68 30 64 42 C60 52 70 58 76 50 C84 40 80 20 66 12 C62 9 56 8 50 8Z" fill="#2a1200" opacity="0.55"/>
-        </g>
-        <circle cx="50" cy="50" r="46" fill="none" stroke="#2a1200" stroke-width="3" opacity="0.25"/>
-      </svg>
-      <span class="chat-title">Orbiview</span>
+      <img src="/assets/orbiview.png" alt="Orbiview" style="height:32px;width:auto;object-fit:contain;flex-shrink:0;">
       <span class="status-dot" id="statusDot" title="Checking..."></span>
     </div>
     <div class="chat-header-right">
@@ -211,18 +165,33 @@
 
   <!-- Messages -->
   <div class="messages" id="messages">
-    <!-- Welcome message -->
-    <div class="msg-row ai">
-      <div class="msg-bubble ai">
-        <p>Hello! I'm <strong>Orbiview</strong>, your GIS Agent powered by Google Earth Engine.</p>
-        <p>I can analyze satellite data for any region. Try:</p>
-        <ul>
-          <li><code>/ndvi</code> — Vegetation analysis</li>
-          <li><code>/lulc</code> — Land cover classification</li>
-          <li><code>/lst</code> — Land surface temperature</li>
-          <li><code>/no2</code> — Air quality</li>
-        </ul>
-        <p>Or draw a region on the map and reference it with <strong>@region</strong>.</p>
+    <!-- Welcome splash -->
+    <div class="msg-row ai" id="welcomeSplash">
+      <div class="welcome-splash">
+
+        <!-- Description -->
+        <p class="welcome-desc">Analyze satellite imagery for any region on Earth. Ask a question or choose one below to get started.</p>
+
+        <!-- 4 suggestion cards -->
+        <div class="welcome-cards">
+          <button class="welcome-card" onclick="useWelcomePrompt(this)">
+            <span class="welcome-card-title">Land Cover · London</span>
+            <span class="welcome-card-sub">Show me the land cover of London in 2024</span>
+          </button>
+          <button class="welcome-card" onclick="useWelcomePrompt(this)">
+            <span class="welcome-card-title">Vegetation · Jakarta</span>
+            <span class="welcome-card-sub">Analyze the NDVI of Jakarta in 2024</span>
+          </button>
+          <button class="welcome-card" onclick="useWelcomePrompt(this)">
+            <span class="welcome-card-title">Urban Heat · Tokyo</span>
+            <span class="welcome-card-sub">Show the land surface temperature of Tokyo in 2024</span>
+          </button>
+          <button class="welcome-card" onclick="useWelcomePrompt(this)">
+            <span class="welcome-card-title">Air Quality · Beijing</span>
+            <span class="welcome-card-sub">Analyze NO₂ air quality over Beijing in 2024</span>
+          </button>
+        </div>
+
       </div>
     </div>
   </div>

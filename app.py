@@ -21,6 +21,10 @@ sys.path.insert(0, str(PARENT_DIR))
 app = Flask(__name__)
 CORS(app)
 
+@app.route('/assets/<path:filename>')
+def serve_assets(filename):
+    return send_from_directory('assets', filename)
+
 # ── Initialize GEE ONCE at startup, keep credentials alive ───────────────────
 import os as _os
 import socket as _socket
