@@ -669,7 +669,7 @@ html, body {
   padding: 6px 10px 8px;
 }
 
-.toolbar-left { display: flex; gap: 4px; align-items: center; }
+.toolbar-left { display: flex; gap: 10px; align-items: center; }
 
 /* Pill-style toolbar buttons matching reference */
 .tb-btn {
@@ -3030,7 +3030,7 @@ html, body {
 }
 .tb-btn.research-btn:hover  { opacity: 0.88; }
 .tb-btn.research-btn.active {
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #ff4602;
+  box-shadow: 0 0 0 1.5px #fff, 0 0 0 3px #ff4602;
   transform: scale(1.04);
 }
  
