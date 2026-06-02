@@ -33,12 +33,26 @@
 <body>
 
 <!-- ════════════════════════════════════════════════════════
+     TOP BAR — full width, logo + status + new chat
+════════════════════════════════════════════════════════ -->
+<header class="top-bar">
+  <div class="top-bar-logo">
+    <img src="/assets/orbiview.png" alt="Orbiview" style="height:32px;width:auto;object-fit:contain;">
+  </div>
+  <div class="top-bar-right">
+    <span class="status-dot" id="statusDot" title="Checking..."></span>
+    <button class="icon-btn" title="New chat" onclick="clearChat()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════════════════════
      SIDEBAR NAV
 ════════════════════════════════════════════════════════ -->
 <nav class="sidebar-nav">
-  <div class="nav-logo" title="Orbiview">
-    <img src="/assets/orbiview.png" alt="Orbiview" style="height:30px;width:30px;object-fit:cover;object-position:left center;">
-  </div>
   <button class="nav-btn active" title="Chat" id="chatNavBtn" onclick="navigateTo('chat')">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -147,21 +161,6 @@
      LEFT PANEL — CHAT
 ════════════════════════════════════════════════════════ -->
 <div class="chat-panel" id="chatPanel">
-
-  <!-- Header -->
-  <div class="chat-header">
-    <div class="chat-header-left">
-      <img src="/assets/orbiview.png" alt="Orbiview" style="height:32px;width:auto;object-fit:contain;flex-shrink:0;">
-      <span class="status-dot" id="statusDot" title="Checking..."></span>
-    </div>
-    <div class="chat-header-right">
-      <button class="icon-btn" title="New chat" onclick="clearChat()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-      </button>
-    </div>
-  </div>
 
   <!-- Messages -->
   <div class="messages" id="messages">
