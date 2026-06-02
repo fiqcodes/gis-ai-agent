@@ -135,7 +135,7 @@ html, body {
 .map-panel {
   position: fixed;
   left: 55%;
-  top: var(--top-bar-h);
+  top: 0;
   right: 0;
   bottom: 0;
   background: var(--bg);
@@ -794,27 +794,21 @@ html, body {
 .map-header {
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 46px;
+  height: var(--top-bar-h);
   z-index: 400;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 0 14px;
-  background: rgba(10,10,11,0.92);
-  backdrop-filter: blur(10px);
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
 
-.map-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text2);
-  letter-spacing: 0.02em;
-}
+.map-title { display: none; }
 
 #map {
   position: absolute;
-  top: 46px; left: 0; right: 0; bottom: 0;
+  top: var(--top-bar-h); left: 0; right: 0; bottom: 0;
 }
 
 /* Override Leaflet controls */
@@ -822,15 +816,15 @@ html, body {
   display: none !important;
 }
 
-/* Layer badge — cyan/teal */
+/* Layer badge — blue */
 .layer-badge {
   position: absolute;
-  top: 58px;
+  top: 72px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 410;
-  background: var(--cyan);
-  color: #0a0a0b;
+  background: #1689fe;
+  color: #ffffff;
   font-size: 12px;
   font-weight: 600;
   padding: 6px 16px;
@@ -839,7 +833,7 @@ html, body {
   max-width: 80%;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow: 0 2px 16px rgba(0,212,255,0.25);
+  box-shadow: 0 2px 16px rgba(22,137,254,0.35);
   animation: fadeSlideIn 0.3s ease;
   font-family: var(--font-mono);
   letter-spacing: 0.02em;

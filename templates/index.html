@@ -37,9 +37,9 @@
 ════════════════════════════════════════════════════════ -->
 <header class="top-bar">
   <div class="top-bar-logo">
-    <img src="/assets/orbiview.png" alt="Orbiview" style="height:32px;width:auto;object-fit:contain;">
+    <img src="/assets/orbiview.png" alt="Orbiview" style="height:60px;width:auto;object-fit:contain;">
   </div>
-  <div class="top-bar-right">
+  <div class="top-bar-right" id="topBarRight">
     <span class="status-dot" id="statusDot" title="Checking..."></span>
     <button class="icon-btn" title="New chat" onclick="clearChat()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -87,7 +87,7 @@
 <div class="history-panel" id="historyPanel" style="display:none">
   <div class="history-header">
     <span class="history-title">Chat History</span>
-    <button class="icon-btn" onclick="navigateTo('chat')">
+    <button class="icon-btn" onclick="toggleHistoryPanel()" title="Close">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>

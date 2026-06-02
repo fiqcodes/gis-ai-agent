@@ -18,6 +18,7 @@ let assetCount     = 0;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  loadPersistedHistory();
   initMap();
   checkHealth();
   setInterval(checkHealth, 30000);
@@ -237,7 +238,7 @@ function addImageOverlay(name, base64Img, bbox) {
 
   // Small delay before fitting so map is ready
   setTimeout(() => {
-    map.fitBounds(bounds, { padding: [30, 30] });
+    map.fitBounds(bounds, { padding: [10, 10], maxZoom: 12 });
   }, 100);
 
   const layerId = 'layer_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
@@ -279,10 +280,10 @@ function addTileLayer(name, tileUrl, bbox, shouldZoom = false) {
   if (shouldZoom && bbox) {
     const [w, s, e, n] = bbox;
     tileLayer.once('load', () => {
-      map.fitBounds([[s, w], [n, e]], { padding: [40, 40] });
+      map.fitBounds([[s, w], [n, e]], { padding: [10, 10], maxZoom: 12 });
     });
     setTimeout(() => {
-      map.fitBounds([[s, w], [n, e]], { padding: [40, 40] });
+      map.fitBounds([[s, w], [n, e]], { padding: [10, 10], maxZoom: 12 });
     }, 2000);
   }
 
@@ -644,6 +645,25 @@ function scrollToBottom() {
 let chatHistory    = [];   // array of { id, title, timestamp, html, layers }
 let activeChatId   = null;
 
+// ── Persistence helpers ──────────────────────────────────────────────────────
+function persistHistory() {
+  try {
+    // Store titles/timestamps only (html can be large; store last 20 chats)
+    const toStore = chatHistory.slice(0, 20).map(c => ({
+      id: c.id, title: c.title, timestamp: c.timestamp,
+      html: c.html, layers: c.layers
+    }));
+    localStorage.setItem('orbiview_chat_history', JSON.stringify(toStore));
+  } catch(e) { /* storage full — fail silently */ }
+}
+
+function loadPersistedHistory() {
+  try {
+    const raw = localStorage.getItem('orbiview_chat_history');
+    if (raw) chatHistory = JSON.parse(raw);
+  } catch(e) { chatHistory = []; }
+}
+
 function generateChatId() {
   return 'chat_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
 }
@@ -685,6 +705,7 @@ function saveCurrentChat() {
 
   activeChatId = entry.id;
   renderHistoryList();
+  persistHistory();
 }
 
 function loadChat(id) {
@@ -726,6 +747,7 @@ function deleteChat(id, e) {
     clearAllLayers();
   }
   renderHistoryList();
+  persistHistory();
 }
 
 function renderHistoryList() {
@@ -773,7 +795,30 @@ function clearChat() {
 
   // Start a fresh chat
   activeChatId = generateChatId();
-  document.getElementById('messages').innerHTML = '';
+  document.getElementById('messages').innerHTML = `
+    <div class="msg-row ai" id="welcomeSplash">
+      <div class="welcome-splash">
+        <p class="welcome-desc">Analyze satellite imagery for any region on Earth. Ask a question or choose one below to get started.</p>
+        <div class="welcome-cards">
+          <button class="welcome-card" onclick="useWelcomePrompt(this)">
+            <span class="welcome-card-title">Land Cover · London</span>
+            <span class="welcome-card-sub">Show me the land cover of London in 2024</span>
+          </button>
+          <button class="welcome-card" onclick="useWelcomePrompt(this)">
+            <span class="welcome-card-title">Vegetation · Jakarta</span>
+            <span class="welcome-card-sub">Analyze the NDVI of Jakarta in 2024</span>
+          </button>
+          <button class="welcome-card" onclick="useWelcomePrompt(this)">
+            <span class="welcome-card-title">Urban Heat · Tokyo</span>
+            <span class="welcome-card-sub">Show the land surface temperature of Tokyo in 2024</span>
+          </button>
+          <button class="welcome-card" onclick="useWelcomePrompt(this)">
+            <span class="welcome-card-title">Air Quality · Beijing</span>
+            <span class="welcome-card-sub">Analyze NO₂ air quality over Beijing in 2024</span>
+          </button>
+        </div>
+      </div>
+    </div>`;
   clearAllLayers();
   hidePlanWidget();
   stopPolling();
@@ -3276,6 +3321,10 @@ function updateAssetsBadge() {
     mapPanel.style.left   = (NAV_W + chatW) + 'px';
     resizer.style.left    = (NAV_W + chatW - 8) + 'px';
 
+    // Top-bar follows chat panel boundary
+    const topBar = document.querySelector('.top-bar');
+    if (topBar) topBar.style.width = (NAV_W + chatW) + 'px';
+
     if (typeof map !== 'undefined' && map) map.invalidateSize({ animate: false });
   }
 
@@ -4228,7 +4277,6 @@ function openKnowledgeDetail(id) {
   const onThisPageHtml = `
     <div class="kpd-otp">
       <div class="kpd-otp-label">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>
       </div>
       <div class="kpd-otp-list">
         ${onThisPageItems.map((it,i) => `
@@ -4575,7 +4623,6 @@ function filterKnowledgeByCategory(cat) {
 // NAV ROUTING — called by sidebar buttons via onclick="navigateTo('...')"
 // ════════════════════════════════════════════════════════
 function navigateTo(target) {
-  // Close all overlay panels first
   const knowledgePanel = document.getElementById('knowledgePanel');
   const historyPanel   = document.getElementById('historyPanel');
 
@@ -4584,17 +4631,26 @@ function navigateTo(target) {
 
   switch (target) {
     case 'chat':
-      // Hide knowledge panel if open, show chat, activate chat btn
-      if (knowledgePanel) knowledgePanel.style.display = 'none';
-      _knowledgeVisible = false;
-      if (historyPanel && historyPanel.style.display !== 'none') {
-        historyPanel.style.display = 'none';
+      // If knowledge or history is open, close them and return to chat
+      const knowledgeOpen = knowledgePanel && knowledgePanel.style.display !== 'none';
+      const historyOpen   = historyPanel && historyPanel.style.display !== 'none';
+      if (knowledgeOpen || historyOpen) {
+        if (knowledgePanel) knowledgePanel.style.display = 'none';
+        _knowledgeVisible = false;
+        if (historyPanel)  historyPanel.style.display = 'none';
+        document.getElementById('chatNavBtn')?.classList.add('active');
+      } else {
+        // Already on chat — toggle history panel
+        renderHistoryList();
+        historyPanel.style.display = 'flex';
+        document.getElementById('chatNavBtn')?.classList.add('active');
       }
-      document.getElementById('chatNavBtn')?.classList.add('active');
+      document.getElementById('topBarRight').style.display = 'flex';
       break;
 
     case 'knowledge':
-      // Toggle knowledge panel
+      // Close history if open, then toggle knowledge
+      if (historyPanel) historyPanel.style.display = 'none';
       _knowledgeVisible = !_knowledgeVisible;
       if (knowledgePanel) {
         knowledgePanel.style.display = _knowledgeVisible ? 'flex' : 'none';
@@ -4605,13 +4661,14 @@ function navigateTo(target) {
           openKnowledgeDetail(KNOWLEDGE[0].id);
         }
         document.getElementById('knowledgeNavBtn')?.classList.add('active');
+        document.getElementById('topBarRight').style.display = 'none';
       } else {
         document.getElementById('chatNavBtn')?.classList.add('active');
+        document.getElementById('topBarRight').style.display = 'flex';
       }
       break;
 
     case 'layers':
-      // Toggle the layers panel on the map
       toggleLayersPanel();
       document.getElementById('chatNavBtn')?.classList.add('active');
       break;
@@ -4619,7 +4676,6 @@ function navigateTo(target) {
     case 'settings':
     case 'help':
     default:
-      // Panels not yet implemented — just keep chat active
       document.getElementById('chatNavBtn')?.classList.add('active');
       break;
   }
