@@ -57,7 +57,8 @@ html, body {
   position: fixed;
   left: 0; top: 0; right: 0;
   height: var(--top-bar-h);
-  background: var(--bg);
+  /* Grey on chat side, black on map side — split at map boundary (nav + chat = 55vw) */
+  background: linear-gradient(90deg, var(--bg) 55%, #16181c 55%);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -73,10 +74,11 @@ html, body {
 }
 
 .top-bar-right {
-  margin-left: auto;
+  position: absolute;
   display: flex;
   align-items: center;
   gap: 8px;
+  /* JS sets 'right' dynamically via setLayout */
 }
 
 /* ════════════════════════════════════════════════════════
@@ -800,8 +802,9 @@ html, body {
   align-items: center;
   justify-content: flex-end;
   padding: 0 14px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  background: #16181c;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-left: 1px solid var(--border);
 }
 
 .map-title { display: none; }
@@ -846,7 +849,7 @@ html, body {
   width: 240px;
   min-width: 180px;
   max-width: 480px;
-  background: rgba(17,17,19,0.97);
+  background: rgba(22,24,28,0.97);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border2);
   border-radius: var(--radius);
@@ -1067,7 +1070,7 @@ html, body {
 .roi-modal-btns button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #0a0a0b;
+  color: #16181c;
   font-weight: 600;
 }
 .roi-modal-btns button.primary:hover { background: var(--accent); border-color: var(--accent); }
@@ -1647,7 +1650,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: var(--bg3);
+  background: #16181c;
   border: 1px solid var(--border2);
   border-radius: 8px;
   padding: 7px 11px;
@@ -1660,7 +1663,7 @@ html, body {
   transition: background 0.15s, box-shadow 0.15s;
 }
 .layers-float-btn:hover {
-  background: var(--bg4);
+  background: #1e2024;
   box-shadow: 0 3px 12px rgba(0,0,0,0.6);
 }
 .layers-float-count {
@@ -3819,4 +3822,19 @@ html, body {
 .msg-row.ai:has(.welcome-splash) {
   justify-content: center;
   width: 100%;
+}
+
+/* ── New chat pencil button ─────────────────────────────── */
+.new-chat-btn {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.new-chat-btn:hover {
+  background: var(--bg4);
+  color: var(--text);
+  border-color: var(--accent);
 }

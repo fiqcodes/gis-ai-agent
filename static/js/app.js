@@ -824,7 +824,16 @@ function clearChat() {
   stopPolling();
 }
 
-// ── Welcome splash card handler ──────────────────────────────────────────────
+// ── Shared helper — always restores the correct grey/black gradient ──────────
+function restoreTopBarGradient() {
+  const topBar = document.querySelector('.top-bar');
+  if (!topBar) return;
+  const NAV_W   = 52;
+  const chatW   = window._currentChatW || Math.round(window.innerWidth * 0.55) - NAV_W;
+  const splitPx = NAV_W + chatW;
+  const splitPct = (splitPx / window.innerWidth * 100).toFixed(2);
+  topBar.style.background = `linear-gradient(90deg, var(--bg) ${splitPct}%, #16181c ${splitPct}%)`;
+}
 function useWelcomePrompt(btn) {
   const text = btn.querySelector('.welcome-card-sub').textContent;
   const input = document.getElementById('chatInput');
@@ -3316,14 +3325,26 @@ function updateAssetsBadge() {
   function setLayout(chatW) {
     chatW = Math.max(MIN_CHAT, Math.min(chatW, window.innerWidth - NAV_W - 200));
     currentChatW = chatW;
+    window._currentChatW = chatW;
 
     chatPanel.style.width = chatW + 'px';
     mapPanel.style.left   = (NAV_W + chatW) + 'px';
     resizer.style.left    = (NAV_W + chatW - 8) + 'px';
 
-    // Top-bar follows chat panel boundary
+    // Top-bar gradient split tracks the chat/map boundary
     const topBar = document.querySelector('.top-bar');
-    if (topBar) topBar.style.width = (NAV_W + chatW) + 'px';
+    const topBarRight = document.getElementById('topBarRight');
+    if (topBar) {
+      const splitPx  = NAV_W + chatW;
+      const splitPct = (splitPx / window.innerWidth * 100).toFixed(2);
+      topBar.style.background =
+        `linear-gradient(90deg, var(--bg) ${splitPct}%, #0a0a0b ${splitPct}%)`;
+      // Keep the new-chat button anchored inside the chat side
+      if (topBarRight) {
+        topBarRight.style.left  = (splitPx - 52) + 'px';
+        topBarRight.style.right = 'auto';
+      }
+    }
 
     if (typeof map !== 'undefined' && map) map.invalidateSize({ animate: false });
   }
@@ -4646,6 +4667,7 @@ function navigateTo(target) {
         document.getElementById('chatNavBtn')?.classList.add('active');
       }
       document.getElementById('topBarRight').style.display = 'flex';
+      restoreTopBarGradient();
       break;
 
     case 'knowledge':
@@ -4662,9 +4684,13 @@ function navigateTo(target) {
         }
         document.getElementById('knowledgeNavBtn')?.classList.add('active');
         document.getElementById('topBarRight').style.display = 'none';
+        // Full grey while knowledge panel covers the screen
+        const topBar = document.querySelector('.top-bar');
+        if (topBar) topBar.style.background = 'var(--bg)';
       } else {
         document.getElementById('chatNavBtn')?.classList.add('active');
         document.getElementById('topBarRight').style.display = 'flex';
+        restoreTopBarGradient();
       }
       break;
 

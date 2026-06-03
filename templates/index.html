@@ -36,14 +36,14 @@
      TOP BAR — full width, logo + status + new chat
 ════════════════════════════════════════════════════════ -->
 <header class="top-bar">
-  <div class="top-bar-logo">
+  <div class="top-bar-logo" onclick="clearChat()" style="cursor:pointer;" title="New chat">
     <img src="/assets/orbiview.png" alt="Orbiview" style="height:60px;width:auto;object-fit:contain;">
   </div>
   <div class="top-bar-right" id="topBarRight">
-    <span class="status-dot" id="statusDot" title="Checking..."></span>
-    <button class="icon-btn" title="New chat" onclick="clearChat()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    <button class="icon-btn new-chat-btn" title="New chat" onclick="clearChat()">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
       </svg>
     </button>
   </div>
@@ -364,11 +364,7 @@
   <!-- Map header -->
   <div class="map-header">
     <span class="map-title">Insights Viewer</span>
-    <button class="icon-btn" id="collapseMapBtn" onclick="toggleMapPanel()" title="Collapse">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="15 18 9 12 15 6"/>
-      </svg>
-    </button>
+    <span class="status-dot online" title="Map active" style="margin-right:4px;"></span>
   </div>
 
   <!-- Active layer badge -->
