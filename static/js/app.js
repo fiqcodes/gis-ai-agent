@@ -5001,11 +5001,11 @@ function _insertResearchGeneratingChip(chipId) {
   chip.id = chipId;
   chip.innerHTML = `
     <div class="msg-bubble ai research-chip-bubble">
-      <div class="rcp-summary open" id="${chipId}_summary" onclick="_toggleRcpSteps('${chipId}')">
+      <div class="rcp-summary" id="${chipId}_summary" onclick="_toggleRcpSteps('${chipId}')">
         <span id="${chipId}_label">Writing 6 sections</span>
         <span class="rcp-chevron">›</span>
       </div>
-      <div class="rcp-steps open" id="${chipId}_steps">
+      <div class="rcp-steps" id="${chipId}_steps">
         ${stepsHtml}
       </div>
       <div class="rcp-done-row" id="${chipId}_done">
