@@ -1667,8 +1667,9 @@ html, body {
   box-shadow: 0 3px 12px rgba(0,0,0,0.6);
 }
 .layers-float-count {
-  background: var(--accent);
-  color: #fff;
+  background: #16181c;
+  color: var(--text2);
+  border: 1px solid var(--border2);
   border-radius: 10px;
   font-size: 10px;
   font-weight: 600;
