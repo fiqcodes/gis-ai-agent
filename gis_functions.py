@@ -1091,55 +1091,112 @@ def make_stats_charts(stats, var_name, label):
         try:
             import matplotlib.colors as _mc
 
-            # Hardcoded label → (display_label, hex_color) maps — same pattern as LST
+            def _palette_color_at(value, vmin, vmax, palette):
+                """Sample a color from an evenly-spaced map palette gradient at `value`,
+                so legend swatches match the actual rendered map colors."""
+                if vmax == vmin:
+                    t = 0.0
+                else:
+                    t = (value - vmin) / (vmax - vmin)
+                t = max(0.0, min(1.0, t))
+                n = len(palette)
+                if n == 1:
+                    return palette[0]
+                pos = t * (n - 1)
+                i = min(int(np.floor(pos)), n - 2)
+                frac = pos - i
+                c1 = np.array(_mc.to_rgb(palette[i]))
+                c2 = np.array(_mc.to_rgb(palette[i + 1]))
+                return _mc.to_hex(c1 + frac * (c2 - c1))
+
+            # Hardcoded label → display_label text — same pattern as LST.
+            # Colors are NOT hardcoded here: they are sampled directly from the
+            # same VIS palette/min/max used to render the map, so the legend
+            # swatches always match the actual map colors.
             _ATMO_DISPLAY = {
                 'NO2': {
-                    'Clean (<8e-5)'      : ('Clean\n(<8×10⁻⁵)',     '#000033'),
-                    'Moderate (8–15e-5)' : ('Moderate\n(8–15×10⁻⁵)','#00ffff'),
-                    'High (15–25e-5)'    : ('High\n(15–25×10⁻⁵)',   '#66cc00'),
-                    'Severe (>25e-5)'    : ('Severe\n(>25×10⁻⁵)',   '#ffdd00'),
+                    'Clean (<8e-5)'      : 'Clean\n(<8×10⁻⁵)',
+                    'Moderate (8–15e-5)' : 'Moderate\n(8–15×10⁻⁵)',
+                    'High (15–25e-5)'    : 'High\n(15–25×10⁻⁵)',
+                    'Severe (>25e-5)'    : 'Severe\n(>25×10⁻⁵)',
                 },
                 'CO': {
-                    'Low (<0.035)'           : ('Low\n(<0.035)',           '#000033'),
-                    'Moderate (0.035–0.055)' : ('Moderate\n(0.035–0.055)','#00ffff'),
-                    'High (0.055–0.07)'      : ('High\n(0.055–0.07)',      '#66cc00'),
-                    'Severe (>0.07)'         : ('Severe\n(>0.07)',         '#ffdd00'),
+                    'Low (<0.035)'           : 'Low\n(<0.035)',
+                    'Moderate (0.035–0.055)' : 'Moderate\n(0.035–0.055)',
+                    'High (0.055–0.07)'      : 'High\n(0.055–0.07)',
+                    'Severe (>0.07)'         : 'Severe\n(>0.07)',
                 },
                 'SO2': {
-                    'Clean (<1e-4)'      : ('Clean\n(<1×10⁻⁴)',      '#0000ff'),
-                    'Moderate (1–5e-4)'  : ('Moderate\n(1–5×10⁻⁴)', '#008000'),
-                    'High (5e-4–1e-3)'   : ('High\n(5–10×10⁻⁴)',    '#ffa500'),
-                    'Severe (>1e-3)'     : ('Severe\n(>10⁻³)',       '#8b0000'),
+                    'Clean (<1e-4)'      : 'Clean\n(<1×10⁻⁴)',
+                    'Moderate (1–5e-4)'  : 'Moderate\n(1–5×10⁻⁴)',
+                    'High (5e-4–1e-3)'   : 'High\n(5–10×10⁻⁴)',
+                    'Severe (>1e-3)'     : 'Severe\n(>10⁻³)',
                 },
                 'CH4': {
-                    'Background (<1850)'    : ('Background\n(<1850)',    '#0000ff'),
-                    'Elevated (1850–1900)'  : ('Elevated\n(1850–1900)', '#00bbbb'),
-                    'High (1900–1950)'      : ('High\n(1900–1950)',      '#ffa500'),
-                    'Very high (>1950)'     : ('Very high\n(>1950)',     '#ff0000'),
+                    'Background (<1850)'    : 'Background\n(<1850)',
+                    'Elevated (1850–1900)'  : 'Elevated\n(1850–1900)',
+                    'High (1900–1950)'      : 'High\n(1900–1950)',
+                    'Very high (>1950)'     : 'Very high\n(>1950)',
                 },
                 'O3': {
-                    'Very low (<220 DU)' : ('Very low\n(<220 DU)', '#800080'),
-                    'Low (220–280 DU)'   : ('Low\n(220–280 DU)',   '#0000ff'),
-                    'Normal (280–340 DU)': ('Normal\n(280–340 DU)','#008000'),
-                    'High (>340 DU)'     : ('High\n(>340 DU)',     '#ff0000'),
+                    'Very low (<220 DU)' : 'Very low\n(<220 DU)',
+                    'Low (220–280 DU)'   : 'Low\n(220–280 DU)',
+                    'Normal (280–340 DU)': 'Normal\n(280–340 DU)',
+                    'High (>340 DU)'     : 'High\n(>340 DU)',
                 },
                 'AEROSOL': {
-                    'Clean (<0)'    : ('Clean\n(<0)',    '#0000ff'),
-                    'Low (0–1)'     : ('Low\n(0–1)',     '#ffff44'),
-                    'Moderate (1–2)': ('Moderate\n(1–2)','#ffa500'),
-                    'High (>2)'     : ('High\n(>2)',     '#ff0000'),
+                    'Clean (<0)'    : 'Clean\n(<0)',
+                    'Low (0–1)'     : 'Low\n(0–1)',
+                    'Moderate (1–2)': 'Moderate\n(1–2)',
+                    'High (>2)'     : 'High\n(>2)',
                 },
                 'FFPI': {
-                    'Clean (0–0.3)'      : ('Clean\n(0–0.3)',      '#313695'),
-                    'Moderate (0.3–0.6)' : ('Moderate\n(0.3–0.6)', '#74add1'),
-                    'Polluted (0.6–0.8)' : ('Polluted\n(0.6–0.8)', '#fdae61'),
-                    'Severe (>0.8)'      : ('Severe\n(>0.8)',       '#d73027'),
+                    'Clean (0–0.3)'      : 'Clean\n(0–0.3)',
+                    'Moderate (0.3–0.6)' : 'Moderate\n(0.3–0.6)',
+                    'Polluted (0.6–0.8)' : 'Polluted\n(0.6–0.8)',
+                    'Severe (>0.8)'      : 'Severe\n(>0.8)',
                 },
+            }
+
+            # Map each atmo var to its VIS palette key (for map-matching colors)
+            _ATMO_VIS_KEY = {
+                'NO2': 'no2', 'CO': 'co', 'SO2': 'so2', 'CH4': 'ch4',
+                'O3': 'o3', 'AEROSOL': 'aerosol', 'FFPI': 'ffpi',
             }
 
             # Pick the right display map
             atmo_key = next((k for k in _ATMO_DISPLAY if k in label_up), None)
-            display_map = _ATMO_DISPLAY.get(atmo_key, {})
+            label_text_map = _ATMO_DISPLAY.get(atmo_key, {})
+
+            # Build display_map: label -> (display_text, color), with color sampled
+            # from the same palette/min/max used for the map layer
+            display_map = {}
+            vis_key   = _ATMO_VIS_KEY.get(atmo_key)
+            cb_entry  = _CLASS_BOUNDS.get(atmo_key)
+            vis_entry = VIS.get(vis_key) if vis_key else None
+            if label_text_map and cb_entry and vis_entry:
+                cb_bounds, cb_labels = cb_entry
+                vmin, vmax = vis_entry['min'], vis_entry['max']
+                palette = vis_entry['palette']
+                for i, lbl in enumerate(cb_labels):
+                    lo_b, hi_b = cb_bounds[i], cb_bounds[i + 1]
+                    mid = (max(lo_b, vmin) + min(hi_b, vmax)) / 2.0
+                    color = _palette_color_at(mid, vmin, vmax, palette)
+                    disp  = label_text_map.get(lbl, lbl)
+                    display_map[lbl] = (disp, color)
+            elif label_text_map:
+                # Fallback if VIS/_CLASS_BOUNDS lookup fails for some reason
+                display_map = {lbl: (disp, '#5B9BD5') for lbl, disp in label_text_map.items()}
+
+            # Hardcoded override for NO2 — guarantees colors match the NO2 map palette
+            # (#000033 -> #0000ff -> #8000ff -> #00ffff -> #008000 -> #ffff00 -> #ff0000)
+            if atmo_key == 'NO2':
+                display_map = {
+                    'Clean (<8e-5)'      : ('Clean\n(<8×10⁻⁵)',     '#1a00ff'),
+                    'Moderate (8–15e-5)' : ('Moderate\n(8–15×10⁻⁵)','#00c68c'),
+                    'High (15–25e-5)'    : ('High\n(15–25×10⁻⁵)',   '#ffbf00'),
+                    'Severe (>25e-5)'    : ('Severe\n(>25×10⁻⁵)',   '#ff0000'),
+                }
 
             real_cp = s.get('class_pcts') or {}
 

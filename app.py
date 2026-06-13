@@ -307,9 +307,9 @@ def run_analysis_job(job_id: str, user_input: str, roi_geojson: dict = None):
                     'Dry (<-0.3)': '#bf8c4c', 'Transition (-0.3–0)': '#a5d6a7',
                     'Moist (0–0.3)': '#42a5f5', 'Water (>0.3)': '#0d47a1',
                     # NO2 — palette ['#000033','#0000ff','#8000ff','#00ffff','#008000','#ffff00','#ff0000'], min=0 max=0.0002
-                    'Clean (<8e-5)':      '#000033',  # 0–40% of palette → deep navy
-                    'Moderate (8–15e-5)': '#00ccff',  # 40–75% → cyan
-                    'High (15–25e-5)':    '#80cc00',  # 75–100% → yellow-green
+                    'Clean (<8e-5)':      '#1a00ff',  # ~20% of palette → blue
+                    'Moderate (8–15e-5)': '#00c68c',  # ~57% → cyan-green
+                    'High (15–25e-5)':    '#ffbf00',  # ~87% → amber/orange
                     'Severe (>25e-5)':    '#ff0000',  # top → red
                     # CO — same palette ['#000033'…'#ff0000'], min=0.02 max=0.08
                     'Low (<0.035)':           '#000033',

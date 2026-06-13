@@ -1366,7 +1366,7 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
     for para in sections.get('abstract', '').strip().split('\n'):
         para = para.strip()
         if para:
-            story.append(Paragraph(para, S['body']))
+            story.append(Paragraph(_esc(para), S['body']))
 
     # ── Keywords ───────────────────────────────────────────────────────────────
     vars_list = sections.get('variables', '')
@@ -2015,8 +2015,21 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
 
 
 def _esc(text: str) -> str:
-    """Escape special XML chars for reportlab Paragraph."""
-    return (str(text)
+    """Escape special XML chars for reportlab Paragraph, and normalize unicode
+    sub/superscript characters (e.g. NO₂, CO₂, m²) to plain ASCII, since the
+    base Helvetica font (WinAnsi encoding) has no glyph for these and renders
+    them as solid black boxes."""
+    text = str(text)
+    _SUBSUP_MAP = {
+        '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4',
+        '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9',
+        '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4',
+        '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9',
+        '₊': '+', '₋': '-', '⁺': '+', '⁻': '-',
+    }
+    for uni, ascii_ch in _SUBSUP_MAP.items():
+        text = text.replace(uni, ascii_ch)
+    return (text
             .replace('&', '&amp;')
             .replace('<', '&lt;')
             .replace('>', '&gt;'))

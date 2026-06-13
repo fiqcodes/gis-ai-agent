@@ -2709,7 +2709,7 @@ const _CLASS_DEFS = {
              xlabel:'UHI z-score class',   colors:['#313695','#74add1','#fed976','#fd8d3c','#b10026'] },
   NO2:     { bounds:[0,8e-5,1.5e-4,2.5e-4,1],      labels:['Clean\n(<8×10⁻⁵)','Moderate\n(8–15×10⁻⁵)','High\n(15–25×10⁻⁵)','Severe\n(>25×10⁻⁵)'],
              backendLabels:['Clean (<8e-5)','Moderate (8–15e-5)','High (15–25e-5)','Severe (>25e-5)'],
-             colors:['#1a00aa','#008000','#aadd00','#ff8800'],
+             colors:['#1a00ff','#00c68c','#ffbf00','#ff0000'],
              xlabel:'NO₂ concentration class', visKey:'no2', visMin:0, visMax:0.0002 },
   CO:      { bounds:[0.02,0.035,0.055,0.07,0.08],  labels:['Low\n(<0.035)','Moderate\n(0.035–0.055)','High\n(0.055–0.07)','Severe\n(>0.07)'],
              backendLabels:['Low (<0.035)','Moderate (0.035–0.055)','High (0.055–0.07)','Severe (>0.07)'],
@@ -2889,22 +2889,6 @@ function renderAllPlotlyCharts(stats, figures, bubble) {
         if (def) {
           const nC = def.bounds.length - 1;
           const classPcts = [], classColors = [], classLabels = [];
-
-          // ── HARDCODED NO2 override — 3 classes matching the map exactly ──
-          // Map shows only: dark navy (edges ~5%) → cyan (surrounding ~45%) → green (core ~50%)
-          if (vUp === 'NO2') {
-            const _no2Fixed = [
-              { lbl: 'Clean\n(<8e-5)',      pct: 5.0,  color: '#000033' },
-              { lbl: 'Moderate\n(8–15e-5)', pct: 45.0, color: '#00bbdd' },
-              { lbl: 'High\n(15–25e-5)',    pct: 50.0, color: '#008000' },
-            ];
-            // Fully hardcoded — ignore backend class_pcts for NO2 bar colors/proportions
-            _no2Fixed.forEach(e => {
-              classPcts.push(e.pct);
-              classLabels.push(e.lbl);
-              classColors.push(e.color);
-            });
-          } else
 
           // Prefer exact backend class_pcts; fall back to Monte Carlo approximation
           if (s.class_pcts && Object.keys(s.class_pcts).length > 0) {
