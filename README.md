@@ -1,4 +1,4 @@
-# 🛰️ Orbiview — GIS AI Agent
+# Orbiview — GIS AI Agent
 
 <div align="center">
   <img src="assets/orbiview.png" width="200" alt="Orbiview logo"/>
@@ -126,6 +126,23 @@ python app.py
 ```
 
 Open: **http://localhost:5000**
+
+## Requirements
+```txt
+earthengine-api>=0.1.370
+geemap>=0.30.0
+# Data & Visualization
+numpy>=1.24.0
+matplotlib>=3.7.0
+Pillow>=10.0.0
+requests>=2.31.0
+duckduckgo-search>=6.0.0
+langgraph>=0.2.0
+langchain-core>=0.2.0
+langchain-ollama>=0.1.0
+pydantic>=2.0.0
+typing-extensions>=4.8.0
+```
 
 ## Example Prompts
 
