@@ -14,6 +14,11 @@
 
 </div>
 
+
+## Demo
+ 
+https://github.com/user-attachments/assets/18a93a1e-d11f-4439-b6fa-92052b746d48
+
 ## Overview
 
 **Orbiview** is a geospatial AI agent that turns natural-language prompts into satellite imagery analysis. Ask about vegetation health, pollution levels, land cover change, or urban heat for any region and time range — Orbiview pulls the data from **Google Earth Engine**, runs the analysis, and returns interactive maps, charts, and narrative insights, powered by **Gemma** via **LangGraph**.
@@ -131,7 +136,6 @@ Open: **http://localhost:5000**
 ```txt
 earthengine-api>=0.1.370
 geemap>=0.30.0
-# Data & Visualization
 numpy>=1.24.0
 matplotlib>=3.7.0
 Pillow>=10.0.0
@@ -143,17 +147,31 @@ langchain-ollama>=0.1.0
 pydantic>=2.0.0
 typing-extensions>=4.8.0
 ```
+## Usage Examples
 
-## Example Prompts
+### Machine Learning
+- User: "Show me the land cover of London in 2024"
+- Orbiview: Understand the user's request, perform machine learning in GEE, and present the results with insights
 
-```
-Show NDVI in Bali from 2022-01-01 to 2022-12-31
-Analyze NO2 pollution in Beijing 2022
-Land cover in Hokkaido from 2022-04-01 to 2022-10-31
-LST and UHI in Jakarta 2025
-Compare NDVI across @my-roi for 2021, 2022, and 2023
-Generate a PDF report for the LULC analysis above
-```
+<img src="assets/land_cover.png" width="100%"/>
+
+### Trend Analysis
+- User: "Analyze No2 air quality over Beijing in 2024"
+- Orbiview: Creates visualization and identifies key patterns
+
+<img src="assets/no2.png" width="100%"/>
+
+### Research Agent
+- User: "Analyze the 2025 land cover of London and generate a comprehensive research paper"
+- Orbiview: Activate research mode, generate a research paper, and present the results
+
+<img src="assets/research.png" width="100%"/>
+
+### Insights Summary
+- User: "Analyze the land surface temperature of Jakarta in 2025"
+- SmartLook: Generate an insights summary section with recommendations based on the analysis
+
+<img src="assets/lst.png" width="100%"/>
 
 ## PDF Research Reports
 
@@ -172,4 +190,4 @@ See the [LICENSE](LICENSE) file for details.
 
 ---
 
-**Built for fast, conversational geospatial analysis** 🛰️
+**Built for fast, conversational geospatial analysis** 
