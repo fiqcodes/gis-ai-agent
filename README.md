@@ -7,7 +7,7 @@
   ![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)
   ![LangGraph](https://img.shields.io/badge/LangGraph-Agent-FF6B6B?style=for-the-badge&logo=langchain&logoColor=white)
   ![Google Earth Engine](https://img.shields.io/badge/Google%20Earth%20Engine-Satellite%20Data-4285F4?style=for-the-badge&logo=googleearth&logoColor=white)
-  ![Ollama](https://img.shields.io/badge/Ollama-gemma3:4b-1A1A1A?style=for-the-badge)
+  ![Gemma](https://img.shields.io/badge/LLM-Gemma-8E75B2?style=for-the-badge&logo=google&logoColor=white)
   ![Leaflet](https://img.shields.io/badge/Leaflet.js-Map-199900?style=for-the-badge&logo=leaflet&logoColor=white)
   ![Plotly](https://img.shields.io/badge/Plotly.js-Charts-3F4F75?style=for-the-badge&logo=plotly&logoColor=white)
   ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
@@ -16,14 +16,14 @@
 
 ## Overview
 
-**Orbiview** is a geospatial AI agent that turns natural-language prompts into satellite imagery analysis. Ask about vegetation health, pollution levels, land cover change, or urban heat for any region and time range — Orbiview pulls the data from **Google Earth Engine**, runs the analysis, and returns interactive maps, charts, and narrative insights, powered by a fully local **Ollama (gemma3:4b)** LLM via **LangGraph**.
+**Orbiview** is a geospatial AI agent that turns natural-language prompts into satellite imagery analysis. Ask about vegetation health, pollution levels, land cover change, or urban heat for any region and time range — Orbiview pulls the data from **Google Earth Engine**, runs the analysis, and returns interactive maps, charts, and narrative insights, powered by **Gemma** via **LangGraph**.
 
 The interface is a split-panel web app: a chat panel for queries on one side, an interactive Leaflet map on the other — with support for custom ROI drawing, multi-year comparisons, and downloadable PDF research reports.
 
 ## Key Features
 
 - 🗨️ **Chat interface** — ask questions in plain language; persistent chat history (localStorage)
-- 🧠 **LangGraph agent** — structured multi-step reasoning with a live plan widget showing agent progress
+- 🧠 **LangGraph agent** — structured multi-step reasoning with a live plan widget showing agent progress, powered by Gemma
 - 🗺️ **Interactive map** — Leaflet.js + ESRI satellite basemap
 - ✏️ **Draw your own ROI** — polygon or rectangle, name it, and reference it in chat with `@name`
 - 📊 **19 GIS indices** — vegetation, water, urban, thermal, and atmospheric analysis (see table below)
@@ -33,7 +33,6 @@ The interface is a split-panel web app: a chat panel for queries on one side, an
 - 🧾 **PDF research reports** — full report generation with formulas, figure descriptions, and ML metrics (accuracy, per-class metrics, confusion matrix for LULC)
 - 🗂️ **Layer manager** — toggle visibility, zoom to, or remove any analysis layer
 - 📚 **Knowledge Base** — in-app documentation page covering all 19 indices, with scroll-spy navigation and category accent colors
-- 🔒 **Runs fully local** — LLM inference via Ollama, no data sent to third-party APIs
 
 ## Architecture
 
@@ -41,7 +40,7 @@ The interface is a split-panel web app: a chat panel for queries on one side, an
 User Prompt
     │
     ▼
-agent.py  ──────────► LangGraph orchestration (Ollama / gemma3:4b)
+agent.py  ──────────► LangGraph orchestration (Gemma)
     │
     ├──► gis_functions.py ──► Google Earth Engine (index calculation, stats, classification)
     │
@@ -68,7 +67,7 @@ templates/index.html + static/js/app.js ──► Chat + Leaflet map + Plotly ch
 
 ## Tech Stack
 
-**Backend:** Flask · LangGraph · Ollama (gemma3:4b) · Google Earth Engine Python API · ReportLab
+**Backend:** Flask · LangGraph · Gemma · Google Earth Engine Python API · ReportLab
 **Frontend:** Vanilla JavaScript · Leaflet.js · Plotly.js · HTML5 · CSS3
 
 ## Folder Structure
@@ -103,10 +102,7 @@ gis-ai-agent/
 
 - Python 3.9+
 - A Google Earth Engine account with API access
-- [Ollama](https://ollama.com) installed locally, with the `gemma3:4b` model pulled:
-  ```bash
-  ollama pull gemma3:4b
-  ```
+- Access to a Gemma model endpoint (configured via `config.py`)
 
 ### Installation
 
@@ -154,7 +150,7 @@ See the [LICENSE](LICENSE) file for details.
 
 - Google Earth Engine for satellite data infrastructure
 - The LangChain / LangGraph team for the agent framework
-- Ollama for local LLM inference
+- Google for the Gemma model
 - Leaflet.js and Plotly.js for mapping and visualization
 
 ---
