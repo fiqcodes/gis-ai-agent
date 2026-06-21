@@ -1,7 +1,7 @@
 # 🛰️ Orbiview — GIS AI Agent
 
 <div align="center">
-  <img src="assets/orbiview.png" width="300" alt="Orbiview logo"/>
+  <img src="assets/orbiview.png" width="200" alt="Orbiview logo"/>
 
   ![Flask](https://img.shields.io/badge/Flask-3.0-000000?style=for-the-badge&logo=flask&logoColor=white)
   ![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)
