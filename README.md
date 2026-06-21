@@ -14,10 +14,9 @@
 
 </div>
 
-
 ## Demo
  
-https://github.com/user-attachments/assets/18a93a1e-d11f-4439-b6fa-92052b746d48
+https://github.com/user-attachments/assets/4f466034-3686-41f8-b3a8-3fcb601ddf15
 
 ## Overview
 
@@ -75,7 +74,7 @@ templates/index.html + static/js/app.js ──► Chat + Leaflet map + Plotly ch
 **Backend:** Flask · LangGraph · Gemma · Google Earth Engine Python API · ReportLab
 **Frontend:** Vanilla JavaScript · Leaflet.js · Plotly.js · HTML5 · CSS3
 
-## Folder Structure
+## Project Structure
 
 ```
 gis-ai-agent/
@@ -87,7 +86,6 @@ gis-ai-agent/
 ├── requirements.txt            # Core agent dependencies
 ├── requirements_webapp.txt     # Web app (Flask) dependencies
 ├── assets/
-│   └── orbiview.png            # App logo
 ├── static/
 │   ├── css/
 │   │   └── style.css
@@ -177,10 +175,6 @@ typing-extensions>=4.8.0
 
 Orbiview can generate a full downloadable PDF report for any analysis, including the formulas used, figure descriptions, and — for LULC classification — a complete accuracy breakdown (overall accuracy, per-class metrics, and confusion matrix).
 
-## License
-
-See the [LICENSE](LICENSE) file for details.
-
 ## Acknowledgments
 
 - Google Earth Engine for satellite data infrastructure
@@ -188,6 +182,10 @@ See the [LICENSE](LICENSE) file for details.
 - Google for the Gemma model
 - Leaflet.js and Plotly.js for mapping and visualization
 
+## License
+
+See the [LICENSE](LICENSE) file for details.
 ---
+If you find Orbiview useful, please consider giving it a star! ⭐
 
 **Built for fast, conversational geospatial analysis** 
