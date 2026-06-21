@@ -1,18 +1,3 @@
-# =============================================================================
-# agent.py — LangGraph Satellite Analysis AI Agent
-# 
-# Architecture:
-#   START → ROUTER
-#     ├── surface vars  → SURFACE_WORKER ──┐
-#     ├── atmo vars     → ATMO_WORKER ─────┤→ MERGE → CONTEXT → STATS
-#     ├── lulc          → LULC_WORKER ─────┘       → INSIGHT → EVALUATOR
-#     ├── question      → QA → END                  ↓
-#     └── unknown       → UNKNOWN → END         FINAL_OUTPUT → END
-#
-# Usage:
-#   python agent.py
-# =============================================================================
-
 import ee
 import requests
 import json

@@ -1,8 +1,3 @@
-"""
-app.py — Flask backend for GIS Agent WebApp
-Connects to real GEE + Ollama agent (agent.py / gis_functions.py)
-"""
-
 import os
 import sys
 import json

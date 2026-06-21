@@ -2962,4 +2962,4 @@ def print_insight(region_name, start_date, end_date, stats_summary, variables):
     print(f'\n{sep}\n')
 
 
-print('All analysis functions loaded. Ready to run the agent (Cell 4).')
+print('All analysis functions loaded. Ready to run the agent.')
