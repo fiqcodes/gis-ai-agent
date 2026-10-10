@@ -5255,7 +5255,7 @@ function _appendResearchDownloadChip(filename, metadata = {}) {
   chip.className = 'msg-row ai';
   chip.innerHTML = `
     <div class="msg-bubble ai" style="padding:0;overflow:hidden;max-width:420px;background:transparent">
-    <div class="research-artifact-card" data-report-url="${escapeHtml(url)}" data-report-title="${escapeHtml(title)}" data-download-name="${escapeHtml(downloadName)}" title="Click to open">
+    <div class="research-artifact-card" title="Click to open">
       <div class="rac-icon">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -5270,7 +5270,7 @@ function _appendResearchDownloadChip(filename, metadata = {}) {
       </div>
       <a class="rac-download-btn"
          href="/api/report/${encodeURIComponent(filename)}?download=1"
-         download="${escapeHtml(downloadName)}"
+         download
          onclick="event.stopPropagation()"
          title="Download PDF">
         Download
@@ -5278,6 +5278,11 @@ function _appendResearchDownloadChip(filename, metadata = {}) {
     </div>
     </div>
   `;
+  const card = chip.querySelector('.research-artifact-card');
+  card.dataset.reportUrl = url;
+  card.dataset.reportTitle = title;
+  card.dataset.downloadName = downloadName;
+  chip.querySelector('.rac-download-btn').download = downloadName;
   msgs.appendChild(chip);
   msgs.scrollTop = msgs.scrollHeight;
 }

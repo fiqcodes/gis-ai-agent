@@ -17,7 +17,7 @@ const root=path.resolve(__dirname,'..');
   if(u.pathname==='/api/generate_report'){
    reports.push(route.request().postDataJSON());
    if(delayReport)await new Promise(r=>setTimeout(r,900));
-   return route.fulfill({contentType:'application/x-ndjson',body:JSON.stringify({status:'complete',filename:'b'.repeat(32)+'.pdf',title:'Jakarta’s Vegetation <2024>',download_name:'Jakarta_Vegetation_2024.pdf'})+'\n'}).catch(()=>{});
+   return route.fulfill({contentType:'application/x-ndjson',body:JSON.stringify({status:'complete',filename:'b'.repeat(32)+'.pdf',title:'Jakarta’s "Vegetation" <2024>',download_name:'Jakarta_Vegetation_2024.pdf'})+'\n'}).catch(()=>{});
   }
   const file=u.pathname==='/'?path.join(root,'templates/index.html'):path.join(root,'public',u.pathname);
   if(!fs.existsSync(file))return route.fulfill({status:404,body:''});
@@ -27,8 +27,9 @@ const root=path.resolve(__dirname,'..');
  await page.locator('#researchBtn').click();await page.waitForTimeout(500);assert.equal(reports.length,0,'empty chat must not generate');
  await page.locator('#chatInput').fill('Analyze NDVI Jakarta in 2024');await page.locator('#sendBtn').click();
  await page.locator('.rac-name').waitFor();assert.equal(reports.length,1);
- assert.equal(await page.locator('.rac-name').textContent(),'Jakarta’s Vegetation <2024>');
+ assert.equal(await page.locator('.rac-name').textContent(),'Jakarta’s "Vegetation" <2024>');
  assert.equal(await page.locator('.rac-download-btn').getAttribute('download'),'Jakarta_Vegetation_2024.pdf');
+ assert.equal(await page.locator('.research-artifact-card').getAttribute('data-report-title'),'Jakarta’s "Vegetation" <2024>');
  const saved=await page.evaluate(()=>{saveCurrentChat();return activeChatId});
  await page.evaluate(()=>clearChat());await page.locator('#researchBtn').click();await page.waitForTimeout(500);assert.equal(reports.length,1,'new chat must not reuse old context');
  await page.evaluate(id=>{toggleHistoryPanel();loadChat(id)},saved);assert.equal(await page.evaluate(()=>hasResearchContext()),true);
