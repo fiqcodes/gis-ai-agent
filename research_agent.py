@@ -774,7 +774,7 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
         from reportlab.platypus import (
             SimpleDocTemplate, Paragraph, Spacer,
             HRFlowable, PageBreak, KeepTogether, Image as RLImage,
-            Table, TableStyle,
+            Table as RLTable, TableStyle,
         )
         from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
     except ImportError as e:
@@ -782,6 +782,17 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
         print('[research_agent] HINT: pip install reportlab')
         return False
 
+
+    # Embed the Unicode fonts already shipped with matplotlib on every platform.
+    from matplotlib import get_data_path
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    font_dir = Path(get_data_path()) / 'fonts' / 'ttf'
+    for suffix, file_suffix in [('', ''), ('-Bold', '-Bold'),
+                                ('-Oblique', '-Oblique'), ('-BoldOblique', '-BoldOblique')]:
+        pdfmetrics.registerFont(TTFont('Orbiview' + suffix, str(font_dir / ('DejaVuSans' + file_suffix + '.ttf'))))
+    pdfmetrics.registerFontFamily('Orbiview', normal='Orbiview', bold='Orbiview-Bold',
+                                  italic='Orbiview-Oblique', boldItalic='Orbiview-BoldOblique')
 
     # ── Page layout ────────────────────────────────────────────────────────────
     PAGE_W, PAGE_H = A4
@@ -802,28 +813,29 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
     LGRAY = colors.HexColor('#cccccc')
 
     def style(name, **kw):
+        kw.setdefault('fontName', 'Orbiview')
         return ParagraphStyle(name, parent=BASE['Normal'], **kw)
 
     S = {
         'title': style('T',
             fontSize=16, leading=21, textColor=BLACK,
-            fontName='Helvetica-Bold', alignment=TA_CENTER, spaceAfter=5),
+            fontName='Orbiview-Bold', alignment=TA_CENTER, spaceAfter=5),
         'meta': style('M',
             fontSize=8.5, leading=12, textColor=GRAY,
             alignment=TA_CENTER, spaceAfter=2),
         'h1': style('H1',
             fontSize=10.5, leading=14, textColor=BLACK,
-            fontName='Helvetica-Bold', spaceBefore=10, spaceAfter=3),
+            fontName='Orbiview-Bold', spaceBefore=10, spaceAfter=3),
         'h2': style('H2',
             fontSize=10, leading=13, textColor=BLACK,
-            fontName='Helvetica-Bold', spaceBefore=7, spaceAfter=2),
+            fontName='Orbiview-Bold', spaceBefore=7, spaceAfter=2),
         'body': style('B',
             fontSize=9.5, leading=14.5, textColor=BLACK,
             alignment=TA_JUSTIFY, spaceAfter=5),
         'formula': style('F',
             fontSize=9.5, leading=13, textColor=BLACK,
             alignment=TA_CENTER, spaceAfter=2, spaceBefore=3,
-            fontName='Helvetica'),
+            fontName='Orbiview'),
         'formula_label': style('FL',
             fontSize=8.5, leading=12, textColor=GRAY,
             alignment=TA_JUSTIFY, spaceAfter=6, leftIndent=10, rightIndent=10),
@@ -840,6 +852,17 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
             fontSize=9.5, leading=14.5, textColor=BLACK,
             alignment=TA_JUSTIFY, leftIndent=18, firstLineIndent=0, spaceAfter=3),
     }
+
+    def Table(rows, **kwargs):
+        # Paragraph cells wrap long dataset names with the embedded font.
+        from html import unescape
+        body = style('TableBody', fontSize=8, leading=11)
+        heading = style('TableHeading', fontSize=8, leading=11, fontName='Orbiview-Bold')
+        return RLTable([
+            [Paragraph(_esc(unescape(cell)).replace('\n', '<br/>'), heading if i == 0 else body)
+             if isinstance(cell, str) else cell for cell in row]
+            for i, row in enumerate(rows)
+        ], **kwargs)
 
     def hr(color=LGRAY, thickness=0.4):
         return HRFlowable(width='100%', thickness=thickness,
@@ -1433,7 +1456,8 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
                 col_w = [3.8*cm, 2.5*cm, 1.8*cm, 3.2*cm, 3.5*cm]
                 tbl = Table(tbl_data, colWidths=col_w, repeatRows=1)
                 tbl.setStyle(TableStyle([
-                    ('FONTNAME',    (0,0), (-1,0),  'Helvetica-Bold'),
+                    ('FONTNAME', (0,0), (-1,-1), 'Orbiview'),
+                    ('FONTNAME',    (0,0), (-1,0),  'Orbiview-Bold'),
                     ('FONTSIZE',    (0,0), (-1,-1), 8),
                     ('LEADING',     (0,0), (-1,-1), 11),
                     ('BACKGROUND',  (0,0), (-1,0),  colors.HexColor('#eeeeee')),
@@ -1519,7 +1543,8 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
         esa_col_w = [2.8*cm, 4.5*cm, 2.8*cm, 3.7*cm]
         esa_tbl = Table(esa_data, colWidths=esa_col_w, repeatRows=1)
         esa_tbl.setStyle(TableStyle([
-            ('FONTNAME',    (0,0), (-1,0),  'Helvetica-Bold'),
+            ('FONTNAME', (0,0), (-1,-1), 'Orbiview'),
+            ('FONTNAME',    (0,0), (-1,0),  'Orbiview-Bold'),
             ('FONTSIZE',    (0,0), (-1,-1), 8),
             ('LEADING',     (0,0), (-1,-1), 11),
             ('BACKGROUND',  (0,0), (-1,0),  colors.HexColor('#eeeeee')),
@@ -1660,7 +1685,8 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
         spectral_col_w = [2.8*cm, 2.2*cm, 2.2*cm, 2.2*cm, 2.6*cm, 2.3*cm]
         spectral_tbl = Table(spectral_data, colWidths=spectral_col_w, repeatRows=1)
         spectral_tbl.setStyle(TableStyle([
-            ('FONTNAME',    (0,0), (-1,0),  'Helvetica-Bold'),
+            ('FONTNAME', (0,0), (-1,-1), 'Orbiview'),
+            ('FONTNAME',    (0,0), (-1,0),  'Orbiview-Bold'),
             ('FONTSIZE',    (0,0), (-1,-1), 8),
             ('LEADING',     (0,0), (-1,-1), 11),
             ('BACKGROUND',  (0,0), (-1,0),  colors.HexColor('#eeeeee')),
@@ -1843,7 +1869,8 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
                 col_w2 = [5.5*cm, 2.5*cm, 6.3*cm]
                 tbl2 = Table(overall_rows, colWidths=col_w2, repeatRows=1)
                 tbl2.setStyle(TableStyle([
-                    ('FONTNAME',      (0,0), (-1,0),  'Helvetica-Bold'),
+                    ('FONTNAME', (0,0), (-1,-1), 'Orbiview'),
+                    ('FONTNAME',      (0,0), (-1,0),  'Orbiview-Bold'),
                     ('FONTSIZE',      (0,0), (-1,-1), 8),
                     ('LEADING',       (0,0), (-1,-1), 11),
                     ('BACKGROUND',    (0,0), (-1,0),  colors.HexColor('#eeeeee')),
@@ -1888,7 +1915,8 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
                     col_w3 = [3.8*cm, 2.2*cm, 2.2*cm, 2.2*cm, 2.2*cm, 1.8*cm]
                     tbl3 = Table(pc_rows, colWidths=col_w3, repeatRows=1)
                     tbl3.setStyle(TableStyle([
-                        ('FONTNAME',      (0,0), (-1,0),  'Helvetica-Bold'),
+                        ('FONTNAME', (0,0), (-1,-1), 'Orbiview'),
+                        ('FONTNAME',      (0,0), (-1,0),  'Orbiview-Bold'),
                         ('FONTSIZE',      (0,0), (-1,-1), 8),
                         ('LEADING',       (0,0), (-1,-1), 11),
                         ('BACKGROUND',    (0,0), (-1,0),  colors.HexColor('#eeeeee')),
@@ -1953,8 +1981,8 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
                     col_w4 = [label_col_w] + [data_col_w] * n
 
                     cm_style = [
-                        ('FONTNAME',      (0,0), (-1,0),  'Helvetica-Bold'),
-                        ('FONTNAME',      (0,0), (0,-1),  'Helvetica-Bold'),
+                        ('FONTNAME',      (0,0), (-1,0),  'Orbiview-Bold'),
+                        ('FONTNAME',      (0,0), (0,-1),  'Orbiview-Bold'),
                         ('FONTSIZE',      (0,0), (-1,-1), 7.5),
                         ('LEADING',       (0,0), (-1,-1), 10),
                         ('BACKGROUND',    (0,0), (-1,0),  colors.HexColor('#eeeeee')),
@@ -2016,11 +2044,11 @@ def _build_pdf(sections: dict, output_path: str) -> bool:
 
 
 def _esc(text: str) -> str:
-    """Escape special XML chars for reportlab Paragraph, and normalize unicode
-    sub/superscript characters (e.g. NO₂, CO₂, m²) to plain ASCII, since the
-    base Helvetica font (WinAnsi encoding) has no glyph for these and renders
-    them as solid black boxes."""
-    text = str(text)
+    """Escape paragraph markup and normalize typographic separators for PDF text."""
+    import unicodedata
+    text = ''.join('-' if unicodedata.category(ch) == 'Pd' else
+                   ' ' if unicodedata.category(ch) == 'Zs' else ch for ch in str(text))
+    text = text.replace('\u00ad', '').replace('\u200b', '').replace('\ufeff', '')
     _SUBSUP_MAP = {
         '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4',
         '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9',
@@ -2038,7 +2066,7 @@ def _esc(text: str) -> str:
 
 # ── Main entry point ───────────────────────────────────────────────────────────
 
-def generate_research_paper(analysis_result: dict, output_dir: str) -> 'Optional[str]':
+def generate_research_paper(analysis_result: dict, output_dir: str, metadata: Optional[dict] = None) -> 'Optional[str]':
     """
     Main entry point. Accepts the GIS Agent result dict and generates a PDF.
 
@@ -2075,6 +2103,9 @@ def generate_research_paper(analysis_result: dict, output_dir: str) -> 'Optional
 
     # ── Generate all sections via Groq ──────────────────────────────────────
     title = gen_title(region, variables, date_range, GROQ_URL, GROQ_MODEL)
+    title = ' '.join(title.split()).strip('"').strip()
+    if not title or title.startswith('[Section unavailable:'):
+        title = f'{var_str} Satellite Analysis of {region} ({date_range})'
     print(f'  ✓ Title: {title[:60]}...')
 
     abstract = gen_abstract(region, variables, date_range, all_stats, conclusion,
@@ -2148,10 +2179,10 @@ def generate_research_paper(analysis_result: dict, output_dir: str) -> 'Optional
 
     # ── Build PDF ─────────────────────────────────────────────────────────────
     os.makedirs(output_dir, exist_ok=True)
-    safe_region = region.replace(' ', '_').replace('/', '-')[:30]
-    safe_vars   = '_'.join(v.upper() for v in variables[:3])
-    timestamp   = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename    = f'research_{safe_region}_{safe_vars}_{timestamp}.pdf'
+    from werkzeug.utils import secure_filename
+    filename = (secure_filename(title)[:160].rstrip('._-') or 'Satellite_Analysis') + '.pdf'
+    if metadata is not None:
+        metadata.update(title=title, download_name=filename)
     output_path = str(Path(output_dir) / filename)
 
     print(f'[research_agent] Building PDF: {filename}')

@@ -9,6 +9,7 @@ import secrets
 from urllib.parse import urlsplit
 from flask import Flask, Response, jsonify, render_template, request, session, send_from_directory, stream_with_context
 from werkzeug.exceptions import HTTPException
+from werkzeug.utils import secure_filename
 import config
 from gee_auth import configured as gee_configured
 from storage import configured_store, StorageUnavailable, ConversationBusy
@@ -117,8 +118,11 @@ def download(filename):
     raw=stored(filename) if filename.endswith('.pdf') else None
     if raw is None:return error('Report expired or not found in this browser session.',404)
     disposition='attachment' if request.args.get('download')=='1' else 'inline'
+    metadata=stored(filename[:-4])
+    name=json.loads(metadata).get('download_name','') if metadata else ''
+    name=secure_filename(name) or filename
     return Response((raw[i:i+65536] for i in range(0,len(raw),65536)),mimetype='application/pdf',
-                    headers={'Content-Disposition':f'{disposition}; filename="{filename}"'})
+                    headers={'Content-Disposition':f'{disposition}; filename="{name}"'})
 
 @app.errorhandler(ValueError)
 def bad_input(exc):return error(str(exc),400)

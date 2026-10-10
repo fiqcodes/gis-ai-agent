@@ -24,11 +24,12 @@ def main(directory):
                 run_analysis_job(result,data['message'],data.get('roi'),progress=emit)
             else:
                 from research_agent import generate_research_paper
-                path=generate_research_paper(data['result'],str(folder))
+                metadata={}
+                path=generate_research_paper(data['result'],str(folder),metadata=metadata)
                 if not path or not Path(path).is_file():
                     raise RuntimeError('Report generation failed')
                 Path(path).replace(folder/'report.pdf')
-                result={'status':'complete','filename':data['job_id']+'.pdf'}
+                result={'status':'complete','filename':data['job_id']+'.pdf',**metadata}
         (folder/'result.json').write_text(json.dumps(result))
     except Exception as exc:
         print('Worker failed: '+type(exc).__name__,file=sys.stderr,flush=True)

@@ -3479,9 +3479,9 @@ html, body {
   font-size: 12px;
   font-weight: 600;
   color: var(--text, #e2e8f0);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
 }
 
 .rac-type {

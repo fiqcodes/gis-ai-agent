@@ -688,6 +688,7 @@ function saveCurrentChat() {
     title    : title,
     timestamp: Date.now(),
     html     : msgs.innerHTML,
+    analysisJobId: _lastAnalysisChatId === activeChatId ? _lastAnalysisJobId : null,
     layers   : mapLayers.map(l => ({
       id     : l.id,
       name   : l.name,
@@ -715,6 +716,8 @@ function loadChat(id) {
   // Save current before switching
   saveCurrentChat();
 
+  resetConversationWork();
+
   // Restore messages
   document.getElementById('messages').innerHTML = entry.html;
   scrollToBottom();
@@ -731,6 +734,8 @@ function loadChat(id) {
   });
 
   activeChatId = id;
+  _lastAnalysisJobId = entry.analysisJobId || null;
+  _lastAnalysisChatId = _lastAnalysisJobId ? id : null;
   hidePlanWidget();
   stopPolling();
   renderHistoryList();
@@ -742,7 +747,8 @@ function deleteChat(id, e) {
   chatHistory = chatHistory.filter(c => c.id !== id);
   if (activeChatId === id) {
     // If deleting current chat, start fresh
-    activeChatId = null;
+    resetConversationWork();
+    activeChatId = generateChatId();
     document.getElementById('messages').innerHTML = '';
     clearAllLayers();
   }
@@ -792,6 +798,8 @@ function toggleHistoryPanel() {
 function clearChat() {
   // Save current chat before clearing
   saveCurrentChat();
+
+  resetConversationWork();
 
   // Start a fresh chat
   activeChatId = generateChatId();
@@ -891,6 +899,8 @@ async function consumeJobStream(url, body, onEvent, signal) {
 }
 
 async function startAnalysis(text, onComplete) {
+  if (!activeChatId) activeChatId = generateChatId();
+  resetResearchContext(false);
   isAnalyzing = true;
   setSendBtnStop(); appendTypingIndicator(); resetPlanWidget();
   const body = {message: text};
@@ -898,6 +908,7 @@ async function startAnalysis(text, onComplete) {
   const controller = new AbortController(); analysisController = controller;
   try {
     await consumeJobStream('/api/analyze', body, data => {
+      if (controller.signal.aborted || analysisController !== controller) return;
       currentJobId = data.job_id;
       if (data.steps?.length) updatePlanSteps(data.steps);
       if (data.geo?.bbox && !window._geoShown) {
@@ -1043,10 +1054,11 @@ function handleResult(result, completedJobId) {
   // 3a. Store job ID and full result so Research Mode can reference this completed analysis
   _lastAnalysisJobId  = completedJobId;  // use passed-in id — currentJobId is null after stopPolling()
   _lastAnalysisResult = result;
+  _lastAnalysisChatId = activeChatId;
 
   // 3b. If Research Mode is active, auto-generate the paper immediately
   if (_researchModeActive) {
-    setTimeout(() => _autoStartResearch(completedJobId), 400);
+    _autoStartResearch(completedJobId);
   }
 
   // 3. Render Plotly charts — use captured bubble ref (not last-in-DOM, which may be the research chip)
@@ -4720,6 +4732,8 @@ function navigateTo(target) {
 // ════════════════════════════════════════════════════════
 
 // ── State ─────────────────────────────────────────────────────────────────────
+let _lastAnalysisChatId = null;
+let _reportController = null;
 let _lastAnalysisJobId      = null;   // job_id of most recent completed analysis
 let _lastAnalysisResult    = null;   // full result dict cached for research fallback
 let _researchModeActive    = false;  // whether Research Mode toggle is ON
@@ -4839,7 +4853,7 @@ function _initPdfResizeHandle() {
   handle.addEventListener('mousedown', handle._mdHandler);
 }
 
-function openPdfViewer(filename, downloadUrl) {
+function openPdfViewer(filename, downloadUrl, downloadName = filename) {
   const panel  = document.getElementById('pdfViewerPanel');
   const viewer = document.getElementById('pdfViewerContent');
   const title  = document.getElementById('pdfViewerTitle');
@@ -4857,7 +4871,7 @@ function openPdfViewer(filename, downloadUrl) {
   }
 
   if (title) title.textContent = filename;
-  if (dlBtn) { dlBtn.href = downloadUrl + '?download=1'; dlBtn.download = filename; }
+  if (dlBtn) { dlBtn.href = downloadUrl + '?download=1'; dlBtn.download = downloadName; }
 
   // Show panel immediately with a loading state
   viewer.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#aaa;font-size:13px;font-family:sans-serif">Loading PDF…</div>`;
@@ -4894,37 +4908,75 @@ function closePdfViewer() {
   if (handle) handle.style.display = 'none';
 }
 
-// ── Toggle button — simple on/off, no modal ───────────────────────────────────
-function toggleResearchMode() {
-  _researchModeActive = !_researchModeActive;
-  const btn = document.getElementById('researchBtn');
-  if (btn) btn.classList.toggle('active', _researchModeActive);
-
-  // If toggled ON and a completed analysis already exists, generate the paper now
-  if (_researchModeActive && (_lastAnalysisJobId || _lastAnalysisResult)) {
-    setTimeout(() => _autoStartResearch(_lastAnalysisJobId), 200);
+function resetResearchContext(resetMode = true) {
+  if (_reportController) _reportController.abort();
+  _reportController = null;
+  _activeReportJobId = null;
+  _lastAnalysisJobId = null;
+  _lastAnalysisResult = null;
+  _lastAnalysisChatId = null;
+  _researchPaperStepStatus = 'pending';
+  document.querySelectorAll('.research-chip-bubble').forEach(bubble => {
+    const chip = bubble.closest('.msg-row');
+    if (chip?._sectionTimer) clearInterval(chip._sectionTimer);
+  });
+  _stopSectionAnimation(false);
+  if (resetMode) {
+    _researchModeActive = false;
+    document.getElementById('researchBtn')?.classList.remove('active');
   }
 }
 
-// ── Called automatically after GIS analysis completes (if mode is active) ─────
+function resetConversationWork() {
+  if (analysisController) analysisController.abort();
+  analysisController = null;
+  stopPolling();
+  resetResearchContext();
+  closePdfViewer();
+}
+
+function hasResearchContext(jobId = _lastAnalysisJobId) {
+  return !!jobId && jobId === _lastAnalysisJobId &&
+    _lastAnalysisChatId === activeChatId && !isAnalyzing;
+}
+
+// With no completed analysis, Research only arms the next submitted analysis.
+function toggleResearchMode() {
+  _researchModeActive = !_researchModeActive;
+  document.getElementById('researchBtn')?.classList.toggle('active', _researchModeActive);
+  if (_researchModeActive && hasResearchContext() &&
+      !document.getElementById('chatInput').value.trim()) {
+    _autoStartResearch(_lastAnalysisJobId);
+  }
+}
+
 async function _autoStartResearch(jobId) {
-  if (!jobId) return;
-  if (_activeReportJobId) return;
-  _activeReportJobId = 'running';
+  if (!hasResearchContext(jobId) || _activeReportJobId) return;
+  const controller = new AbortController();
+  _reportController = controller;
+  _activeReportJobId = jobId;
   _researchPaperStepStatus = 'running'; _refreshPlanResearchStep();
   const chipId = 'researchChip_' + Date.now();
   _insertResearchGeneratingChip(chipId);
   try {
     await consumeJobStream('/api/generate_report', {job_id: jobId}, data => {
+      if (controller.signal.aborted || _reportController !== controller) return;
       if (data.status === 'complete') {
         _researchPaperStepStatus = 'done'; _refreshPlanResearchStep();
-        _upgradeChipToDownload(chipId, data.filename);
+        _upgradeChipToDownload(chipId, data.filename, data);
+        saveCurrentChat();
       }
-    });
+    }, controller.signal);
   } catch (err) {
+    if (err.name === 'AbortError' || _reportController !== controller) return;
     _researchPaperStepStatus = 'error'; _refreshPlanResearchStep();
     _updateResearchChipError(chipId, err.message);
-  } finally { _activeReportJobId = null; }
+  } finally {
+    if (_reportController === controller) {
+      _activeReportJobId = null;
+      _reportController = null;
+    }
+  }
 }
 
 // Force-refresh just the plan widget to show updated research step status
@@ -5034,10 +5086,10 @@ function _animateChipSections(chipId) {
 
 // ── Poll and update chip when report is ready ─────────────────────────────────
 // ── Upgrade chip from "generating" to "download ready" ───────────────────────
-function _upgradeChipToDownload(chipId, filename) {
+function _upgradeChipToDownload(chipId, filename, metadata = {}) {
   const chip = document.getElementById(chipId);
   if (!chip) {
-    _appendResearchDownloadChip(filename);
+    _appendResearchDownloadChip(filename, metadata);
     return;
   }
   if (chip._sectionTimer) clearInterval(chip._sectionTimer);
@@ -5068,49 +5120,7 @@ function _upgradeChipToDownload(chipId, filename) {
   const doneRow = bubble.querySelector('.rcp-done-row');
   if (doneRow) doneRow.classList.add('visible');
 
-  // Append artifact card as a new message row after the chip
-  const msgs = document.getElementById('messages');
-  if (msgs) {
-    const card = document.createElement('div');
-    card.className = 'msg-row ai';
-    card.innerHTML = `
-      <div class="msg-bubble ai">
-        <div class="research-artifact-card" onclick="openPdfViewer('${filename}', '/api/report/${encodeURIComponent(filename)}')" title="Click to open">
-          <div class="rac-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" y1="13" x2="8" y2="13"/>
-              <line x1="16" y1="17" x2="8" y2="17"/>
-            </svg>
-          </div>
-          <div class="rac-meta">
-            <div class="rac-name">${filename}</div>
-            <div class="rac-type">GIS Research Paper &middot; PDF</div>
-          </div>
-          <a class="rac-download-btn"
-             href="/api/report/${encodeURIComponent(filename)}?download=1"
-             download="${filename}"
-             onclick="event.stopPropagation()"
-             title="Download PDF">
-            Download
-          </a>
-        </div>
-      </div>
-    `;
-    msgs.appendChild(card);
-    msgs.scrollTop = msgs.scrollHeight;
-  }
-
-  // Also update the modal if open
-  _showResearchState('done');
-  const filenameEl = document.getElementById('researchDoneFilename');
-  if (filenameEl) filenameEl.textContent = filename;
-  const downloadLink = document.getElementById('researchDownloadLink');
-  if (downloadLink) {
-    downloadLink.href     = `/api/report/${encodeURIComponent(filename)}?download=1`;
-    downloadLink.download = filename;
-  }
+  _onReportReady(filename, metadata);
 }
 
 function _updateResearchChipError(chipId, errorMsg) {
@@ -5134,9 +5144,9 @@ function openResearchModal() {
   _resetResearchModal();
   modal.style.display = 'flex';
   const warnEl = document.getElementById('researchNoJobWarning');
-  if (warnEl) warnEl.style.display = _lastAnalysisJobId ? 'none' : 'block';
+  if (warnEl) warnEl.style.display = hasResearchContext() ? 'none' : 'block';
   const genBtn = document.getElementById('researchGenerateBtn');
-  if (genBtn) genBtn.disabled = !_lastAnalysisJobId;
+  if (genBtn) genBtn.disabled = !hasResearchContext();
 }
 
 function closeResearchModal(e) {
@@ -5162,9 +5172,9 @@ function _resetResearchModal() {
 function resetResearchModal() {
   _resetResearchModal();
   const warnEl = document.getElementById('researchNoJobWarning');
-  if (warnEl) warnEl.style.display = _lastAnalysisJobId ? 'none' : 'block';
+  if (warnEl) warnEl.style.display = hasResearchContext() ? 'none' : 'block';
   const genBtn = document.getElementById('researchGenerateBtn');
-  if (genBtn) genBtn.disabled = !_lastAnalysisJobId;
+  if (genBtn) genBtn.disabled = !hasResearchContext();
 }
 
 function _showResearchState(state) {
@@ -5215,43 +5225,37 @@ function _stopSectionAnimation(markAllDone) {
 
 // Manual generate (from modal)
 async function startResearchGeneration() {
-  if (!_lastAnalysisJobId || _activeReportJobId) return;
-  _activeReportJobId = 'running';
-  _showResearchState('generating'); _startSectionAnimation();
-  try {
-    await consumeJobStream('/api/generate_report', {job_id: _lastAnalysisJobId}, data => {
-      if (data.status === 'complete') {
-        _stopSectionAnimation(true); _onReportReady(data.filename);
-      }
-    });
-  } catch (err) {
-    _stopSectionAnimation(false); _showResearchState('error');
-    const errEl = document.getElementById('researchErrorMsg');
-    if (errEl) errEl.textContent = err.message;
-  } finally { _activeReportJobId = null; }
+  if (!hasResearchContext() || _activeReportJobId) return;
+  closeResearchModal();
+  await _autoStartResearch(_lastAnalysisJobId);
 }
 
-function _onReportReady(filename) {
+function _onReportReady(filename, metadata = {}) {
   _showResearchState('done');
+  const title = metadata.title || metadata.download_name || 'Satellite Analysis Research Paper';
+  const downloadName = metadata.download_name || 'Satellite_Analysis_Research_Paper.pdf';
   const filenameEl = document.getElementById('researchDoneFilename');
-  if (filenameEl) filenameEl.textContent = filename;
+  if (filenameEl) filenameEl.textContent = title;
   const downloadLink = document.getElementById('researchDownloadLink');
   if (downloadLink) {
-    downloadLink.href     = `/api/report/${encodeURIComponent(filename)}?download=1`;
-    downloadLink.download = filename;
+    downloadLink.href = `/api/report/${encodeURIComponent(filename)}?download=1`;
+    downloadLink.download = downloadName;
   }
-  _appendResearchDownloadChip(filename);
+  _appendResearchDownloadChip(filename, metadata);
 }
 
 // ── Standalone download chip (fallback / modal flow) ──────────────────────────
-function _appendResearchDownloadChip(filename) {
+function _appendResearchDownloadChip(filename, metadata = {}) {
+  const title = metadata.title || metadata.download_name || 'Satellite Analysis Research Paper';
+  const downloadName = metadata.download_name || 'Satellite_Analysis_Research_Paper.pdf';
+  const url = `/api/report/${encodeURIComponent(filename)}`;
   const msgs = document.getElementById('messages');
   if (!msgs) return;
   const chip = document.createElement('div');
   chip.className = 'msg-row ai';
   chip.innerHTML = `
     <div class="msg-bubble ai" style="padding:0;overflow:hidden;max-width:420px;background:transparent">
-    <div class="research-artifact-card" onclick="openPdfViewer('${filename}', '/api/report/${encodeURIComponent(filename)}')" title="Click to open">
+    <div class="research-artifact-card" data-report-url="${escapeHtml(url)}" data-report-title="${escapeHtml(title)}" data-download-name="${escapeHtml(downloadName)}" title="Click to open">
       <div class="rac-icon">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -5261,12 +5265,12 @@ function _appendResearchDownloadChip(filename) {
         </svg>
       </div>
       <div class="rac-meta">
-        <div class="rac-name">${filename}</div>
-        <div class="rac-type">GIS Functions &middot; PDF</div>
+        <div class="rac-name">${escapeHtml(title)}</div>
+        <div class="rac-type">GIS Research Paper &middot; PDF</div>
       </div>
       <a class="rac-download-btn"
          href="/api/report/${encodeURIComponent(filename)}?download=1"
-         download="${filename}"
+         download="${escapeHtml(downloadName)}"
          onclick="event.stopPropagation()"
          title="Download PDF">
         Download
@@ -5277,3 +5281,9 @@ function _appendResearchDownloadChip(filename) {
   msgs.appendChild(chip);
   msgs.scrollTop = msgs.scrollHeight;
 }
+
+document.getElementById('messages').addEventListener('click', event => {
+  if (event.target.closest('a')) return;
+  const card = event.target.closest('[data-report-url]');
+  if (card) openPdfViewer(card.dataset.reportTitle, card.dataset.reportUrl, card.dataset.downloadName);
+});

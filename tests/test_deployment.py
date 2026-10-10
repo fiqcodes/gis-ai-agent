@@ -19,6 +19,8 @@ def client(monkeypatch):
         data={'status':'complete','job_id':payload['job_id'],'result':{'type':'analysis','region':'Jakarta'}}
         if payload['kind']=='report':
             data['filename']=payload['job_id']+'.pdf'
+            data['title']='Vegetation Patterns in Jakarta (2024)'
+            data['download_name']='Vegetation_Patterns_in_Jakarta_2024.pdf'
             store.put(sid,data['filename'],b'%PDF-1.4\nfixture')
         store.put(sid,payload['job_id'],json.dumps(data).encode())
         yield data
@@ -56,6 +58,7 @@ def test_public_stream_report_and_isolation(client):
     assert client.get('/api/report/'+filename).data.startswith(b'%PDF')
     assert other.get('/api/report/'+filename).status_code==404
     assert 'attachment' in client.get('/api/report/'+filename+'?download=1').headers['Content-Disposition']
+    assert 'Vegetation_Patterns_in_Jakarta_2024.pdf' in client.get('/api/report/'+filename+'?download=1').headers['Content-Disposition']
 
 def test_setup_without_secrets(client,monkeypatch):
     monkeypatch.delenv('GROQ_API_KEY')
@@ -279,3 +282,23 @@ def test_tile_preview_preserves_alpha_and_bounds(monkeypatch):
     assert len(seen)<=16
     assert (pixels[:,:,:3]==[10,20,30]).all()
     assert (pixels[:,:,3]==128).all()
+
+
+def test_pdf_unicode_and_descriptive_name(tmp_path, monkeypatch):
+    import research_agent as research
+    from reportlab.pdfbase import pdfmetrics
+    title='Land\u2011Use/Land\u2011Cover Change in London (2024)'
+    body='High\u2011resolution multi\u2011sensor observations. NO₂, m², μm, ±, ≥, κ. A & B < C.'
+    monkeypatch.setattr(research, '_call_llm', lambda *args, **kwargs: body)
+    monkeypatch.setattr(research, 'gen_title', lambda *args: title)
+    monkeypatch.setattr(research, 'gen_references', lambda *args: [])
+    metadata={}
+    path=research.generate_research_paper({'region':'London','variables':['ndvi'],
+        'start_date':'2024-01-01','end_date':'2024-12-31','stats':{}}, str(tmp_path), metadata)
+    assert Path(path).read_bytes().startswith(b'%PDF')
+    assert metadata['title']==title
+    assert metadata['download_name']==Path(path).name
+    assert 'London_2024' in Path(path).name
+    assert research._esc(body).startswith('High-resolution multi-sensor')
+    for font in ['Orbiview', 'Orbiview-Bold', 'Orbiview-Oblique']:
+        assert all(ord(char) in pdfmetrics.getFont(font).face.charToGlyph for char in 'μ±≥κ')
