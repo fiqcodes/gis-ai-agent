@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 import app as web
 from storage import LocalStore, ArtifactStore
+from runtime import _decode_worker_event
 from validation import validate_roi, validate_analysis
 
 @pytest.fixture
@@ -22,6 +23,14 @@ def client(monkeypatch):
     return web.app.test_client()
 
 def events(response):return [json.loads(x) for x in response.text.splitlines()]
+
+def test_worker_event_decoder_ignores_stray_stdout():
+    event={'status':'running','steps':[]}
+    encoded=json.dumps(event)
+    assert _decode_worker_event(encoded)==event
+    assert _decode_worker_event(encoded.encode())==event
+    assert _decode_worker_event('dependency log: '+encoded+' trailing diagnostic')==event
+    assert _decode_worker_event('dependency log without an event') is None
 
 def test_public_stream_report_and_isolation(client):
     assert client.get('/').status_code==200

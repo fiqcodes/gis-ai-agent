@@ -12,6 +12,25 @@ import time
 MAX_SECONDS=260
 WORKER_PATH=Path(__file__).with_name("worker.py")
 
+def _decode_worker_event(line):
+    """Decode one worker event while tolerating stray stdout from dependencies.
+
+    Vercel streams a child process pipe. A dependency may write a diagnostic to
+    stdout alongside our newline-delimited JSON; parse the first complete JSON
+    value and ignore any trailing text instead of failing the whole analysis.
+    """
+    if isinstance(line,bytes):
+        line=line.decode('utf-8',errors='replace')
+    decoder=json.JSONDecoder()
+    start=line.find('{')
+    if start<0:
+        return None
+    try:
+        event,_=decoder.raw_decode(line,start)
+    except json.JSONDecodeError:
+        return None
+    return event if isinstance(event,dict) and isinstance(event.get('status'),str) else None
+
 def run_stream(payload,store,sid):
     job_id=payload['job_id']
     with store.lock(sid), tempfile.TemporaryDirectory(prefix='orbiview-') as directory:
@@ -33,7 +52,9 @@ def run_stream(payload,store,sid):
                     pending+=chunk
                     while b'\n' in pending:
                         line,pending=pending.split(b'\n',1)
-                        event=json.loads(line)
+                        event=_decode_worker_event(line)
+                        if event is None:
+                            continue
                         if event.get('status')!='finished':
                             event['job_id']=job_id
                             yield event
