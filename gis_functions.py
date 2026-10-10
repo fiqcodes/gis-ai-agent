@@ -29,6 +29,7 @@ import json
 import os
 import textwrap
 import time
+import unicodedata
 import urllib.request
 from io import BytesIO
 from PIL import Image as PILImage
@@ -475,8 +476,33 @@ VIS = {
 
 def get_thumb(image, vis_params, region, dim=512):
     url = image.getThumbURL({**vis_params, 'region': region, 'dimensions': dim, 'format': 'png'})
-    with urllib.request.urlopen(url, timeout=30) as r:
-        return np.array(PILImage.open(BytesIO(r.read())))
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(url, timeout=25) as r:
+                return np.array(PILImage.open(BytesIO(r.read())))
+        except (TimeoutError, OSError):
+            if attempt:
+                raise
+
+def monthly_means(collection, make_image, band, region, scale, start, end, digits=6):
+    import datetime
+    current = datetime.date.fromisoformat(start).replace(day=1)
+    stop = datetime.date.fromisoformat(end)
+    features = []
+    while current <= stop:
+        following = (current.replace(year=current.year + 1, month=1)
+                     if current.month == 12 else current.replace(month=current.month + 1))
+        subset = collection.filterDate(current.isoformat(), following.isoformat())
+        values = make_image(subset).reduceRegion(
+            reducer=ee.Reducer.mean(), geometry=region, scale=scale, maxPixels=1e9)
+        # The empty-month expression is evaluated only when scenes exist.
+        values = ee.Dictionary(ee.Algorithms.If(subset.size().gt(0), values, {}))
+        features.append(ee.Feature(None, values.set('month', current.strftime('%Y-%m'))))
+        current = following
+    result = ee.FeatureCollection(features).getInfo()
+    return {f['properties']['month']: round(float(f['properties'][band]), digits)
+            for f in result['features'] if f['properties'].get(band) is not None}
+
 
 def get_stats(image, band, study_area, scale=1000):
     try:
@@ -1461,7 +1487,7 @@ def _extract_variables_from_text(text: str) -> list:
     Returns list of matched canonical variable names (preserving order, deduped).
     Returns empty list if nothing matched — caller falls through to LLM.
     """
-    lower = text.lower()
+    lower = unicodedata.normalize('NFKC', text).lower()
     found, seen = [], set()
     for pattern, var in _KEYWORD_INTERCEPTS:
         if _re.search(pattern, lower) and var not in seen:
@@ -1512,7 +1538,7 @@ def _extract_region_and_dates(text: str) -> tuple:
     # Region: strip all variable tokens first, then extract what remains
     region = None
     # Remove variable keywords so "FFPI Jakarta in 2025" → "Jakarta in 2025"
-    cleaned = _strip_var_tokens(text)
+    cleaned = _strip_var_tokens(unicodedata.normalize('NFKC', text))
     # Strip leading action verbs (incl. "show me", "give me the", etc.)
     cleaned = _re.sub(
         r'^(?:analyse|analyze|show me the|show me|give me the|give me|show|'
@@ -1522,7 +1548,7 @@ def _extract_region_and_dates(text: str) -> tuple:
     # removal can leave stacked leftovers like "me the of London"
     while True:
         new_cleaned = _re.sub(
-            r'^(?:in|for|of|from|between|during|at|the|me)\s+',
+            r'^(?:in|for|of|from|between|during|at|over|the|me|air quality)\s+',
             '', cleaned, flags=_re.IGNORECASE)
         if new_cleaned == cleaned:
             break
@@ -2673,10 +2699,10 @@ def _is_relevant(title, snippet, region_name):
 
     return False, 'no-match'
 
-def _search(query, mode='text', max_results=6):
+def _search(query, mode='text', max_results=6, timeout=3):
     """Run DDG search, return normalized result list."""
     try:
-        with DDGS() as ddgs:
+        with DDGS(timeout=timeout) as ddgs:
             if mode == 'news':
                 raw = list(ddgs.news(query, max_results=max_results))
                 return [{'title': r.get('title',''), 'body': r.get('body', r.get('excerpt','')),
@@ -2686,13 +2712,13 @@ def _search(query, mode='text', max_results=6):
     except Exception as e:
         return []   # silent fail, caller handles fallback
 
-def _wiki(region_name, topic):
+def _wiki(region_name, topic, timeout=3):
     """Wikipedia summary fallback."""
     try:
         q    = requests.utils.quote(f'{region_name} {topic}')
         resp = requests.get(
             f'https://en.wikipedia.org/api/rest_v1/page/summary/{q}',
-            timeout=8).json()
+            timeout=timeout).json()
         text  = resp.get('extract', '').strip()
         title = resp.get('title', 'Wikipedia')
         if text and len(text) > 80:
@@ -2719,7 +2745,7 @@ def _pick_best(results, region_name, seen_urls):
             print(f'    Skip ({reason}): "{title[:55]}"')
     return None, None
 
-def fetch_web_context(region_name, start_date, end_date, variables):
+def fetch_web_context(region_name, start_date, end_date, variables, max_seconds=12):
     """
     Smart multi-query web search.
     Strategy per variable:
@@ -2728,6 +2754,14 @@ def fetch_web_context(region_name, start_date, end_date, variables):
       3. If still nothing, use Wikipedia fallback
     Collect up to 5 unique relevant snippets.
     """
+    deadline = time.monotonic() + max_seconds
+
+    def search(query, mode, count):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return []
+        return _search(query, mode, count, timeout=min(3, remaining))
+
     year      = start_date[:4]
     chunks    = []
     seen_urls = set()
@@ -2746,14 +2780,12 @@ def fetch_web_context(region_name, start_date, end_date, variables):
             print(f'  [{v.upper()}] "{query}"')
 
             # Try text first
-            results = _search(query, 'text', 6)
-            time.sleep(0.8)
+            results = search(query, 'text', 6)
             chunk, reason = _pick_best(results, region_name, seen_urls)
 
             # Retry as news if text found nothing
             if not chunk:
-                results2 = _search(query + ' news', 'news', 6)
-                time.sleep(0.8)
+                results2 = search(query + ' news', 'news', 6)
                 chunk, reason = _pick_best(results2, region_name, seen_urls)
 
             if chunk:
@@ -2764,7 +2796,8 @@ def fetch_web_context(region_name, start_date, end_date, variables):
         # Wikipedia fallback if no DDG result for this variable
         if not got_one:
             topic = WIKI_TOPICS.get(v.lower(), 'environment')
-            wiki  = _wiki(region_name, topic)
+            remaining = deadline - time.monotonic()
+            wiki = _wiki(region_name, topic, timeout=min(3, remaining)) if remaining > 0 else None
             if wiki and wiki not in chunks:
                 chunks.append(wiki)
                 print(f'    ✓ Wikipedia fallback: {region_name} {topic}')
@@ -2780,11 +2813,9 @@ def fetch_web_context(region_name, start_date, end_date, variables):
             if len(chunks) >= 5:
                 break
             print(f'  [NEWS] "{nq}"')
-            results = _search(nq, 'news', 6)
-            time.sleep(0.8)
+            results = search(nq, 'news', 6)
             if not results:
-                results = _search(nq, 'text', 6)
-                time.sleep(0.8)
+                results = search(nq, 'text', 6)
             chunk, reason = _pick_best(results, region_name, seen_urls)
             if chunk:
                 chunks.append(chunk)

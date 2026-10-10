@@ -1085,7 +1085,24 @@ const VAR_DESC_MAP = {
   'LULC'   : 'Land Use / Land Cover classification (LULC)',
 };
 
+// Numeric results remain usable when Earth Engine cannot render a static image.
+function completeResultFigures(stats, figures) {
+  const result = { ...(figures || {}) };
+  for (const [label, values] of Object.entries(stats || {})) {
+    if (!values || values.error || label.toUpperCase() === 'LULC') continue;
+    const figure = { ...(result[label] || {}) };
+    const charts = [...(figure.charts || [])];
+    const add = type => { if (!charts.some(c => c[0] === type)) charts.push([type, null]); };
+    if (Object.keys(values.monthly || {}).length >= 2) add('monthly_trend');
+    if (Number.isFinite(values.mean) && Number.isFinite(values.std)) add('histogram');
+    if (Object.keys(values.class_pcts || {}).length) add('class_bar');
+    result[label] = { ...figure, charts };
+  }
+  return result;
+}
+
 function buildResultHTML(region, startDate, endDate, variables, stats, layers, figures, varInsights, conclusion) {
+  figures = completeResultFigures(stats, figures);
   const dateStr   = `${startDate} → ${endDate}`;
   const startYear = startDate.slice(0, 4);
   const endYear   = endDate.slice(0, 4);
@@ -1152,6 +1169,7 @@ function buildResultHTML(region, startDate, endDate, variables, stats, layers, f
       const isLULC     = varLabel.toUpperCase() === 'LULC';
 
       html += `<div class="var-section">`;
+      if (fig.warning) html += `<p class="stats-note">${escapeHtml(fig.warning)}</p>`;
 
       // For LULC: show RGB overview first (same as non-LULC vars), then LULC map
       if (isLULC) {
@@ -2759,7 +2777,8 @@ function _sampleNormal(mean, std, n=50000, lo=-Infinity, hi=Infinity) {
 }
 
 function renderAllPlotlyCharts(stats, figures, bubble) {
-  if (!stats || !figures) return;
+  if (!stats) return;
+  figures = completeResultFigures(stats, figures);
   const scope = bubble || document;
 
   for (const [varLabel, fig] of Object.entries(figures)) {

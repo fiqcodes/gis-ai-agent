@@ -148,7 +148,7 @@ def run_analysis_job(job: dict, user_input: str, roi_geojson: dict = None, progr
         from gis_functions import (
             SURFACE_INDEX_MAP, ATMO_INDEX_MAP, KEYWORD_MAP, SYSTEM_PROMPT,
             resolve_region, fetch_web_context, generate_insight,
-            _extract_variables_from_text, _extract_region_and_dates,
+            _extract_variables_from_text, _extract_region_and_dates, monthly_means,
         )
 
         # ── Local helpers (defined here so they're always in scope) ──────────
@@ -182,21 +182,22 @@ def run_analysis_job(job: dict, user_input: str, roi_geojson: dict = None, progr
             bounds, labels = _APP_CLASS_BOUNDS_LOCAL[key]
             pixel_area_ha = (scale ** 2) / 10000.0
             try:
-                total_pixels = ee_image.select(band_name).reduceRegion(
-                    reducer=_ee.Reducer.count(),
-                    geometry=study_area, scale=scale, maxPixels=1e9
-                ).getInfo().get(band_name, 0)
+                band = ee_image.select(band_name)
+                counts_image = band.rename('total')
+                for i, (lo, hi) in enumerate(zip(bounds, bounds[1:])):
+                    counts_image = counts_image.addBands(
+                        band.updateMask(band.gte(lo).And(band.lt(hi))).rename(f'class_{i}'))
+                counts = counts_image.reduceRegion(
+                    reducer=_ee.Reducer.count(), geometry=study_area,
+                    scale=scale, maxPixels=1e9).getInfo()
+                total_pixels = counts.get('total', 0)
                 if not total_pixels:
                     return None, {}
                 total_ha   = round(total_pixels * pixel_area_ha, 1)
                 class_pcts = {}
                 for i in range(len(bounds) - 1):
                     lo, hi = bounds[i], bounds[i + 1]
-                    mask  = ee_image.select(band_name).gte(lo).And(ee_image.select(band_name).lt(hi))
-                    count = ee_image.select(band_name).updateMask(mask).reduceRegion(
-                        reducer=_ee.Reducer.count(),
-                        geometry=study_area, scale=scale, maxPixels=1e9
-                    ).getInfo().get(band_name, 0)
+                    count = counts.get(f'class_{i}', 0) or 0
                     pct = round((count / total_pixels) * 100, 1) if total_pixels else 0
                     ha  = round(count * pixel_area_ha, 1)
                     if pct > 0:
@@ -455,6 +456,16 @@ def run_analysis_job(job: dict, user_input: str, roi_geojson: dict = None, progr
         initialize_gee()
         from validation import validate_analysis
         validate_analysis(region_name, start_date, end_date, variables)
+
+        from queue import Queue, Empty
+        from threading import Thread
+        context_queue = Queue(maxsize=1)
+        def collect_context():
+            try:
+                context_queue.put(fetch_web_context(region_name, start_date, end_date, variables))
+            except Exception:
+                context_queue.put(None)
+        Thread(target=collect_context, daemon=True).start()
 
         # ── Step 3: Geocode / resolve region ─────────────────────────────────
         update_step(2, 'running', 30)
@@ -809,35 +820,9 @@ def run_analysis_job(job: dict, user_input: str, roi_geojson: dict = None, progr
                             label, func, vis_key, scale = SURFACE_INDEX_MAP[v]
                             img = func(composite)
                             s   = get_stats(img, label, study_area_surf, scale=scale)
-                            # Monthly stats
-                            try:
-                                import datetime
-                                monthly  = {}
-                                start_dt = datetime.datetime.strptime(start_date, '%Y-%m-%d')
-                                end_dt   = datetime.datetime.strptime(end_date,   '%Y-%m-%d')
-                                cur = start_dt.replace(day=1)
-                                while cur <= end_dt:
-                                    m_s = cur.strftime('%Y-%m-%d')
-                                    m_e = (cur.replace(year=cur.year+1, month=1, day=1)
-                                           if cur.month == 12
-                                           else cur.replace(month=cur.month+1, day=1)).strftime('%Y-%m-%d')
-                                    m_scenes = landsat_col.filterDate(m_s, m_e)
-                                    if m_scenes.size().getInfo() > 0:
-                                        m_comp = m_scenes.median()
-                                        m_img  = func(m_comp)
-                                        ms = m_img.reduceRegion(
-                                            reducer=ee.Reducer.mean(),
-                                            geometry=study_area_surf, scale=scale, maxPixels=1e9
-                                        ).getInfo()
-                                        val = ms.get(label)
-                                        if val is not None:
-                                            monthly[cur.strftime('%Y-%m')] = round(val, 6)
-                                    cur = (cur.replace(year=cur.year+1, month=1)
-                                           if cur.month == 12
-                                           else cur.replace(month=cur.month+1))
-                                s['monthly'] = monthly
-                            except Exception as me:
-                                s['monthly'] = {}
+                            s['monthly'] = monthly_means(
+                                landsat_col, lambda scenes: func(scenes.median()), label,
+                                study_area_surf, scale, start_date, end_date)
                             all_stats[label] = s
                             # ── Enrich with real per-class area (ha) ─────────
                             _total_ha, _class_pcts = _compute_area_stats(
@@ -849,34 +834,40 @@ def run_analysis_job(job: dict, user_input: str, roi_geojson: dict = None, progr
                             tile_url = map_id['tile_fetcher'].url_format
                             layers.append({'name': _layer_label(label, region_name, start_date, end_date), 'tile_url': tile_url,
                                            'type': 'tile', 'bbox': bbox})
-                            # Static analysis map + charts
-                            if bbox:
-                                arr          = get_thumb(img.clip(study_area_surf), VIS[vis_key], study_area_surf, dim=512)
-                                analysis_b64 = make_analysis_map(arr, VIS[vis_key], label, region_name, bbox)
-                                charts       = make_stats_charts(all_stats, v, label)
-                                # Always replace class bar with real GEE data if available
-                                _cp_for_bar = all_stats[label].get('class_pcts') or {}
-                                print(f'  {label} class_pcts for bar: {list(_cp_for_bar.keys())}')
-                                if _cp_for_bar:
-                                    _xlabel_map = {
-                                        'NDVI':'NDVI class', 'EVI':'Vegetation class', 'SAVI':'Vegetation class',
-                                        'NDBI':'Built-up class', 'NDWI':'Water class', 'MNDWI':'Water class',
-                                        'BSI':'Bare soil class', 'UI':'Urban class',
-                                        'NDSI':'Snow class', 'NBI':'Built-up class',
-                                    }
-                                    _xu = next((xv for xk, xv in _xlabel_map.items()
-                                                if xk in label.upper()), f'{label} class')
-                                    real_bar = _make_class_bar_b64(
-                                        _cp_for_bar, f'{label} class composition', _xu)
-                                    if real_bar:
-                                        charts = [(t, d) for t, d in charts if t != 'class_bar']
-                                        charts.insert(0, ('class_bar', real_bar))
-                                        print(f'  ✓ {label} class bar replaced with real GEE data')
-                                figures[label] = {
-                                    'analysis_map': analysis_b64,
-                                    'charts'      : charts,
-                                    'rgb_overview': rgb_overview_b64,
+                            charts = make_stats_charts(all_stats, v, label)
+                            # Always replace class bar with real GEE data if available
+                            _cp_for_bar = all_stats[label].get('class_pcts') or {}
+                            print(f'  {label} class_pcts for bar: {list(_cp_for_bar.keys())}')
+                            if _cp_for_bar:
+                                _xlabel_map = {
+                                    'NDVI':'NDVI class', 'EVI':'Vegetation class', 'SAVI':'Vegetation class',
+                                    'NDBI':'Built-up class', 'NDWI':'Water class', 'MNDWI':'Water class',
+                                    'BSI':'Bare soil class', 'UI':'Urban class',
+                                    'NDSI':'Snow class', 'NBI':'Built-up class',
                                 }
+                                _xu = next((xv for xk, xv in _xlabel_map.items()
+                                            if xk in label.upper()), f'{label} class')
+                                real_bar = _make_class_bar_b64(
+                                    _cp_for_bar, f'{label} class composition', _xu)
+                                if real_bar:
+                                    charts = [(t, d) for t, d in charts if t != 'class_bar']
+                                    charts.insert(0, ('class_bar', real_bar))
+                                    print(f'  ✓ {label} class bar replaced with real GEE data')
+                            figures[label] = {'analysis_map': None, 'charts': charts,
+                                              'rgb_overview': rgb_overview_b64}
+                            if bbox:
+                                try:
+                                    arr = get_thumb(img.clip(study_area_surf), VIS[vis_key], study_area_surf, dim=512)
+                                    figures[label]['analysis_map'] = make_analysis_map(arr, VIS[vis_key], label, region_name, bbox)
+                                except Exception as thumbnail_error:
+                                    print(f'  {label} static preview unavailable: {type(thumbnail_error).__name__}')
+                                    try:
+                                        from tile_preview import tile_preview
+                                        arr = tile_preview(tile_url, bbox)
+                                        figures[label]['analysis_map'] = make_analysis_map(arr, VIS[vis_key], label, region_name, bbox)
+                                    except Exception as tile_error:
+                                        print(f'  {label} tile preview unavailable: {type(tile_error).__name__}')
+                                        figures[label]['warning'] = 'Static preview unavailable; the interactive map and computed statistics are available.'
                             print(f'  ✓ {label} ready')
 
                     except Exception as ve:
@@ -1018,36 +1009,9 @@ def run_analysis_job(job: dict, user_input: str, roi_geojson: dict = None, progr
                                 orig_band_name = col.first().bandNames().getInfo()[0]
                                 s = get_stats(img, band_name, study_area_atmo, scale=3500)
 
-                                # Monthly stats — same pattern as LST
-                                try:
-                                    import datetime as _dt_a
-                                    atmo_monthly = {}
-                                    start_dt_a = _dt_a.datetime.strptime(start_date, '%Y-%m-%d').replace(day=1)
-                                    end_dt_a   = _dt_a.datetime.strptime(end_date,   '%Y-%m-%d')
-                                    cur_a = start_dt_a
-                                    while cur_a <= end_dt_a:
-                                        m_s_a = cur_a.strftime('%Y-%m-%d')
-                                        nxt   = (cur_a.replace(year=cur_a.year+1, month=1, day=1)
-                                                 if cur_a.month == 12
-                                                 else cur_a.replace(month=cur_a.month+1, day=1))
-                                        m_e_a = nxt.strftime('%Y-%m-%d')
-                                        try:
-                                            m_col_a = col.filterDate(m_s_a, m_e_a)
-                                            if m_col_a.size().getInfo() > 0:
-                                                m_img_a   = m_col_a.mean().select(orig_band_name).rename(band_name)
-                                                m_stats_a = m_img_a.reduceRegion(
-                                                    reducer=ee.Reducer.mean(),
-                                                    geometry=study_area_atmo, scale=3500, maxPixels=1e9
-                                                ).getInfo()
-                                                val_a = m_stats_a.get(band_name)
-                                                if val_a is not None:
-                                                    atmo_monthly[cur_a.strftime('%Y-%m')] = round(float(val_a), 8)
-                                        except: pass
-                                        cur_a = nxt
-                                    s['monthly'] = atmo_monthly
-                                    print(f'  ✓ {label} monthly: {len(atmo_monthly)} months')
-                                except Exception as _me:
-                                    s['monthly'] = {}
+                                s['monthly'] = monthly_means(
+                                    col, lambda scenes: scenes.mean().select(orig_band_name).rename(band_name),
+                                    band_name, study_area_atmo, 3500, start_date, end_date, digits=8)
 
                                 all_stats[label] = s
 
@@ -1062,23 +1026,34 @@ def run_analysis_job(job: dict, user_input: str, roi_geojson: dict = None, progr
                                 tile_url = map_id['tile_fetcher'].url_format
                                 layers.append({'name': _layer_label(label, region_name, start_date, end_date),
                                                'tile_url': tile_url, 'type': 'tile', 'bbox': bbox})
+                                charts = make_stats_charts(all_stats, v, label)
+                                _cp_a  = all_stats[label].get('class_pcts') or {}
+                                if _cp_a:
+                                    real_bar_a = _make_class_bar_b64(
+                                        _cp_a, f'{label} class composition', f'{label} concentration class')
+                                    if real_bar_a:
+                                        charts = [(t, d) for t, d in charts if t != 'class_bar']
+                                        charts.insert(0, ('class_bar', real_bar_a))
+                                        print(f'  ✓ {label} class bar: real GEE data')
+                                figures[label] = {
+                                    'analysis_map': None,
+                                    'charts': charts,
+                                    'rgb_overview': atmo_rgb_overview if atmo_first_var else None,
+                                }
+                                atmo_first_var = False
                                 if bbox:
-                                    arr    = get_thumb(img.clip(study_area_atmo), VIS[vis_key], study_area_atmo, dim=512)
-                                    charts = make_stats_charts(all_stats, v, label)
-                                    _cp_a  = all_stats[label].get('class_pcts') or {}
-                                    if _cp_a:
-                                        real_bar_a = _make_class_bar_b64(
-                                            _cp_a, f'{label} class composition', f'{label} concentration class')
-                                        if real_bar_a:
-                                            charts = [(t, d) for t, d in charts if t != 'class_bar']
-                                            charts.insert(0, ('class_bar', real_bar_a))
-                                            print(f'  ✓ {label} class bar: real GEE data')
-                                    figures[label] = {
-                                        'analysis_map': make_analysis_map(arr, VIS[vis_key], f'{label} ({unit})', region_name, bbox),
-                                        'charts'      : charts,
-                                        'rgb_overview': atmo_rgb_overview if atmo_first_var else None,
-                                    }
-                                    atmo_first_var = False
+                                    try:
+                                        arr = get_thumb(img.clip(study_area_atmo), VIS[vis_key], study_area_atmo, dim=512)
+                                        figures[label]['analysis_map'] = make_analysis_map(arr, VIS[vis_key], f'{label} ({unit})', region_name, bbox)
+                                    except Exception as thumbnail_error:
+                                        print(f'  {label} static preview unavailable: {type(thumbnail_error).__name__}')
+                                        try:
+                                            from tile_preview import tile_preview
+                                            arr = tile_preview(tile_url, bbox)
+                                            figures[label]['analysis_map'] = make_analysis_map(arr, VIS[vis_key], f'{label} ({unit})', region_name, bbox)
+                                        except Exception as tile_error:
+                                            print(f'  {label} tile preview unavailable: {type(tile_error).__name__}')
+                                            figures[label]['warning'] = 'Static preview unavailable; the interactive map and computed statistics are available.'
                                 print(f'  ✓ {label} ready')
                     except Exception as ve:
                         print(f'  [{v}] atmo failed: {ve}')
@@ -1323,7 +1298,7 @@ def run_analysis_job(job: dict, user_input: str, roi_geojson: dict = None, progr
                                 fig2.text(hx, fy(0.42), ht, color=LGRAY, fontsize=8,
                                           fontweight='bold', transform=fig2.transFigure)
 
-                            tab10 = plt.cm.get_cmap('tab10')
+                            tab10 = plt.get_cmap('tab10')
                             for i,(cls_name,cls_m) in enumerate(per_class.items()):
                                 ry  = fy(0.62 + i*row_h)
                                 p   = cls_m.get('precision',0)
@@ -1420,7 +1395,10 @@ def run_analysis_job(job: dict, user_input: str, roi_geojson: dict = None, progr
 
         # ── Step 6: Generate AI insights ──────────────────────────────────────
         update_step(5, 'running', 20)
-        web_context = fetch_web_context(region_name, start_date, end_date, variables)
+        try:
+            web_context = context_queue.get(timeout=0.1)
+        except Empty:
+            web_context = None
 
         # Per-variable focused insights (one short LLM call per variable)
         var_insights = {}

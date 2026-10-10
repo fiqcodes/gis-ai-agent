@@ -117,7 +117,9 @@ def test_gee_lazy_credentials(monkeypatch):
     import ee,gee_auth
     from google.oauth2 import service_account
     seen=[]
-    monkeypatch.setenv('GEE_SERVICE_ACCOUNT_JSON','{"type":"service_account"}')
+    monkeypatch.setenv('GEE_SERVICE_ACCOUNT_JSON',json.dumps({
+        'type':'service_account','project_id':'fixture','private_key':'fixture',
+        'client_email':'fixture@example.test','token_uri':'https://oauth2.googleapis.com/token'}))
     monkeypatch.setattr(service_account.Credentials,'from_service_account_info',lambda info,scopes:'credential')
     monkeypatch.setattr(ee,'Initialize',lambda *a,**k:seen.append((a,k)))
     monkeypatch.setattr(ee.data,'setDeadline',lambda value:None)
@@ -207,3 +209,73 @@ def test_runtime_disconnect_kills_worker(tmp_path,monkeypatch):
     assert 'pid' in child
     stream.close()
     with pytest.raises(ProcessLookupError):os.kill(child['pid'],0)
+
+@pytest.mark.parametrize('text,expected', [
+    ('Analyze NO₂ air quality over Beijing in 2024', ('no2', 'Beijing')),
+    ('Analyze the NDVI of Jakarta in 2024', ('ndvi', 'Jakarta')),
+    ('Show me the land cover of London in 2024', ('lulc', 'London')),
+])
+def test_example_prompt_regions(text, expected):
+    from gis_functions import _extract_variables_from_text, _extract_region_and_dates
+    assert expected[0] in _extract_variables_from_text(text)
+    assert _extract_region_and_dates(text) == (expected[1], '2024-01-01', '2024-12-31')
+
+
+def test_context_search_budget(monkeypatch):
+    import gis_functions as gis
+    clock=[0.0];calls=[]
+    monkeypatch.setattr(gis.time, 'monotonic', lambda:clock[0])
+    def slow_search(query, mode, count, timeout):
+        calls.append(timeout)
+        clock[0] += timeout
+        return []
+    monkeypatch.setattr(gis, '_search', slow_search)
+    monkeypatch.setattr(gis, '_wiki', lambda *a,**k: pytest.fail('No requests after budget expires'))
+    assert gis.fetch_web_context('Jakarta', '2024-01-01', '2024-12-31', ['ndvi'], max_seconds=7) is None
+    assert calls == [3,3,1]
+
+
+def test_thumbnail_retry(monkeypatch):
+    import gis_functions as gis
+    from io import BytesIO
+    from PIL import Image
+    image=BytesIO();Image.new('RGB',(2,2)).save(image,format='PNG');data=image.getvalue()
+    calls=[]
+    def download(url, timeout):
+        calls.append(url)
+        if len(calls)==1:raise TimeoutError('fixture')
+        return BytesIO(data)
+    monkeypatch.setattr(gis.urllib.request, 'urlopen', download)
+    source=type('Image',(),{'getThumbURL':lambda self,params:'https://example.test/thumb'})()
+    assert gis.get_thumb(source,{},None).shape == (2,2,3)
+    assert len(calls)==2
+
+
+def test_numeric_charts_without_thumbnail():
+    from gis_functions import make_stats_charts
+    values={'NO2':{'mean':0.0001,'min':0.00001,'max':0.0002,'std':0.00003,
+                  'p10':0.00005,'p90':0.00017,'monthly':{'2024-01':0.0001,'2024-02':0.00012},
+                  'class_pcts':{'Clean (<8e-5)':{'pct':30},'Moderate (8–15e-5)':{'pct':70}}}}
+    charts=make_stats_charts(values,'no2','NO2')
+    assert {'monthly_trend','histogram','class_bar'} <= {kind for kind,_ in charts}
+    assert all(data.startswith('data:image/png;base64,') for _,data in charts)
+
+
+def test_tile_preview_preserves_alpha_and_bounds(monkeypatch):
+    import tile_preview as preview
+    from io import BytesIO
+    from PIL import Image
+    image=BytesIO();Image.new('RGBA',(256,256),(10,20,30,128)).save(image,format='PNG')
+    seen=[]
+    class Response:
+        content=image.getvalue()
+        def raise_for_status(self):pass
+    def fetch(url,timeout):
+        seen.append(url)
+        return Response()
+    monkeypatch.setattr(preview.requests,'get',fetch)
+    pixels=preview.tile_preview('https://earthengine.googleapis.com/tiles/{z}/{x}/{y}',[115.4,39.4,117.5,41.1])
+    assert pixels.shape[1]==512 and pixels.shape[2]==4
+    assert len(seen)<=16
+    assert (pixels[:,:,:3]==[10,20,30]).all()
+    assert (pixels[:,:,3]==128).all()
