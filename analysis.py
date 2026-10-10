@@ -6,6 +6,17 @@ from pathlib import Path
 from config import OUTPUT_DIR
 from llm import llm_post
 
+def _parse_intent_json(raw: str) -> dict:
+    """Extract the first complete object from model output, ignoring trailing text."""
+    start = raw.find('{')
+    if start < 0:
+        return {}
+    try:
+        parsed, _ = json.JSONDecoder().raw_decode(raw[start:])
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
 def image_to_base64(path: str) -> str:
     """Convert an image file to base64 data URI."""
     with open(path, 'rb') as f:
@@ -338,8 +349,9 @@ def run_analysis_job(job: dict, user_input: str, roi_geojson: dict = None, progr
             if '```' in raw:
                 raw = raw.split('```')[1]
                 if raw.startswith('json'): raw = raw[4:]
-            s = raw.find('{'); e = raw.rfind('}') + 1
-            parsed = json.loads(raw[s:e]) if s >= 0 and e > s else {}
+            # GPT-OSS can append another JSON object after the requested
+            # response; consume the first complete object and ignore trailing text.
+            parsed = _parse_intent_json(raw)
 
             # If pre-check found vars or region, merge them in (override LLM guesses)
             if _pre_vars:
@@ -1605,4 +1617,3 @@ def generate_conclusion(region: str, start_date: str, end_date: str,
 # ─────────────────────────────────────────────────────────────────────────────
 # ROUTES
 # ─────────────────────────────────────────────────────────────────────────────
-

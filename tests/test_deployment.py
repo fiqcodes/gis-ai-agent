@@ -4,6 +4,7 @@ import pytest
 import app as web
 from storage import LocalStore, ArtifactStore
 from runtime import _decode_worker_event
+from analysis import _parse_intent_json
 from validation import validate_roi, validate_analysis
 
 @pytest.fixture
@@ -31,6 +32,10 @@ def test_worker_event_decoder_ignores_stray_stdout():
     assert _decode_worker_event(encoded.encode())==event
     assert _decode_worker_event('dependency log: '+encoded+' trailing diagnostic')==event
     assert _decode_worker_event('dependency log without an event') is None
+
+def test_intent_parser_ignores_trailing_model_json():
+    assert _parse_intent_json('{"intent":"analysis"}\n{"intent":"question"}')=={'intent':'analysis'}
+    assert _parse_intent_json('no JSON object')=={}
 
 def test_public_stream_report_and_isolation(client):
     assert client.get('/').status_code==200
