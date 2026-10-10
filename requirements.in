@@ -1,0 +1,12 @@
+Flask>=3.1,<4
+python-dotenv>=1,<2
+earthengine-api>=1.6,<2
+numpy>=2,<3
+matplotlib>=3.9,<4
+Pillow>=11,<13
+requests>=2.32,<3
+duckduckgo-search>=8,<9
+langgraph>=1,<2
+langchain-core>=1,<2
+langchain-groq>=1,<2
+reportlab>=4,<5

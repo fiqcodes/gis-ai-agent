@@ -1,3 +1,4 @@
+from llm import llm_post
 import ee
 import requests
 import json
@@ -11,7 +12,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.graph import StateGraph, START, END
 from pydantic import BaseModel, Field
 
-from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR
+from config import GEE_PROJECT, GROQ_URL, GROQ_MODEL, OUTPUT_DIR
 from gis_functions import (
     # Region
     resolve_region,
@@ -32,22 +33,9 @@ from gis_functions import (
     fetch_web_context, generate_insight,
     # Maps
     SURFACE_INDEX_MAP, ATMO_INDEX_MAP, KEYWORD_MAP, SYSTEM_PROMPT, VIS,
-    # Pre-check helpers — bypass Ollama for known variable keywords
+    # Pre-check helpers — bypass Groq for known variable keywords
     _extract_variables_from_text, _extract_region_and_dates, _strip_var_tokens,
 )
-
-# ── Initialize GEE ────────────────────────────────────────────────────────────
-ee.Initialize(project=GEE_PROJECT)
-print(f'✅ GEE initialized | Model: {OLLAMA_MODEL}')
-print(f'✅ Outputs: {OUTPUT_DIR}')
-
-# ── Test Ollama ───────────────────────────────────────────────────────────────
-try:
-    r = requests.get('http://localhost:11434/api/tags', timeout=3)
-    models = [m['name'] for m in r.json().get('models', [])]
-    print(f'✅ Ollama connected | Models: {models}')
-except Exception as e:
-    print(f'⚠️  Ollama not reachable: {e} — run: ollama serve')
 
 # =============================================================================
 # LANGGRAPH TOOLS
@@ -356,12 +344,12 @@ from typing_extensions import TypedDict
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
-from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from pydantic import BaseModel, Field
 
-# ── LLM (Ollama) ──────────────────────────────────────────────────────────────
-llm = ChatOllama(model=OLLAMA_MODEL, base_url="http://localhost:11434", temperature=0)
+# ── LLM (Groq) ──────────────────────────────────────────────────────────────
+llm = ChatGroq(model=GROQ_MODEL, temperature=0, timeout=30, max_retries=0)
 llm_with_tools = llm.bind_tools(ALL_TOOLS)
 
 # ── State ─────────────────────────────────────────────────────────────────────
@@ -401,9 +389,9 @@ class InsightEval(BaseModel):
     feedback : str   = Field(description="Specific feedback for improvement if score < 7")
     accept   : bool  = Field(description="True if score >= 7 and insight is acceptable")
 
-# ── NODE 1: Router — pre-check first, Ollama only as fallback ────────────────
+# ── NODE 1: Router — pre-check first, Groq only as fallback ────────────────
 def node_router(state: AgentState) -> dict:
-    """Parse user intent. Uses keyword pre-check to bypass Ollama for known
+    """Parse user intent. Uses keyword pre-check to bypass Groq for known
     variable names — prevents Gemma from hallucinating on acronyms like FFPI."""
     user_input = state["user_input"]
     print("\n[ROUTER] Parsing user request...")
@@ -413,7 +401,7 @@ def node_router(state: AgentState) -> dict:
     if _pre_vars:
         _pre_region, _pre_start, _pre_end = _extract_region_and_dates(user_input)
 
-        # Full pre-check: skip Ollama entirely
+        # Full pre-check: skip Groq entirely
         if _pre_region and _pre_start:
             print(f"  [pre-check FULL] vars={_pre_vars} region={_pre_region} start={_pre_start}")
             vars_out = _pre_vars
@@ -434,8 +422,8 @@ def node_router(state: AgentState) -> dict:
             }
 
         # Partial pre-check: variables found but region/date missing
-        # Strip variable tokens so Ollama only sees region + dates
-        print(f"  [pre-check PARTIAL] vars={_pre_vars} — asking Ollama for region/date only")
+        # Strip variable tokens so Groq only sees region + dates
+        print(f"  [pre-check PARTIAL] vars={_pre_vars} — asking Groq for region/date only")
         _geo_prompt = (
             "Extract ONLY the region name and date range from this message. "
             "Words like FFPI, NDVI, NO2, CO, SO2, CH4, LST, LULC, EVI, NDWI are satellite index names — "
@@ -445,10 +433,10 @@ def node_router(state: AgentState) -> dict:
             '{"region": "place name or null", "start_date": "YYYY-MM-DD or null", "end_date": "YYYY-MM-DD or null"}'
         )
         _clean_msg = _strip_var_tokens(user_input)
-        print(f"  [pre-check] cleaned msg for Ollama: \"{_clean_msg}\"")
+        print(f"  [pre-check] cleaned msg for Groq: \"{_clean_msg}\"")
         try:
-            _resp = requests.post(OLLAMA_URL,
-                json={"model": OLLAMA_MODEL,
+            _resp = llm_post(GROQ_URL,
+                json={"model": GROQ_MODEL,
                       "messages": [{"role": "system", "content": _geo_prompt},
                                    {"role": "user",   "content": _clean_msg}],
                       "stream": False}, timeout=30)
@@ -477,10 +465,10 @@ def node_router(state: AgentState) -> dict:
                                      + (f" for {_pre_region}" if _pre_region else "") + ".")],
         }
 
-    # ── No variable keywords found → full Ollama parse (questions, unknown) ──
-    print("  [router] No variable keywords — falling back to Ollama")
-    resp = requests.post(OLLAMA_URL,
-        json={"model": OLLAMA_MODEL,
+    # ── No variable keywords found → full Groq parse (questions, unknown) ──
+    print("  [router] No variable keywords — falling back to Groq")
+    resp = llm_post(GROQ_URL,
+        json={"model": GROQ_MODEL,
               "messages": [
                   {"role": "system", "content": SYSTEM_PROMPT},
                   {"role": "user",   "content": user_input}],
@@ -768,9 +756,9 @@ def node_insight_generator(state: AgentState) -> dict:
         "\nWrite in flowing paragraphs, not bullet points."
     )
 
-    resp = requests.post(
-        OLLAMA_URL,
-        json={"model": OLLAMA_MODEL,
+    resp = llm_post(
+        GROQ_URL,
+        json={"model": GROQ_MODEL,
               "messages": [{"role": "user", "content": prompt}],
               "stream": False},
         timeout=180
@@ -845,8 +833,8 @@ def node_final_output(state: AgentState) -> dict:
 def node_qa(state: AgentState) -> dict:
     """Answer general questions about satellite remote sensing."""
     print("\n[QA] Answering question...")
-    resp = requests.post(OLLAMA_URL,
-        json={"model": OLLAMA_MODEL,
+    resp = llm_post(GROQ_URL,
+        json={"model": GROQ_MODEL,
               "messages": [
                   {"role": "system", "content": "You are an expert in satellite remote sensing and GIS."},
                   {"role": "user",   "content": state["user_input"]}],
@@ -950,74 +938,77 @@ def fmt_date(start, end):
     if sy == ey: return f"{sy} ({MONTHS.get(sm,sm)}–{MONTHS.get(em,em)})"
     return f"{MONTHS.get(sm,sm)} {sy} – {MONTHS.get(em,em)} {ey}"
 
-print("╔══════════════════════════════════════════════════════╗")
-print("║  🛰️  SATELLITE ANALYSIS AI AGENT  (LangGraph)       ║")
-print("║  Router → Workers → Evaluator → Insight Loop        ║")
-print("╚══════════════════════════════════════════════════════╝")
-print(f"  Model   : {OLLAMA_MODEL}")
-print(f"  Outputs : {OUTPUT_DIR}")
-print()
-print("  Examples:")
-print("  → Show NDVI in Jakarta from 2023-01-01 to 2023-12-31")
-print("  → Analyze NO2 and CO pollution in Beijing in 2022")
-print("  → LST and UHI in Cairo, summer 2021")
-print("  → What does NDVI measure?")
-print("  → Type \"exit\" to quit")
-print("─" * 56)
-
-while True:
-    try:
-        user_input = input("\nYou: ").strip()
-    except (EOFError, KeyboardInterrupt):
-        print("\n👋 Stopped.")
-        break
-
-    if not user_input:
-        continue
-    if user_input.lower() in ["exit","quit","bye","stop"]:
-        print(f"👋 Goodbye! Outputs saved to: {OUTPUT_DIR}")
-        break
-
-    # ── Run the graph ─────────────────────────────────────────────────────────
-    print("\n🤖 Agent running...")
-    try:
-        init_state = {
-            "user_input"   : user_input,
-            "region"       : None,
-            "start_date"   : None,
-            "end_date"     : None,
-            "variables"    : [],
-            "intent"       : "unknown",
-            "surface_stats": {},
-            "atmo_stats"   : {},
-            "web_context"  : "",
-            "insight"      : "",
-            "eval_score"   : 0,
-            "eval_feedback": "",
-            "refine_count" : 0,
-            "final_response": "",
-            "messages"     : [HumanMessage(content=user_input)],
-        }
-
-        result = satellite_graph.invoke(init_state)
-
-        # Print summary for analysis intent
-        if result.get("intent") == "analysis":
-            vars_str  = fmt_vars(result.get("variables", []))
-            date_str  = fmt_date(result["start_date"], result["end_date"])
-            print(f"\n🤖 Analyzing {vars_str} in {result['region']} ({date_str})")
-            print(f"   Eval score: {result.get('eval_score','?')}/10 | "
-                  f"Refinements: {result.get('refine_count',0)-1}")
-        elif result.get("intent") == "question":
-            print(f"\n🤖 {result.get('final_response','')}")
-
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
-
+if __name__ == '__main__':
+    from gee_auth import initialize_gee
+    initialize_gee()
+    print("╔══════════════════════════════════════════════════════╗")
+    print("║  🛰️  SATELLITE ANALYSIS AI AGENT  (LangGraph)       ║")
+    print("║  Router → Workers → Evaluator → Insight Loop        ║")
+    print("╚══════════════════════════════════════════════════════╝")
+    print(f"  Model   : {GROQ_MODEL}")
+    print(f"  Outputs : {OUTPUT_DIR}")
+    print()
+    print("  Examples:")
+    print("  → Show NDVI in Jakarta from 2023-01-01 to 2023-12-31")
+    print("  → Analyze NO2 and CO pollution in Beijing in 2022")
+    print("  → LST and UHI in Cairo, summer 2021")
+    print("  → What does NDVI measure?")
+    print("  → Type \"exit\" to quit")
     print("─" * 56)
 
+    while True:
+        try:
+            user_input = input("\nYou: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n👋 Stopped.")
+            break
 
-if __name__ == '__main__':
-    pass  # Chat loop runs automatically above
+        if not user_input:
+            continue
+        if user_input.lower() in ["exit","quit","bye","stop"]:
+            print(f"👋 Goodbye! Outputs saved to: {OUTPUT_DIR}")
+            break
+
+        # ── Run the graph ─────────────────────────────────────────────────────────
+        print("\n🤖 Agent running...")
+        try:
+            init_state = {
+                "user_input"   : user_input,
+                "region"       : None,
+                "start_date"   : None,
+                "end_date"     : None,
+                "variables"    : [],
+                "intent"       : "unknown",
+                "surface_stats": {},
+                "atmo_stats"   : {},
+                "web_context"  : "",
+                "insight"      : "",
+                "eval_score"   : 0,
+                "eval_feedback": "",
+                "refine_count" : 0,
+                "final_response": "",
+                "messages"     : [HumanMessage(content=user_input)],
+            }
+
+            result = satellite_graph.invoke(init_state)
+
+            # Print summary for analysis intent
+            if result.get("intent") == "analysis":
+                vars_str  = fmt_vars(result.get("variables", []))
+                date_str  = fmt_date(result["start_date"], result["end_date"])
+                print(f"\n🤖 Analyzing {vars_str} in {result['region']} ({date_str})")
+                print(f"   Eval score: {result.get('eval_score','?')}/10 | "
+                      f"Refinements: {result.get('refine_count',0)-1}")
+            elif result.get("intent") == "question":
+                print(f"\n🤖 {result.get('final_response','')}")
+
+        except Exception as e:
+            print(f"\n❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+
+        print("─" * 56)
+
+
+    if __name__ == '__main__':
+        pass  # Chat loop runs automatically above

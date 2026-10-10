@@ -1,2 +1,2 @@
-flask>=3.0.0
-flask-cors>=4.0.0
+# All dependencies are now in requirements.txt.
+-r requirements.txt

@@ -1,23 +1,13 @@
-# =============================================================================
-# config.py — Configuration for Satellite Analysis AI Agent
-# =============================================================================
+"""Server configuration. Secrets come from environment variables, never the browser."""
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 
-# ── Google Earth Engine ───────────────────────────────────────────────────────
-GEE_PROJECT = 'gis-ai-agent'
-
-# ── Service Account (preferred — thread-safe, no expiry) ─────────────────────
-# Path to your GEE service account JSON key file
-GEE_SERVICE_ACCOUNT_FILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    'gee-creds.json'
-)
-GEE_SERVICE_ACCOUNT_EMAIL = 'gee-credentials@gis-ai-agent.iam.gserviceaccount.com'
-
-# ── Ollama (Local LLM) ────────────────────────────────────────────────────────
-OLLAMA_URL   = 'http://localhost:11434/api/chat'
-OLLAMA_MODEL = 'gemma3:4b'
-
-# ── Output folder ─────────────────────────────────────────────────────────────
-OUTPUT_DIR = os.path.expanduser('~/Downloads/satellite_agent_outputs')
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+load_dotenv('.env.local')
+GEE_PROJECT = os.getenv('GEE_PROJECT', 'gis-ai-agent')
+GEE_SERVICE_ACCOUNT_FILE = os.getenv('GEE_SERVICE_ACCOUNT_FILE', str(Path(__file__).parent / 'gee-creds.json'))
+GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
+GROQ_MODEL = os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b')
+OUTPUT_DIR = os.getenv('OUTPUT_DIR', '/tmp/orbiview')
+os.environ.setdefault('MPLCONFIGDIR', '/tmp/orbiview-matplotlib')
+os.environ.setdefault('MPLBACKEND', 'Agg')
