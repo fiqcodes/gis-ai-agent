@@ -855,72 +855,75 @@ function escapeHtml(s) {
 // ════════════════════════════════════════════════════════
 // ANALYSIS — POST + POLL
 // ════════════════════════════════════════════════════════
-function startAnalysis(text, onComplete) {
-  isAnalyzing = true;
-  setSendBtnStop();
-  appendTypingIndicator();
-  resetPlanWidget();
+let analysisController = null;
 
-  const body = { message: text };
-  if (activeROI) body.roi = activeROI.geojson;
-
-  fetch('/api/analyze', {
-    method : 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body   : JSON.stringify(body),
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.error) { handleError(data.error); if (onComplete) onComplete(); return; }
-    currentJobId = data.job_id;
-    startPolling(data.job_id, onComplete);
-  })
-  .catch(err => { handleError(err.toString()); if (onComplete) onComplete(); });
+async function consumeJobStream(url, body, onEvent, signal) {
+  const response = await fetch(url, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body), signal,
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Request failed.');
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let pending = '', completed = false;
+  try {
+    while (true) {
+      const {value, done} = await reader.read();
+      pending += decoder.decode(value || new Uint8Array(), {stream: !done});
+      const lines = pending.split('\n'); pending = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const event = JSON.parse(line);
+        if (event.status === 'error') throw new Error(event.error || 'Analysis failed.');
+        if (event.status === 'complete') completed = true;
+        if (event.status !== 'heartbeat') onEvent(event);
+      }
+      if (done) break;
+    }
+    if (!completed) throw new Error('The connection ended before completion. Try a smaller request.');
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
 }
 
-function startPolling(jobId, onComplete) {
-  pollingTimer = setInterval(() => pollJob(jobId, onComplete), 1500);
+async function startAnalysis(text, onComplete) {
+  isAnalyzing = true;
+  setSendBtnStop(); appendTypingIndicator(); resetPlanWidget();
+  const body = {message: text};
+  if (activeROI) body.roi = activeROI.geojson;
+  const controller = new AbortController(); analysisController = controller;
+  try {
+    await consumeJobStream('/api/analyze', body, data => {
+      currentJobId = data.job_id;
+      if (data.steps?.length) updatePlanSteps(data.steps);
+      if (data.geo?.bbox && !window._geoShown) {
+        window._geoShown = true;
+        if (data.parsed?.region) addROIOverlayFromBbox(data.parsed.region, data.geo.bbox);
+      }
+      if (data.status === 'complete') {
+        stopPolling(); window._geoShown = false;
+        removeTypingIndicator(); hidePlanWidget();
+        handleResult(data.result, data.job_id);
+      }
+    }, controller.signal);
+    if (onComplete) onComplete();
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      handleError(err.message);
+      if (onComplete) onComplete();
+    }
+  } finally {
+    if (analysisController === controller) analysisController = null;
+  }
 }
 
 function stopPolling() {
   if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
-  currentJobId = null;
-  isAnalyzing  = false;
-  setSendBtnSend();
-}
-
-function pollJob(jobId, onComplete) {
-  fetch(`/api/job/${jobId}`)
-  .then(r => r.json())
-  .then(data => {
-    updatePlanSteps(data.steps);
-
-    // Show geocode result on map as soon as we have it
-    if (data.geo && data.geo.bbox && !window._geoShown) {
-      window._geoShown = true;
-      if (data.parsed && data.parsed.region) {
-        addROIOverlayFromBbox(data.parsed.region, data.geo.bbox);
-      }
-    }
-
-    if (data.status === 'complete') {
-      const completedJobId = jobId;   // capture before stopPolling() nulls currentJobId
-      stopPolling();
-      window._geoShown = false;
-      removeTypingIndicator();
-      hidePlanWidget();
-      handleResult(data.result, completedJobId);
-      if (onComplete) onComplete();
-    } else if (data.status === 'error') {
-      stopPolling();
-      window._geoShown = false;
-      removeTypingIndicator();
-      hidePlanWidget();
-      handleError(data.error || 'Unknown error');
-      if (onComplete) onComplete();
-    }
-  })
-  .catch(() => {});
+  currentJobId = null; isAnalyzing = false; setSendBtnSend();
 }
 
 function handleError(msg) {
@@ -3096,9 +3099,9 @@ function plotlyConfig() {
 function parseMarkdown(text) {
   if (!text) return '';
   try {
-    return marked.parse(text);
+    return DOMPurify.sanitize(marked.parse(text));
   } catch(e) {
-    return text;
+    return escapeHtml(text);
   }
 }
 
@@ -3276,6 +3279,7 @@ function setSendBtnSend() {
 }
 
 function stopAnalysis() {
+  if (analysisController) analysisController.abort();
   stopPolling();
   removeTypingIndicator();
   hidePlanWidget();
@@ -3399,16 +3403,18 @@ function updateAssetsBadge() {
 
 function checkHealth() {
   const dot = document.getElementById('statusDot');
-  dot.className = 'status-dot checking';
+  if (dot) dot.className = 'status-dot checking';
 
   fetch('/api/health')
   .then(r => r.json())
   .then(data => {
-    const ok = data.flask && data.ollama && data.gee;
-    dot.className = 'status-dot ' + (ok ? 'online' : 'offline');
-    dot.title = `Flask: ${data.flask ? '✓' : '✗'} | Ollama: ${data.ollama ? '✓' : '✗'} | GEE: ${data.gee ? '✓' : '✗'}`;
+    const ok = data.status === 'ready';
+    if (dot) dot.className = 'status-dot ' + (ok ? 'online' : 'offline');
+    const notice = document.getElementById('setupNotice');
+    if (notice) notice.hidden = ok;
+    if (dot) dot.title = ok ? 'Ready to analyze' : 'Setup required — the owner is connecting the analysis services.';
   })
-  .catch(() => { dot.className = 'status-dot offline'; });
+  .catch(() => { if (dot) dot.className = 'status-dot offline'; });
 }
 // ════════════════════════════════════════════════════════
 // KNOWLEDGE BASE
@@ -4883,65 +4889,23 @@ function toggleResearchMode() {
 
 // ── Called automatically after GIS analysis completes (if mode is active) ─────
 async function _autoStartResearch(jobId) {
-  if (!jobId && !_lastAnalysisResult) {
-    console.warn('[Research] _autoStartResearch: no jobId and no cached result');
-    return;
-  }
-  console.log('[Research] Starting auto-research for job:', jobId);
-
-  // Mark the plan widget step as running
-  _researchPaperStepStatus = 'running';
-  // Re-render the last known steps to show the running state
-  _refreshPlanResearchStep();
-
-  // Insert a "generating" chip into the chat stream
+  if (!jobId) return;
+  if (_activeReportJobId) return;
+  _activeReportJobId = 'running';
+  _researchPaperStepStatus = 'running'; _refreshPlanResearchStep();
   const chipId = 'researchChip_' + Date.now();
   _insertResearchGeneratingChip(chipId);
-
   try {
-    // First try with job_id reference (fast path — reuses server-side result)
-    let resp, data;
-    if (jobId) {
-      resp = await fetch('/api/generate_report', {
-        method : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body   : JSON.stringify({ job_id: jobId }),
-      });
-      data = await resp.json();
-      console.log('[Research] job_id path response:', resp.status, data);
-    }
-
-    // If server rejected the job_id, fall back to inline result payload
-    if (!resp || !resp.ok || data.error) {
-      console.warn('[Research] job_id path failed — trying inline result fallback');
-      const cachedResult = _lastAnalysisResult;
-      if (cachedResult) {
-        resp = await fetch('/api/generate_report', {
-          method : 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body   : JSON.stringify({ result: cachedResult }),
-        });
-        data = await resp.json();
-        console.log('[Research] inline fallback response:', resp.status, data);
+    await consumeJobStream('/api/generate_report', {job_id: jobId}, data => {
+      if (data.status === 'complete') {
+        _researchPaperStepStatus = 'done'; _refreshPlanResearchStep();
+        _upgradeChipToDownload(chipId, data.filename);
       }
-    }
-
-    if (!resp || !resp.ok || data.error) {
-      _researchPaperStepStatus = 'error';
-      _refreshPlanResearchStep();
-      _updateResearchChipError(chipId, data?.error || 'Failed to start report generation.');
-      return;
-    }
-
-    _activeReportJobId = data.report_job_id;
-    _pollReportForChip(chipId, data.report_job_id);
-
+    });
   } catch (err) {
-    console.error('[Research] fetch error:', err);
-    _researchPaperStepStatus = 'error';
-    _refreshPlanResearchStep();
-    _updateResearchChipError(chipId, `Network error: ${err.message}`);
-  }
+    _researchPaperStepStatus = 'error'; _refreshPlanResearchStep();
+    _updateResearchChipError(chipId, err.message);
+  } finally { _activeReportJobId = null; }
 }
 
 // Force-refresh just the plan widget to show updated research step status
@@ -5050,31 +5014,6 @@ function _animateChipSections(chipId) {
 }
 
 // ── Poll and update chip when report is ready ─────────────────────────────────
-function _pollReportForChip(chipId, reportJobId) {
-  if (_researchPollTimer) clearInterval(_researchPollTimer);
-  _researchPollTimer = setInterval(async () => {
-    try {
-      const resp = await fetch(`/api/report_status/${reportJobId}`);
-      const data = await resp.json();
-      if (data.status === 'complete') {
-        clearInterval(_researchPollTimer);
-        _researchPollTimer = null;
-        _researchPaperStepStatus = 'done';
-        _refreshPlanResearchStep();
-        _upgradeChipToDownload(chipId, data.filename);
-      } else if (data.status === 'error') {
-        clearInterval(_researchPollTimer);
-        _researchPollTimer = null;
-        _researchPaperStepStatus = 'error';
-        _refreshPlanResearchStep();
-        _updateResearchChipError(chipId, data.error || 'Report generation failed.');
-      }
-    } catch (e) {
-      console.warn('[Research] poll error:', e);
-    }
-  }, 3000);
-}
-
 // ── Upgrade chip from "generating" to "download ready" ───────────────────────
 function _upgradeChipToDownload(chipId, filename) {
   const chip = document.getElementById(chipId);
@@ -5257,54 +5196,20 @@ function _stopSectionAnimation(markAllDone) {
 
 // Manual generate (from modal)
 async function startResearchGeneration() {
-  if (!_lastAnalysisJobId) {
-    const warnEl = document.getElementById('researchNoJobWarning');
-    if (warnEl) warnEl.style.display = 'block';
-    return;
-  }
-  _showResearchState('generating');
-  _startSectionAnimation();
+  if (!_lastAnalysisJobId || _activeReportJobId) return;
+  _activeReportJobId = 'running';
+  _showResearchState('generating'); _startSectionAnimation();
   try {
-    const resp = await fetch('/api/generate_report', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ job_id: _lastAnalysisJobId }),
+    await consumeJobStream('/api/generate_report', {job_id: _lastAnalysisJobId}, data => {
+      if (data.status === 'complete') {
+        _stopSectionAnimation(true); _onReportReady(data.filename);
+      }
     });
-    const data = await resp.json();
-    if (!resp.ok || data.error) {
-      _stopSectionAnimation(false);
-      _showResearchState('error');
-      const errEl = document.getElementById('researchErrorMsg');
-      if (errEl) errEl.textContent = data.error || 'Failed to start report generation.';
-      return;
-    }
-    _activeReportJobId = data.report_job_id;
-    // Poll for modal
-    if (_researchPollTimer) clearInterval(_researchPollTimer);
-    _researchPollTimer = setInterval(async () => {
-      if (!_activeReportJobId) return;
-      try {
-        const r2 = await fetch(`/api/report_status/${_activeReportJobId}`);
-        const d2 = await r2.json();
-        if (d2.status === 'complete') {
-          clearInterval(_researchPollTimer); _researchPollTimer = null;
-          _stopSectionAnimation(true);
-          setTimeout(() => _onReportReady(d2.filename), 600);
-        } else if (d2.status === 'error') {
-          clearInterval(_researchPollTimer); _researchPollTimer = null;
-          _stopSectionAnimation(false);
-          _showResearchState('error');
-          const errEl = document.getElementById('researchErrorMsg');
-          if (errEl) errEl.textContent = d2.error || 'Report generation failed.';
-        }
-      } catch (e) { console.warn('[Research modal] poll error:', e); }
-    }, 3000);
   } catch (err) {
-    _stopSectionAnimation(false);
-    _showResearchState('error');
+    _stopSectionAnimation(false); _showResearchState('error');
     const errEl = document.getElementById('researchErrorMsg');
-    if (errEl) errEl.textContent = `Network error: ${err.message}`;
-  }
+    if (errEl) errEl.textContent = err.message;
+  } finally { _activeReportJobId = null; }
 }
 
 function _onReportReady(filename) {

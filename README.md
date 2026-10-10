@@ -27,7 +27,7 @@ The interface is a split-panel web app: a chat panel for queries on one side, an
 ## Key Features
 
 - 🗨️ **Chat interface** — ask questions in plain language; persistent chat history (localStorage)
-- 🧠 **LangGraph agent** — structured multi-step reasoning with a live plan widget showing agent progress, powered by Gemma
+- 🧠 **LangGraph agent** — structured multi-step reasoning with a live plan widget showing agent progress, powered by Groq
 - 🗺️ **Interactive map** — Leaflet.js + ESRI satellite basemap
 - ✏️ **Draw your own ROI** — polygon or rectangle, name it, and reference it in chat with `@name`
 - 📊 **19 GIS indices** — vegetation, water, urban, thermal, and atmospheric analysis (see table below)
@@ -44,7 +44,7 @@ The interface is a split-panel web app: a chat panel for queries on one side, an
 User Prompt
     │
     ▼
-agent.py  ──────────► LangGraph orchestration (Gemma)
+agent.py  ──────────► LangGraph orchestration (Groq)
     │
     ├──► gis_functions.py ──► Google Earth Engine (index calculation, stats, classification)
     │
@@ -54,7 +54,7 @@ agent.py  ──────────► LangGraph orchestration (Gemma)
 app.py (Flask) ──► JSON / map tiles / charts
     │
     ▼
-templates/index.html + static/js/app.js ──► Chat + Leaflet map + Plotly charts
+templates/index.html + public/static/js/app.js ──► Chat + Leaflet map + Plotly charts
 ```
 
 ## Supported GIS Indices
@@ -71,7 +71,7 @@ templates/index.html + static/js/app.js ──► Chat + Leaflet map + Plotly ch
 
 ## Tech Stack
 
-**Backend:** Flask · LangGraph · Gemma · Google Earth Engine Python API · ReportLab
+**Backend:** Flask · LangGraph · Groq · Google Earth Engine Python API · ReportLab
 **Frontend:** Vanilla JavaScript · Leaflet.js · Plotly.js · HTML5 · CSS3
 
 ## Project Structure
@@ -99,52 +99,24 @@ gis-ai-agent/
 └── README.md
 ```
 
-## Getting Started
+## Deployment and local development
 
-### Prerequisites
-
-- Python 3.9+
-- A Google Earth Engine account with API access
-- Access to a Gemma model endpoint (configured via `config.py`)
-
-### Installation
+See [Vercel setup](docs/VERCEL_DEPLOYMENT.md) for the hosted public demo,
+required secrets, Earth Engine authentication and usage limits.
 
 ```bash
-git clone https://github.com/<your-username>/gis-ai-agent.git
-cd gis-ai-agent
-
-python -m venv venv
-source venv/bin/activate     # On Windows: venv\Scripts\activate
-
+python3.12 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-pip install -r requirements_webapp.txt
-```
-
-Place your `gee-creds.json` and `gee-service-account.json` files in the project root (these are gitignored and never committed).
-
-### Run
-
-```bash
+cp .env.example .env.local
+# Fill in your own credentials in .env.local; never commit them.
 python app.py
 ```
 
-Open: **http://localhost:5000**
+Open http://localhost:8000. The default model is `openai/gpt-oss-120b` on Groq;
+local Ollama is no longer required. Without credentials, the interface opens but
+analysis requests return a setup-required message.
 
-## Requirements
-```txt
-earthengine-api>=0.1.370
-geemap>=0.30.0
-numpy>=1.24.0
-matplotlib>=3.7.0
-Pillow>=10.0.0
-requests>=2.31.0
-duckduckgo-search>=6.0.0
-langgraph>=0.2.0
-langchain-core>=0.2.0
-langchain-ollama>=0.1.0
-pydantic>=2.0.0
-typing-extensions>=4.8.0
-```
 ## Usage Examples
 
 ### Machine Learning

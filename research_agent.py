@@ -1,3 +1,4 @@
+from llm import llm_post
 """
 research_agent.py — Research Agent for GIS AI Agent WebApp
 ============================================================
@@ -9,7 +10,7 @@ Architecture:
 
 The Research Agent does NOT perform GIS analysis. It only:
   1. Receives analysis outputs (stats, insights, web context, conclusion)
-  2. Calls Ollama to generate each paper section
+  2. Calls Groq to generate each paper section
   3. Assembles a DOCX research paper
   4. Returns the file path for download
 
@@ -28,14 +29,14 @@ from pathlib import Path
 from typing import Optional
 
 
-# ── Section generators (each calls Ollama for a focused section) ──────────────
+# ── Section generators (each calls Groq for a focused section) ──────────────
 
-def _call_ollama(prompt: str, ollama_url: str, model: str, timeout: int = 90) -> str:
-    """Make a single Ollama completion call. Returns the response text."""
+def _call_llm(prompt: str, llm_url: str, model: str, timeout: int = 90) -> str:
+    """Make a single Groq completion call. Returns the response text."""
     import requests
     try:
-        resp = requests.post(
-            ollama_url,
+        resp = llm_post(
+            llm_url,
             json={
                 'model': model,
                 'messages': [{'role': 'user', 'content': prompt}],
@@ -86,7 +87,7 @@ def _format_date_range(start_date: str, end_date: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def gen_title(region: str, variables: list, date_range: str,
-              ollama_url: str, model: str) -> str:
+              llm_url: str, model: str) -> str:
     var_str = ', '.join(v.upper() for v in variables[:4])
     if len(variables) > 4:
         var_str += ', et al.'
@@ -95,12 +96,12 @@ def gen_title(region: str, variables: list, date_range: str,
         f'satellite remote sensing study analyzing {var_str} in {region} during {date_range}. '
         f'Make it specific, scientific, and professional. Return ONLY the title text, no quotes.'
     )
-    return _call_ollama(prompt, ollama_url, model)
+    return _call_llm(prompt, llm_url, model)
 
 
 def gen_abstract(region: str, variables: list, date_range: str,
                  all_stats: dict, conclusion: str,
-                 ollama_url: str, model: str) -> str:
+                 llm_url: str, model: str) -> str:
     stats_text = _stats_summary(all_stats)
     var_str = ', '.join(v.upper() for v in variables)
     prompt = (
@@ -112,11 +113,11 @@ def gen_abstract(region: str, variables: list, date_range: str,
         f'methodology (satellite indices), key findings (use actual statistics), and implications. '
         f'Write in third person, past tense. No bullet points. No headers. Plain academic prose.'
     )
-    return _call_ollama(prompt, ollama_url, model, timeout=120)
+    return _call_llm(prompt, llm_url, model, timeout=120)
 
 
 def gen_introduction(region: str, variables: list, date_range: str,
-                     web_context: str, ollama_url: str, model: str) -> str:
+                     web_context: str, llm_url: str, model: str) -> str:
     var_str = ', '.join(v.upper() for v in variables)
     web_section = f'\nBackground context (use sparingly):\n{web_context[:800]}\n' if web_context else ''
     prompt = (
@@ -129,11 +130,11 @@ def gen_introduction(region: str, variables: list, date_range: str,
         f'(4) objectives of this study.\n'
         f'Write flowing academic prose. No bullet points. No markdown. No headers.'
     )
-    return _call_ollama(prompt, ollama_url, model, timeout=120)
+    return _call_llm(prompt, llm_url, model, timeout=120)
 
 
 def gen_methodology(region: str, variables: list, start_date: str, end_date: str,
-                    ollama_url: str, model: str) -> str:
+                    llm_url: str, model: str) -> str:
     # Categorize variables
     surface_vars = [v for v in variables if v.lower() in
                     ['ndvi','evi','savi','ndwi','mndwi','ndbi','ui','nbi','bsi','ndsi','lst','uhi','rgb']]
@@ -191,12 +192,12 @@ def gen_methodology(region: str, variables: list, start_date: str, end_date: str
             f'Write in academic passive voice. No bullet points. No markdown. No headers. '
             f'Flowing prose paragraphs only.'
         )
-    return _call_ollama(prompt, ollama_url, model, timeout=120)
+    return _call_llm(prompt, llm_url, model, timeout=120)
 
 
 def gen_results(region: str, variables: list, date_range: str,
                 all_stats: dict, var_insights: dict,
-                ollama_url: str, model: str) -> str:
+                llm_url: str, model: str) -> str:
     stats_text = _stats_summary(all_stats)
     insights_text = '\n'.join(
         f'  {var}: {txt[:300]}' for var, txt in var_insights.items()
@@ -298,12 +299,12 @@ def gen_results(region: str, variables: list, date_range: str,
             f'Reference actual numbers from the statistics above. '
             f'Write in academic past tense. Flowing prose, no bullet points, no markdown, no headers.'
         )
-    return _call_ollama(prompt, ollama_url, model, timeout=120)
+    return _call_llm(prompt, llm_url, model, timeout=120)
 
 
 def gen_discussion(region: str, variables: list, date_range: str,
                    all_stats: dict, web_context: str,
-                   ollama_url: str, model: str) -> str:
+                   llm_url: str, model: str) -> str:
     stats_text = _stats_summary(all_stats)
     web_section = f'Real-world context:\n{web_context[:600]}\n' if web_context else ''
     var_str = ', '.join(v.upper() for v in variables)
@@ -398,11 +399,11 @@ def gen_discussion(region: str, variables: list, date_range: str,
             f'5. Suggest monitoring or policy implications\n\n'
             f'Academic prose. No bullet points. No markdown. No headers.'
         )
-    return _call_ollama(prompt, ollama_url, model, timeout=120)
+    return _call_llm(prompt, llm_url, model, timeout=120)
 
 
 def gen_conclusion_section(region: str, variables: list, date_range: str,
-                           conclusion: str, ollama_url: str, model: str) -> str:
+                           conclusion: str, llm_url: str, model: str) -> str:
     var_str = ', '.join(v.upper() for v in variables)
     prompt = (
         f'Write a Conclusion section (150–200 words) for a satellite remote sensing paper.\n'
@@ -413,10 +414,10 @@ def gen_conclusion_section(region: str, variables: list, date_range: str,
         f'recommendation for future monitoring or research. '
         f'Academic prose. No bullet points. No markdown. No headers.'
     )
-    return _call_ollama(prompt, ollama_url, model, timeout=90)
+    return _call_llm(prompt, llm_url, model, timeout=90)
 
 
-def gen_references(variables: list, ollama_url: str, model: str) -> list:
+def gen_references(variables: list, llm_url: str, model: str) -> list:
     """Generate a list of plausible but standard references for the variables used."""
     var_str = ', '.join(v.upper() for v in variables)
     prompt = (
@@ -428,7 +429,7 @@ def gen_references(variables: list, ollama_url: str, model: str) -> list:
         f'Return ONLY a numbered list. Each reference on its own line. '
         f'No preamble. No explanation.'
     )
-    raw = _call_ollama(prompt, ollama_url, model, timeout=90)
+    raw = _call_llm(prompt, llm_url, model, timeout=90)
     refs = []
     for line in raw.split('\n'):
         line = line.strip()
@@ -2053,11 +2054,7 @@ def generate_research_paper(analysis_result: dict, output_dir: str) -> 'Optional
     str or None
         Absolute path to the generated .pdf file, or None on failure.
     """
-    try:
-        from config import OLLAMA_URL, OLLAMA_MODEL
-    except ImportError:
-        OLLAMA_URL   = 'http://localhost:11434/api/chat'
-        OLLAMA_MODEL = 'llama3'
+    from config import GROQ_URL, GROQ_MODEL
 
     region      = analysis_result.get('region', 'Unknown Region')
     start_date  = analysis_result.get('start_date', '')
@@ -2074,37 +2071,37 @@ def generate_research_paper(analysis_result: dict, output_dir: str) -> 'Optional
 
     print(f'[research_agent] Generating paper for {region} | {date_range}')
     print(f'[research_agent] Variables: {var_str}')
-    print(f'[research_agent] Calling Ollama for each section...')
+    print(f'[research_agent] Calling Groq for each section...')
 
-    # ── Generate all sections via Ollama ──────────────────────────────────────
-    title = gen_title(region, variables, date_range, OLLAMA_URL, OLLAMA_MODEL)
+    # ── Generate all sections via Groq ──────────────────────────────────────
+    title = gen_title(region, variables, date_range, GROQ_URL, GROQ_MODEL)
     print(f'  ✓ Title: {title[:60]}...')
 
     abstract = gen_abstract(region, variables, date_range, all_stats, conclusion,
-                            OLLAMA_URL, OLLAMA_MODEL)
+                            GROQ_URL, GROQ_MODEL)
     print(f'  ✓ Abstract ({len(abstract.split())} words)')
 
     introduction = gen_introduction(region, variables, date_range, web_context,
-                                    OLLAMA_URL, OLLAMA_MODEL)
+                                    GROQ_URL, GROQ_MODEL)
     print(f'  ✓ Introduction ({len(introduction.split())} words)')
 
     methodology = gen_methodology(region, variables, start_date, end_date,
-                                  OLLAMA_URL, OLLAMA_MODEL)
+                                  GROQ_URL, GROQ_MODEL)
     print(f'  ✓ Methodology ({len(methodology.split())} words)')
 
     results = gen_results(region, variables, date_range, all_stats, var_insights,
-                          OLLAMA_URL, OLLAMA_MODEL)
+                          GROQ_URL, GROQ_MODEL)
     print(f'  ✓ Results ({len(results.split())} words)')
 
     discussion = gen_discussion(region, variables, date_range, all_stats, web_context,
-                                OLLAMA_URL, OLLAMA_MODEL)
+                                GROQ_URL, GROQ_MODEL)
     print(f'  ✓ Discussion ({len(discussion.split())} words)')
 
     conclusion_section = gen_conclusion_section(region, variables, date_range, conclusion,
-                                                OLLAMA_URL, OLLAMA_MODEL)
+                                                GROQ_URL, GROQ_MODEL)
     print(f'  ✓ Conclusion ({len(conclusion_section.split())} words)')
 
-    references = gen_references(variables, OLLAMA_URL, OLLAMA_MODEL)
+    references = gen_references(variables, GROQ_URL, GROQ_MODEL)
     print(f'  ✓ References ({len(references)} entries)')
 
     # ── Assemble sections dict (include raw figures for PDF embedding) ───────────

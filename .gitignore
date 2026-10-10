@@ -17,3 +17,10 @@ __pycache__/
 # service account
 gee-service-account.json
 gee-creds.json
+.env*
+!.env.example
+.venv/
+.vercel/
+.pytest_cache/
+*.egg-info/
+.vercel

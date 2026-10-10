@@ -1,3 +1,4 @@
+from llm import llm_post
 # =============================================================================
 # gis_functions.py — All GEE analysis functions for Satellite AI Agent
 # Sections:
@@ -32,7 +33,7 @@ import urllib.request
 from io import BytesIO
 from PIL import Image as PILImage
 
-from config import GEE_PROJECT, OLLAMA_URL, OLLAMA_MODEL, OUTPUT_DIR
+from config import GEE_PROJECT, GROQ_URL, GROQ_MODEL, OUTPUT_DIR
 
 def ensure_gee():
     """Kept for compatibility — calls gee_init_for_thread()."""
@@ -40,35 +41,8 @@ def ensure_gee():
 
 
 def gee_init_for_thread():
-    """Initialize GEE fresh in the current thread using service account credentials.
-    Called at the start of every analysis job and every major GEE function."""
-    import os
-    import socket
-    from config import GEE_SERVICE_ACCOUNT_FILE, GEE_PROJECT
-    try:
-        if not os.path.exists(GEE_SERVICE_ACCOUNT_FILE):
-            return
-        import google.oauth2.service_account as _sa_t
-        from google.auth.transport.requests import Request as _Request
-        import requests as _requests
-
-        # Force IPv4 — prevents httplib2 from hanging on IPv6 for 10+ min
-        _orig = socket.getaddrinfo
-        socket.getaddrinfo = lambda h, p, family=0, *a, **k: \
-            _orig(h, p, socket.AF_INET, *a, **k)
-
-        scopes = ['https://www.googleapis.com/auth/earthengine',
-                  'https://www.googleapis.com/auth/cloud-platform']
-        creds = _sa_t.Credentials.from_service_account_file(
-            GEE_SERVICE_ACCOUNT_FILE, scopes=scopes)
-        # Use requests.Session() — avoids httplib2 IPv6 hang on token refresh
-        creds.refresh(_Request(session=_requests.Session()))
-        ee.Initialize(creds, project=GEE_PROJECT,
-                      opt_url='https://earthengine.googleapis.com')
-    except Exception as e:
-        err = str(e)
-        if 'already' not in err.lower():
-            print(f'  gee_init_for_thread: {e}')
+    from gee_auth import initialize_gee
+    initialize_gee()
 
 
 
@@ -501,7 +475,7 @@ VIS = {
 
 def get_thumb(image, vis_params, region, dim=512):
     url = image.getThumbURL({**vis_params, 'region': region, 'dimensions': dim, 'format': 'png'})
-    with urllib.request.urlopen(url) as r:
+    with urllib.request.urlopen(url, timeout=30) as r:
         return np.array(PILImage.open(BytesIO(r.read())))
 
 def get_stats(image, band, study_area, scale=1000):
@@ -1563,17 +1537,17 @@ def _extract_region_and_dates(text: str) -> tuple:
     return region, start_date, end_date
 
 
-def call_ollama(user_message, chat_history):
+def call_llm(user_message, chat_history):
     # ── Pre-check: intercept known variable keywords before hitting the LLM ───
     # Small models (gemma3:4b) hallucinate on ambiguous acronyms (FFPI, NDVI…).
     # When variables are detected deterministically, we ALWAYS short-circuit.
-    # If region/date extraction also succeeds → skip Ollama entirely.
-    # If region/date is missing → ask Ollama only for those fields, then merge.
+    # If region/date extraction also succeeds → skip Groq entirely.
+    # If region/date is missing → ask Groq only for those fields, then merge.
     _pre_vars = _extract_variables_from_text(user_message)
     if _pre_vars:
         _pre_region, _pre_start, _pre_end = _extract_region_and_dates(user_message)
 
-        # If we have everything, skip Ollama entirely
+        # If we have everything, skip Groq entirely
         if _pre_region and _pre_start:
             print(f'  [pre-check FULL] vars={_pre_vars} region={_pre_region} '
                   f'start={_pre_start} end={_pre_end}')
@@ -1587,9 +1561,9 @@ def call_ollama(user_message, chat_history):
                               + (f' for {_pre_region}' if _pre_region else '') + '.',
             }
 
-        # Variables detected but region/date missing — ask Ollama ONLY for those,
+        # Variables detected but region/date missing — ask Groq ONLY for those,
         # with an explicit instruction not to touch variables or intent.
-        print(f'  [pre-check PARTIAL] vars={_pre_vars} — asking Ollama for region/date only')
+        print(f'  [pre-check PARTIAL] vars={_pre_vars} — asking Groq for region/date only')
         _geo_prompt = (
             'Extract ONLY the region name and date range from this message. '
             'Do NOT interpret or change the variables field. '
@@ -1600,11 +1574,11 @@ def call_ollama(user_message, chat_history):
             '{"region": "place name or null", "start_date": "YYYY-MM-DD or null", "end_date": "YYYY-MM-DD or null"}'
         )
         try:
-            # Strip variable tokens from message so Ollama only sees region + dates
+            # Strip variable tokens from message so Groq only sees region + dates
             _clean_msg = _strip_var_tokens(user_message)
-            print(f'  [pre-check] cleaned msg for Ollama: "{_clean_msg}"')
-            _resp = requests.post(OLLAMA_URL,
-                json={'model': OLLAMA_MODEL,
+            print(f'  [pre-check] cleaned msg for Groq: "{_clean_msg}"')
+            _resp = llm_post(GROQ_URL,
+                json={'model': GROQ_MODEL,
                       'messages': [{'role': 'system', 'content': _geo_prompt},
                                    {'role': 'user',   'content': _clean_msg}],
                       'stream': False}, timeout=30)
@@ -1631,8 +1605,8 @@ def call_ollama(user_message, chat_history):
     messages += chat_history
     messages.append({'role': 'user', 'content': user_message})
     try:
-        resp = requests.post(OLLAMA_URL,
-            json={'model': OLLAMA_MODEL, 'messages': messages, 'stream': False}, timeout=60)
+        resp = llm_post(GROQ_URL,
+            json={'model': GROQ_MODEL, 'messages': messages, 'stream': False}, timeout=60)
         data = resp.json()
 
         # Handle both /api/chat and /api/generate response formats
@@ -1641,7 +1615,7 @@ def call_ollama(user_message, chat_history):
         elif 'response' in data:
             raw = data['response'].strip()
         elif 'error' in data:
-            raise Exception(f"Ollama model error: {data['error']}")
+            raise Exception(f"Groq model error: {data['error']}")
         else:
             raise Exception(f"Unexpected response keys: {list(data.keys())}")
 
@@ -1664,7 +1638,7 @@ def call_ollama(user_message, chat_history):
                 'variables': [], 'response': f'JSON parse error: {e}. Please rephrase.'}
     except Exception as e:
         return {'intent': 'unknown', 'region': None, 'start_date': None, 'end_date': None,
-                'variables': [], 'response': f'Ollama error: {e}. Is Ollama running? Try: ollama serve'}
+                'variables': [], 'response': 'The AI provider is unavailable. Please try again later.'}
 
 # =============================================================================
 # SECTION I - MAIN EXECUTOR
@@ -1989,8 +1963,8 @@ LULC_SYSTEM_PROMPT = (
 def get_relevant_classes(region_name):
     """Ask LLM which land cover classes are relevant for this region."""
     try:
-        resp = requests.post(OLLAMA_URL,
-            json={'model': OLLAMA_MODEL,
+        resp = llm_post(GROQ_URL,
+            json={'model': GROQ_MODEL,
                   'messages': [
                       {'role': 'system', 'content': LULC_SYSTEM_PROMPT},
                       {'role': 'user',   'content': f'Region: {region_name}'}],
@@ -2929,9 +2903,9 @@ def generate_insight(region_name, start_date, end_date, stats_summary, variables
     )
 
     try:
-        resp = requests.post(
-            OLLAMA_URL,
-            json={'model': OLLAMA_MODEL,
+        resp = llm_post(
+            GROQ_URL,
+            json={'model': GROQ_MODEL,
                   'messages': [{'role': 'user', 'content': insight_prompt}],
                   'stream': False},
             timeout=120
