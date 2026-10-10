@@ -10,7 +10,9 @@ from validation import validate_roi, validate_analysis
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setenv('GROQ_API_KEY','test-key')
-    monkeypatch.setenv('GEE_SERVICE_ACCOUNT_JSON','{}')
+    monkeypatch.setenv('GEE_SERVICE_ACCOUNT_JSON',json.dumps({
+        'type':'service_account','project_id':'fixture','private_key':'fixture',
+        'client_email':'fixture@example.test','token_uri':'https://oauth2.googleapis.com/token'}))
     web.app.config.update(TESTING=True,SECRET_KEY='s'*48,STORE=LocalStore())
     def runner(payload,store,sid):
         yield {'status':'running','job_id':payload['job_id'],'steps':[]}
@@ -101,6 +103,15 @@ def test_groq_transport(monkeypatch):
     assert captured['json']['reasoning_format']=='hidden'
     assert captured['timeout']==(5,30)
     assert captured['allow_redirects'] is False
+
+def test_gee_configuration_rejects_malformed_json(monkeypatch):
+    import gee_auth
+    info={'type':'service_account','project_id':'fixture','private_key':'fixture',
+          'client_email':'fixture@example.test','token_uri':'https://oauth2.googleapis.com/token'}
+    monkeypatch.setenv('GEE_SERVICE_ACCOUNT_JSON',json.dumps(info))
+    assert gee_auth.configured()
+    monkeypatch.setenv('GEE_SERVICE_ACCOUNT_JSON',json.dumps(info)+'\n{"extra":true}')
+    assert not gee_auth.configured()
 
 def test_gee_lazy_credentials(monkeypatch):
     import ee,gee_auth
