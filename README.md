@@ -1,13 +1,13 @@
 # Orbiview — GIS AI Agent
 
 <div align="center">
-  <img src="assets/orbiview.png" width="200" alt="Orbiview logo"/>
+  ![Orbiview logo](public/assets/orbiview.png)
 
   ![Flask](https://img.shields.io/badge/Flask-3.0-000000?style=for-the-badge&logo=flask&logoColor=white)
   ![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)
   ![LangGraph](https://img.shields.io/badge/LangGraph-Agent-FF6B6B?style=for-the-badge&logo=langchain&logoColor=white)
   ![Google Earth Engine](https://img.shields.io/badge/Google%20Earth%20Engine-Satellite%20Data-4285F4?style=for-the-badge&logo=googleearth&logoColor=white)
-  ![Gemma](https://img.shields.io/badge/LLM-Gemma3.4B-8E75B2?style=for-the-badge&logo=google&logoColor=white)
+  ![Groq](https://img.shields.io/badge/LLM-Groq-FF6B35?style=for-the-badge)
   ![Leaflet](https://img.shields.io/badge/Leaflet.js-Map-199900?style=for-the-badge&logo=leaflet&logoColor=white)
   ![Plotly](https://img.shields.io/badge/Plotly.js-Charts-3F4F75?style=for-the-badge&logo=plotly&logoColor=white)
   ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
@@ -20,13 +20,13 @@ https://github.com/user-attachments/assets/4f466034-3686-41f8-b3a8-3fcb601ddf15
 
 ## Overview
 
-**Orbiview** is a geospatial AI agent that turns natural-language prompts into satellite imagery analysis. Ask about vegetation health, pollution levels, land cover change, or urban heat for any region and time range — Orbiview pulls the data from **Google Earth Engine**, runs the analysis, and returns interactive maps, charts, and narrative insights, powered by **Gemma** via **LangGraph**.
+**Orbiview** is a geospatial AI agent that turns natural-language prompts into satellite imagery analysis. Ask about vegetation health, pollution levels, land cover change, or urban heat for a region and time range — Orbiview uses **Google Earth Engine** for geospatial processing and **Groq** for language-model reasoning, then returns interactive maps, charts, and narrative insights. The default Groq model is `openai/gpt-oss-120b`; local Ollama is no longer required. This is a provider migration, not a claim that the models are equivalent.
 
-The interface is a split-panel web app: a chat panel for queries on one side, an interactive Leaflet map on the other — with support for custom ROI drawing, multi-year comparisons, and downloadable PDF research reports.
+Try the public demo: [Orbiview on Vercel](https://gis-ai-agent.vercel.app/). The interface is a split-panel web app: a chat panel for queries on one side, an interactive Leaflet map on the other — with support for custom ROI drawing, multi-year comparisons, and downloadable PDF research reports. No visitor password is required.
 
 ## Key Features
 
-- 🗨️ **Chat interface** — ask questions in plain language; persistent chat history (localStorage)
+- 🗨️ **Chat interface** — ask questions in plain language; chat history stays in the browser while signed sessions isolate Redis-backed server results
 - 🧠 **LangGraph agent** — structured multi-step reasoning with a live plan widget showing agent progress, powered by Groq
 - 🗺️ **Interactive map** — Leaflet.js + ESRI satellite basemap
 - ✏️ **Draw your own ROI** — polygon or rectangle, name it, and reference it in chat with `@name`
@@ -41,20 +41,18 @@ The interface is a split-panel web app: a chat panel for queries on one side, an
 ## Architecture
 
 ```
-User Prompt
+Browser request
     │
     ▼
-agent.py  ──────────► LangGraph orchestration (Groq)
-    │
-    ├──► gis_functions.py ──► Google Earth Engine (index calculation, stats, classification)
-    │
-    ├──► research_agent.py ──► PDF report generation (ReportLab)
-    │
-    ▼
-app.py (Flask) ──► JSON / map tiles / charts
-    │
-    ▼
+app.py (Flask) ──► worker.py ──► analysis.py ──► Google Earth Engine
+    │                    │              └──────► Groq (language tasks)
+    │                    └──► research_agent.py ──► PDF report (ReportLab)
+    └──► Redis-backed session results / streamed progress
+             │
+             ▼
 templates/index.html + public/static/js/app.js ──► Chat + Leaflet map + Plotly charts
+
+agent.py remains a separate LangGraph command-line entry point.
 ```
 
 ## Supported GIS Indices
@@ -78,31 +76,28 @@ templates/index.html + public/static/js/app.js ──► Chat + Leaflet map + Pl
 
 ```
 gis-ai-agent/
-├── agent.py                    # LangGraph agent orchestration
-├── app.py                      # Flask backend & API routes
-├── config.py                   # App configuration / environment settings
-├── gis_functions.py            # GEE analysis logic for all 19 indices
+├── app.py                      # Public Flask routes and API
+├── analysis.py                 # Web analysis pipeline
+├── agent.py                    # LangGraph CLI entry point
+├── worker.py                   # Isolated GIS/report worker process
+├── llm.py                      # Groq API transport
+├── gee_auth.py                 # Earth Engine service-account setup
+├── gis_functions.py            # GEE analysis functions
 ├── research_agent.py           # PDF report generation (ReportLab)
-├── requirements.txt            # Core agent dependencies
-├── requirements_webapp.txt     # Web app (Flask) dependencies
-├── assets/
-├── static/
-│   ├── css/
-│   │   └── style.css
-│   └── js/
-│       └── app.js
-├── templates/
-│   └── index.html
-├── gee-creds.json               # GEE credentials (gitignored)
-├── gee-service-account.json     # GEE service account key (gitignored)
-├── LICENSE
-└── README.md
+├── storage.py                  # Redis sessions, results, and limits
+├── config.py                   # App configuration / environment settings
+├── public/assets/              # Images and static assets
+├── public/static/              # Frontend CSS and JavaScript
+├── templates/index.html        # Chat and map interface
+├── .env.example                # Safe environment-variable template
+├── vercel.json                 # Flask function configuration
+└── docs/VERCEL_DEPLOYMENT.md   # Deployment and operations guide
 ```
 
 ## Deployment and local development
 
 See [Vercel setup](docs/VERCEL_DEPLOYMENT.md) for the hosted public demo,
-required secrets, Earth Engine authentication and usage limits.
+required environment variables, Earth Engine authentication and usage limits.
 
 ```bash
 python3.12 -m venv .venv
@@ -113,9 +108,14 @@ cp .env.example .env.local
 python app.py
 ```
 
-Open http://localhost:8000. The default model is `openai/gpt-oss-120b` on Groq;
-local Ollama is no longer required. Without credentials, the interface opens but
-analysis requests return a setup-required message.
+Open http://localhost:8000. Set the values from `.env.example` in `.env.local`:
+Groq API key, registered Earth Engine project ID and service-account JSON,
+application signing key, and Upstash Redis REST URL/token. The Vercel Marketplace
+`KV_REST_API_URL` and `KV_REST_API_TOKEN` aliases are also supported. Never commit
+`.env.local` or service-account credentials. The default model is
+`openai/gpt-oss-120b` on Groq; local Ollama is no longer required. See the
+[deployment guide](docs/VERCEL_DEPLOYMENT.md) for Earth Engine setup, limits,
+troubleshooting, and end-to-end verification.
 
 ## Usage Examples
 
@@ -123,25 +123,25 @@ analysis requests return a setup-required message.
 - User: "Show me the land cover of London in 2024"
 - Orbiview: Understand the user's request, perform machine learning in GEE, and present the results with insights
 
-<img src="assets/land_cover.png" width="100%"/>
+![Land-cover analysis example](public/assets/land_cover.jpg)
 
 ### Trend Analysis
 - User: "Analyze No2 air quality over Beijing in 2024"
 - Orbiview: Creates visualization and identifies key patterns
 
-<img src="assets/no2.png" width="100%"/>
+![Air-quality analysis example](public/assets/no2.jpg)
 
 ### Research Agent
 - User: "Analyze the 2025 land cover of London and generate a comprehensive research paper"
 - Orbiview: Activate research mode, generate a research paper, and present the results
 
-<img src="assets/research.png" width="100%"/>
+![Research report example](public/assets/research.jpg)
 
 ### Insights Summary
 - User: "Analyze the land surface temperature of Jakarta in 2025"
 - SmartLook: Generate an insights summary section with recommendations based on the analysis
 
-<img src="assets/lst.png" width="100%"/>
+![Land-surface temperature analysis example](public/assets/lst.jpg)
 
 ## PDF Research Reports
 
@@ -151,7 +151,7 @@ Orbiview can generate a full downloadable PDF report for any analysis, including
 
 - Google Earth Engine for satellite data infrastructure
 - The LangChain / LangGraph team for the agent framework
-- Google for the Gemma model
+- Groq for hosted language-model inference
 - Leaflet.js and Plotly.js for mapping and visualization
 
 ## License
@@ -160,4 +160,4 @@ See the [LICENSE](LICENSE) file for details.
 ---
 If you find Orbiview useful, please consider giving it a star! ⭐
 
-**Built for fast, conversational geospatial analysis** 
+**Built for fast, conversational geospatial analysis**
